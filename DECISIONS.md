@@ -22,3 +22,14 @@ Antes de planejar uma nova issue, leia este arquivo inteiro — decisões de iss
 - Nenhum dos 5 commands valida que `path` está dentro do workspace — decisão consciente, não descuido. Os commands operam em qualquer caminho absoluto do sistema, como um editor de texto genérico. Revisitar se o app ganhar mais superfície de ataque (plugins, conteúdo remoto, abertura de paths vindos de fora do processo).
 
 **Afeta:** `#7` (consome `save_file`/`expected_mtime` para o autosave), `#10` (consome `ExternalChange` para o watcher de alteração externa), `#25` (consome `list_dir` para o explorador de arquivos).
+
+## #7 — Autosave direto no arquivo original com debounce
+
+- Escopo reduzido a **documento único** (sem abas ainda) — a issue, como escrita, pressupõe `src/store/` com estado por aba (`#9`/`#21`), que ainda não existem. `src/store/documentStore.ts` (zustand) foi desenhado para já encaixar quando `#21` vier multiplexá-lo por aba.
+- Path padrão fixo: `~/Documents/scrible/untitled.md`, criado automaticamente no boot (via `read_file`/`save_file`) se ainda não existir — não há file picker nem issue de "abrir/criar arquivo" no backlog.
+- Debounce de 800ms via `setTimeout` simples na store (sem lib de debounce). Gatilhos imediatos (`flush()`): blur da janela (`onFocusChanged` no JS) e fechamento do app.
+- Fechamento do app: handshake `WindowEvent::CloseRequested` (Rust, `on_window_event` do `Builder`) → `api.prevent_close()` + `window.emit("app-close-requested")` → frontend escuta, chama `flush()`, e só então `invoke("quit_app")` (novo command, `app.exit(0)`) — evita perder a última alteração sem depender de um timeout arbitrário.
+- `FsError::ExternalChange` (de `#6`) leva a `status: "conflict"` na store, guardando `current_mtime`/`current_content`, **sem retry automático nem sobrescrita** — fica pronto para a UI de reconciliação de `#10` consumir.
+- Indicador visual "Salvando…" é um elemento fixo mínimo no `app-shell` (não na aba — `#21` não existe ainda).
+
+**Afeta:** `#8` (decide se cria snapshot a cada save bem-sucedido), `#9` (sessão terá que substituir o path fixo por múltiplos paths persistidos e reconciliar com `documentStore`), `#10` (consome o estado `conflict`), `#21` (vai multiplexar `documentStore` por aba).
