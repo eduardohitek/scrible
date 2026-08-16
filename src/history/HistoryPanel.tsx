@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useDocumentStore } from "../store/documentStore";
 
@@ -30,8 +30,22 @@ function formatRelativeTime(timestamp: number): string {
 export function HistoryPanel() {
   const [open, setOpen] = useState(false);
   const [snapshots, setSnapshots] = useState<SnapshotInfo[]>([]);
+  const containerRef = useRef<HTMLDivElement>(null);
   const path = useDocumentStore((state) => state.path);
   const applyExternalContent = useDocumentStore((state) => state.applyExternalContent);
+
+  useEffect(() => {
+    if (!open) return;
+
+    function handleClickOutside(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
 
   async function handleToggle() {
     if (!open && path) {
@@ -49,7 +63,7 @@ export function HistoryPanel() {
   }
 
   return (
-    <div className="history-panel-container">
+    <div className="history-panel-container" ref={containerRef}>
       <button type="button" className="history-toggle" onClick={() => void handleToggle()}>
         Histórico
       </button>

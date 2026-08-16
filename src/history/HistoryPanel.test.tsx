@@ -61,4 +61,30 @@ describe("HistoryPanel", () => {
       expect(useDocumentStore.getState().lastSavedMtime).toBe(5000);
     });
   });
+
+  it("fecha o painel ao clicar fora dele", async () => {
+    mockedInvoke.mockResolvedValueOnce([{ timestamp: Date.now() - 10 * 60_000, size: 42 }]);
+
+    render(<HistoryPanel />);
+
+    fireEvent.click(screen.getByText("Histórico"));
+    await waitFor(() => screen.getByText("Restaurar"));
+
+    fireEvent.mouseDown(document.body);
+
+    expect(screen.queryByText("Restaurar")).toBeNull();
+  });
+
+  it("mantém o painel aberto ao clicar dentro dele", async () => {
+    mockedInvoke.mockResolvedValueOnce([{ timestamp: Date.now() - 10 * 60_000, size: 42 }]);
+
+    render(<HistoryPanel />);
+
+    fireEvent.click(screen.getByText("Histórico"));
+    const restoreButton = await waitFor(() => screen.getByText("Restaurar"));
+
+    fireEvent.mouseDown(restoreButton.closest(".history-item")!);
+
+    expect(screen.queryByText("Restaurar")).not.toBeNull();
+  });
 });
