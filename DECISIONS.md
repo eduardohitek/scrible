@@ -33,3 +33,14 @@ Antes de planejar uma nova issue, leia este arquivo inteiro — decisões de iss
 - Indicador visual "Salvando…" é um elemento fixo mínimo no `app-shell` (não na aba — `#21` não existe ainda).
 
 **Afeta:** `#8` (decide se cria snapshot a cada save bem-sucedido), `#9` (sessão terá que substituir o path fixo por múltiplos paths persistidos e reconciliar com `documentStore`), `#10` (consome o estado `conflict`), `#21` (vai multiplexar `documentStore` por aba).
+
+## #8 — Snapshots de histórico de versões (registrado retroativamente)
+
+- Throttle de 5 minutos (`THROTTLE_MS`, `src-tauri/src/history.rs`), contado a partir do save bem-sucedido: `maybe_snapshot` só cria um novo snapshot se passaram ≥5min desde o último **e** o conteúdo mudou em relação a ele — evita um snapshot por autosave de 800ms.
+- Hash do path do arquivo via **FNV-1a inline** (não `std::collections::hash_map::DefaultHasher`, cujo algoritmo não é garantido estável entre versões do Rust; não uma nova dependência) — determina o diretório de snapshots (`.scrible/history/<hash>/`).
+- Comparação de "conteúdo mudou" é feita contra o **conteúdo completo** do último snapshot, não um diff/hash parcial.
+- Retenção FIFO de `MAX_SNAPSHOTS = 20` por arquivo.
+- `restore_snapshot` **força** um snapshot do conteúdo atual (bypassando o throttle) antes de sobrescrever com a versão restaurada — preserva a versão que seria descartada. Esse é o único ponto que fura o throttle hoje.
+- UI (`src/history/HistoryPanel.tsx`): painel fixo (canto superior direito) acionado por um botão de toggle, fecha ao clicar fora (`mousedown` no `document` comparado contra um `ref` do container).
+
+**Afeta:** `#10` (reaproveita o padrão de "forçar snapshot bypassando throttle" de `restore_snapshot` para a versão descartada num conflito), `#21` (diretório de snapshots já é por path, então multiplexar por aba não exige mudança no `history.rs`), `#25` (exclusão de arquivo pelo explorador pode se apoiar no histórico como rede de segurança parcial).
