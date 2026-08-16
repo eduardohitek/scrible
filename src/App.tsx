@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { listen } from "@tauri-apps/api/event";
 import { EditorPane } from "./editor/EditorPane";
 import { PreviewPane } from "./preview/PreviewPane";
+import { useDocumentStore } from "./store/documentStore";
 import "./App.css";
 
 interface WorkspaceError {
@@ -9,33 +12,38 @@ interface WorkspaceError {
   message: string;
 }
 
-const SAMPLE_DOCUMENT = `# scrible
-
-Um editor de **markdown** com preview em tempo real, para macOS.
-
-## Recursos
-
-- [x] Edição com CodeMirror 6
-- [x] Preview com markdown-it
-- [ ] Autocomplete de sintaxe
-
-\`\`\`mermaid
-flowchart TD
-    A[Editor] --> B[Preview]
-    B --> C{Mermaid ok?}
-    C -->|Sim| D[🎉]
-\`\`\`
-`;
-
 function App() {
-  const [source, setSource] = useState(SAMPLE_DOCUMENT);
   const [workspaceError, setWorkspaceError] = useState<WorkspaceError | null>(null);
+  const content = useDocumentStore((state) => state.content);
+  const setContent = useDocumentStore((state) => state.setContent);
+  const status = useDocumentStore((state) => state.status);
+  const init = useDocumentStore((state) => state.init);
+  const flush = useDocumentStore((state) => state.flush);
 
   useEffect(() => {
-    invoke("workspace_status").catch((err: WorkspaceError) => {
-      setWorkspaceError(err);
+    invoke("workspace_status")
+      .then(() => init())
+      .catch((err: WorkspaceError) => {
+        setWorkspaceError(err);
+      });
+  }, [init]);
+
+  useEffect(() => {
+    const unlistenFocus = getCurrentWindow().onFocusChanged(({ payload: focused }) => {
+      if (!focused) void flush();
     });
-  }, []);
+    const unlistenClose = listen("app-close-requested", () => {
+      void (async () => {
+        await flush();
+        await invoke("quit_app");
+      })();
+    });
+
+    return () => {
+      void unlistenFocus.then((fn) => fn());
+      void unlistenClose.then((fn) => fn());
+    };
+  }, [flush]);
 
   if (workspaceError) {
     return (
@@ -47,8 +55,9 @@ function App() {
 
   return (
     <div className="app-shell">
-      <EditorPane value={source} onChange={setSource} />
-      <PreviewPane source={source} />
+      <EditorPane value={content} onChange={setContent} />
+      <PreviewPane source={content} />
+      {status === "saving" && <div className="save-indicator">Salvando…</div>}
     </div>
   );
 }

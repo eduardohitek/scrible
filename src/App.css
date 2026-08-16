@@ -66,6 +66,18 @@ body {
   margin: 1rem 0;
 }
 
+.save-indicator {
+  position: fixed;
+  bottom: 0.75rem;
+  right: 1rem;
+  font-size: 0.75rem;
+  color: light-dark(#666, #999);
+  background: light-dark(#f5f5f5, #2a2a2a);
+  border-radius: 4px;
+  padding: 0.2rem 0.5rem;
+  pointer-events: none;
+}
+
 .workspace-error {
   display: flex;
   align-items: center;
