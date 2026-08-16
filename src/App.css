@@ -1,0 +1,67 @@
+:root {
+  color-scheme: light dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+}
+
+.app-shell {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+}
+
+.editor-pane,
+.preview-pane {
+  flex: 1 1 50%;
+  min-width: 0;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.editor-pane {
+  border-right: 1px solid light-dark(#e0e0e0, #333);
+}
+
+.editor-pane .cm-editor {
+  height: 100%;
+  font-size: 15px;
+}
+
+.preview-pane {
+  padding: 1rem 2rem;
+  line-height: 1.6;
+}
+
+.mermaid-diagram {
+  display: flex;
+  justify-content: center;
+  margin: 1rem 0;
+}
+
+.mermaid-error {
+  color: #b00020;
+  background: #fdecea;
+  border: 1px solid #f5c6cb;
+  border-radius: 4px;
+  padding: 0.5rem 0.75rem;
+  font-family: monospace;
+  font-size: 0.85rem;
+  margin: 1rem 0;
+}

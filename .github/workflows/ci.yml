@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar mise
+        uses: jdx/mise-action@v2
+        with:
+          cache: true
+
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-npm-${{ hashFiles('package-lock.json') }}
+
+      - name: Instalar dependências
+        run: mise run setup
+
+      - name: Lint (ESLint + clippy)
+        run: mise run lint
+
+      - name: Typecheck
+        run: mise run typecheck
+
+      - name: Testes
+        run: mise run test

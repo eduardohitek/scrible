@@ -1,0 +1,35 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar mise
+        uses: jdx/mise-action@v2
+        with:
+          cache: true
+
+      - name: Instalar dependências
+        run: mise run setup
+
+      - name: Build (.app / .dmg)
+        run: mise run build
+
+      - name: Publicar release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: src-tauri/target/release/bundle/dmg/*.dmg
+          generate_release_notes: true
+          body: |
+            ⚠️ Este build não é assinado nem notarizado pela Apple. Ao abrir pela primeira
+            vez, o macOS vai bloquear com "não foi possível verificar o desenvolvedor" —
+            libere em Ajustes do Sistema → Privacidade e Segurança → Abrir Mesmo Assim.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
