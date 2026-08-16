@@ -4,7 +4,7 @@ mod workspace;
 use std::path::PathBuf;
 
 use fs_ops::FsError;
-use tauri::Manager;
+use tauri::{AppHandle, Emitter, Manager, WindowEvent};
 use workspace::{WorkspaceError, WorkspacePaths};
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
@@ -45,10 +45,21 @@ fn list_dir(path: String) -> Result<Vec<String>, FsError> {
     fs_ops::list_dir(&PathBuf::from(path))
 }
 
+#[tauri::command]
+fn quit_app(app: AppHandle) {
+    app.exit(0);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = window.emit("app-close-requested", ());
+            }
+        })
         .setup(|app| {
             let result = workspace::bootstrap(app.handle());
             if let Err(err) = &result {
@@ -64,7 +75,8 @@ pub fn run() {
             save_file,
             rename_file,
             delete_file,
-            list_dir
+            list_dir,
+            quit_app
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
