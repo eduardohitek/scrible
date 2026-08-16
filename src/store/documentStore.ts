@@ -61,6 +61,7 @@ interface DocumentState {
   init: () => Promise<void>;
   setContent: (value: string) => void;
   flush: () => Promise<void>;
+  applyExternalContent: (content: string, mtime: number) => void;
 }
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -143,5 +144,10 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   flush: async () => {
     clearPendingSave();
     await performSave(get, set);
+  },
+
+  applyExternalContent: (content, mtime) => {
+    clearPendingSave();
+    set({ content, lastSavedMtime: mtime, status: "idle", conflict: null });
   },
 }));
