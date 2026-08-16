@@ -58,10 +58,21 @@ interface DocumentState {
   lastSavedMtime: number | null;
   status: DocumentStatus;
   conflict: DocumentConflict | null;
+  /** `true` desde a última edição não salva; `false` assim que o conteúdo
+   * bate com o que está em disco (save bem-sucedido ou reload externo). */
+  dirty: boolean;
   init: () => Promise<void>;
   setContent: (value: string) => void;
   flush: () => Promise<void>;
   applyExternalContent: (content: string, mtime: number) => void;
+  /** Chamado ao receber o evento `external-file-changed` do watcher (#10):
+   * reload silencioso se não há edição local pendente, ou expõe o conflito
+   * pra `ConflictBanner` se houver. */
+  handleExternalChange: (content: string, mtime: number) => void;
+  /** Resolve um conflito ativo: "mine" sobrescreve o disco com o conteúdo
+   * local; "disk" descarta o conteúdo local (preservado antes via snapshot
+   * forçado) e adota a versão do disco. */
+  resolveConflict: (choice: "mine" | "disk") => Promise<void>;
 }
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -84,7 +95,7 @@ async function performSave(get: () => DocumentState, set: (partial: Partial<Docu
       content,
       expectedMtime: lastSavedMtime,
     });
-    set({ lastSavedMtime: newMtime, status: "idle" });
+    set({ lastSavedMtime: newMtime, status: "idle", dirty: false });
   } catch (err) {
     const fsError = err as FsError;
     if (fsError.kind === "ExternalChange") {
@@ -108,6 +119,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   lastSavedMtime: null,
   status: "idle",
   conflict: null,
+  dirty: false,
 
   init: async () => {
     const { root } = await invoke<WorkspacePaths>("workspace_status");
@@ -133,7 +145,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   },
 
   setContent: (value) => {
-    set({ content: value });
+    set({ content: value, dirty: true });
     clearPendingSave();
     debounceTimer = setTimeout(() => {
       debounceTimer = null;
@@ -148,6 +160,32 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
 
   applyExternalContent: (content, mtime) => {
     clearPendingSave();
-    set({ content, lastSavedMtime: mtime, status: "idle", conflict: null });
+    set({ content, lastSavedMtime: mtime, status: "idle", conflict: null, dirty: false });
+  },
+
+  handleExternalChange: (content, mtime) => {
+    const { dirty, applyExternalContent } = get();
+    if (!dirty) {
+      applyExternalContent(content, mtime);
+      return;
+    }
+    set({
+      status: "conflict",
+      conflict: { currentMtime: mtime, currentContent: content },
+    });
+  },
+
+  resolveConflict: async (choice) => {
+    const { conflict, path, content, applyExternalContent } = get();
+    if (!conflict || path === null) return;
+
+    if (choice === "disk") {
+      await invoke("snapshot_before_discard", { path, content });
+      applyExternalContent(conflict.currentContent, conflict.currentMtime);
+      return;
+    }
+
+    set({ lastSavedMtime: conflict.currentMtime, conflict: null });
+    await performSave(get, set);
   },
 }));

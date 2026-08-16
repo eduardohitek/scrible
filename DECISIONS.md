@@ -33,3 +33,14 @@ Antes de planejar uma nova issue, leia este arquivo inteiro — decisões de iss
 - Indicador visual "Salvando…" é um elemento fixo mínimo no `app-shell` (não na aba — `#21` não existe ainda).
 
 **Afeta:** `#8` (decide se cria snapshot a cada save bem-sucedido), `#9` (sessão terá que substituir o path fixo por múltiplos paths persistidos e reconciliar com `documentStore`), `#10` (consome o estado `conflict`), `#21` (vai multiplexar `documentStore` por aba).
+
+## #10 — Watcher de alteração externa e reconciliação
+
+- Módulo `src-tauri/src/watcher.rs`, crate `notify = "6"`. Observa o **diretório pai** do arquivo (`~/Documents/scrible/`), não o arquivo diretamente — sobrevive ao arquivo ainda não existir no primeiro boot e ao rename atômico feito por qualquer programa (o próprio scrible incluído). `RecursiveMode::NonRecursive` restringe eventos aos filhos diretos do diretório, então escritas dentro de `.scrible/history/` não geram ruído.
+- Supressão de eco: `LastSaveMtime` (`Arc<Mutex<Option<i64>>>`, gerenciado via `app.manage`) guarda o mtime do último `save_file` bem-sucedido do próprio scrible; o watcher ignora eventos cujo mtime em disco bate com esse valor. Não há pausa por janela de tempo — comparação de mtime é exata e não depende de latência de I/O.
+- Debounce de rajadas de eventos (ex: temp+rename gera múltiplos eventos por escrita lógica) implementado inline em `watcher.rs` (buffer + 300ms de silêncio), sem adicionar `notify-debouncer-mini` como dependência nova — mesma postura de `#8`.
+- Início do watch é automático no `setup()` do Rust, path fixo (`untitled.md`) — sem command start/stop, consistente com o escopo documento único de `#7`. Revisitar quando `#21` (abas) introduzir múltiplos arquivos abertos simultaneamente.
+- `history::force_snapshot` (extraído de dentro de `restore_snapshot`, `#8`) é reaproveitado pelo novo command `snapshot_before_discard`: ao usuário escolher "usar versão do disco" num conflito, a versão local descartada é sempre snapshotada, bypassando o throttle de 5min.
+- Frontend: novo campo `dirty: boolean` em `documentStore` (fonte única de verdade para "há edição local pendente"), `resolveConflict("mine" | "disk")` reaproveita o `status`/`conflict` já existentes de `#6`/`#7` (não um shape novo). UI: `src/conflict/ConflictBanner.tsx`, banner fixo não-modal (não um dialog bloqueante), consistente com o padrão visual de `HistoryPanel`/indicador de save.
+
+**Afeta:** `#21` (o watcher terá que observar N arquivos, um por aba aberta, não mais um path fixo único).
