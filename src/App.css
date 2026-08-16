@@ -127,6 +127,39 @@ body {
   cursor: pointer;
 }
 
+.conflict-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+  padding: 0.5rem 1rem;
+  background: light-dark(#fff3cd, #4a3c14);
+  color: light-dark(#664d03, #ffe69c);
+  border-bottom: 1px solid light-dark(#ffe69c, #664d03);
+  z-index: 10;
+}
+
+.conflict-banner-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.conflict-banner-actions button {
+  font-size: 0.8rem;
+  cursor: pointer;
+  border-radius: 4px;
+  border: 1px solid light-dark(#664d03, #ffe69c);
+  background: transparent;
+  color: inherit;
+  padding: 0.25rem 0.6rem;
+}
+
 .save-indicator {
   position: fixed;
   bottom: 0.75rem;

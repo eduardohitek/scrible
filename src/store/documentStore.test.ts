@@ -15,6 +15,7 @@ function resetStore() {
     lastSavedMtime: 1000,
     status: "idle",
     conflict: null,
+    dirty: false,
   });
 }
 
@@ -107,5 +108,78 @@ describe("documentStore", () => {
 
     await vi.advanceTimersByTimeAsync(2000);
     expect(mockedInvoke).toHaveBeenCalledTimes(1);
+  });
+
+  it("setContent liga dirty, save bem-sucedido desliga", async () => {
+    mockedInvoke.mockResolvedValueOnce(2000);
+
+    useDocumentStore.getState().setContent("conteúdo");
+    expect(useDocumentStore.getState().dirty).toBe(true);
+
+    await useDocumentStore.getState().flush();
+
+    expect(useDocumentStore.getState().dirty).toBe(false);
+  });
+
+  it("handleExternalChange sem edição pendente faz reload silencioso", () => {
+    useDocumentStore.getState().handleExternalChange("versão do disco", 3000);
+
+    const state = useDocumentStore.getState();
+    expect(state.content).toBe("versão do disco");
+    expect(state.lastSavedMtime).toBe(3000);
+    expect(state.status).toBe("idle");
+    expect(state.dirty).toBe(false);
+  });
+
+  it("handleExternalChange com edição pendente expõe conflito sem sobrescrever nada", () => {
+    useDocumentStore.getState().setContent("minha edição local");
+
+    useDocumentStore.getState().handleExternalChange("versão do disco", 3000);
+
+    const state = useDocumentStore.getState();
+    expect(state.content).toBe("minha edição local");
+    expect(state.status).toBe("conflict");
+    expect(state.conflict).toEqual({ currentMtime: 3000, currentContent: "versão do disco" });
+  });
+
+  it('resolveConflict("disk") tira snapshot da versão local antes de descartá-la', async () => {
+    useDocumentStore.setState({
+      content: "minha edição local",
+      status: "conflict",
+      conflict: { currentMtime: 3000, currentContent: "versão do disco" },
+    });
+    mockedInvoke.mockResolvedValueOnce(undefined);
+
+    await useDocumentStore.getState().resolveConflict("disk");
+
+    expect(mockedInvoke).toHaveBeenCalledWith("snapshot_before_discard", {
+      path: "/tmp/doc.md",
+      content: "minha edição local",
+    });
+    const state = useDocumentStore.getState();
+    expect(state.content).toBe("versão do disco");
+    expect(state.lastSavedMtime).toBe(3000);
+    expect(state.conflict).toBeNull();
+  });
+
+  it('resolveConflict("mine") salva o conteúdo local usando o mtime do disco', async () => {
+    useDocumentStore.setState({
+      content: "minha edição local",
+      status: "conflict",
+      conflict: { currentMtime: 3000, currentContent: "versão do disco" },
+    });
+    mockedInvoke.mockResolvedValueOnce(4000);
+
+    await useDocumentStore.getState().resolveConflict("mine");
+
+    expect(mockedInvoke).toHaveBeenCalledWith("save_file", {
+      path: "/tmp/doc.md",
+      content: "minha edição local",
+      expectedMtime: 3000,
+    });
+    const state = useDocumentStore.getState();
+    expect(state.lastSavedMtime).toBe(4000);
+    expect(state.status).toBe("idle");
+    expect(state.conflict).toBeNull();
   });
 });

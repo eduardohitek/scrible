@@ -1,5 +1,6 @@
 mod fs_ops;
 mod history;
+mod watcher;
 mod workspace;
 
 use std::path::PathBuf;
@@ -7,6 +8,7 @@ use std::path::PathBuf;
 use fs_ops::FsError;
 use history::{HistoryError, RestoreResult, SnapshotInfo};
 use tauri::{AppHandle, Emitter, Manager, WindowEvent};
+use watcher::LastSaveMtime;
 use workspace::{WorkspaceError, WorkspacePaths};
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
@@ -33,9 +35,11 @@ fn save_file(
     content: String,
     expected_mtime: Option<i64>,
     state: tauri::State<WorkspaceState>,
+    last_save_mtime: tauri::State<LastSaveMtime>,
 ) -> Result<i64, FsError> {
     let file_path = PathBuf::from(path);
     let new_mtime = fs_ops::save_file(&file_path, &content, expected_mtime)?;
+    last_save_mtime.record(new_mtime);
 
     if let Ok(workspace) = &state.0 {
         if let Err(err) = history::maybe_snapshot(&workspace.hidden, &file_path, &content) {
@@ -44,6 +48,18 @@ fn save_file(
     }
 
     Ok(new_mtime)
+}
+
+#[tauri::command]
+fn snapshot_before_discard(
+    path: String,
+    content: String,
+    state: tauri::State<WorkspaceState>,
+) -> Result<(), HistoryError> {
+    let workspace = state.0.as_ref().map_err(|err| HistoryError::Io {
+        message: err.to_string(),
+    })?;
+    history::force_snapshot(&workspace.hidden, &PathBuf::from(path), &content)
 }
 
 #[tauri::command]
@@ -101,7 +117,15 @@ pub fn run() {
             if let Err(err) = &result {
                 eprintln!("falha ao inicializar o workspace: {err}");
             }
+
+            let last_save_mtime = LastSaveMtime::default();
+            if let Ok(paths) = &result {
+                let target = paths.root.join("untitled.md");
+                watcher::start_watching(app.handle().clone(), target, last_save_mtime.clone());
+            }
+
             app.manage(WorkspaceState(result));
+            app.manage(last_save_mtime);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -114,7 +138,8 @@ pub fn run() {
             list_dir,
             quit_app,
             list_snapshots,
-            restore_snapshot
+            restore_snapshot,
+            snapshot_before_discard
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

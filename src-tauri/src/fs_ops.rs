@@ -37,7 +37,7 @@ impl FsError {
     }
 }
 
-fn mtime_millis(meta: &fs::Metadata) -> Result<i64, FsError>{
+pub(crate) fn mtime_millis(meta: &fs::Metadata) -> Result<i64, FsError> {
     let duration = meta
         .modified()
         .map_err(|err| FsError::Io {

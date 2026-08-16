@@ -5,8 +5,14 @@ import { listen } from "@tauri-apps/api/event";
 import { EditorPane } from "./editor/EditorPane";
 import { PreviewPane } from "./preview/PreviewPane";
 import { HistoryPanel } from "./history/HistoryPanel";
+import { ConflictBanner } from "./conflict/ConflictBanner";
 import { useDocumentStore } from "./store/documentStore";
 import "./App.css";
+
+interface ExternalChangePayload {
+  mtime: number;
+  content: string;
+}
 
 interface WorkspaceError {
   kind: "PermissionDenied" | "Io";
@@ -39,10 +45,14 @@ function App() {
         await invoke("quit_app");
       })();
     });
+    const unlistenExternalChange = listen<ExternalChangePayload>("external-file-changed", (event) => {
+      useDocumentStore.getState().handleExternalChange(event.payload.content, event.payload.mtime);
+    });
 
     return () => {
       void unlistenFocus.then((fn) => fn());
       void unlistenClose.then((fn) => fn());
+      void unlistenExternalChange.then((fn) => fn());
     };
   }, [flush]);
 
@@ -59,6 +69,7 @@ function App() {
       <EditorPane value={content} onChange={setContent} />
       <PreviewPane source={content} />
       <HistoryPanel />
+      {status === "conflict" && <ConflictBanner />}
       {status === "saving" && <div className="save-indicator">Salvando…</div>}
     </div>
   );

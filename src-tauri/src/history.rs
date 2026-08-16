@@ -145,6 +145,17 @@ pub fn maybe_snapshot(hidden_dir: &Path, file_path: &Path, content: &str) -> Res
     Ok(())
 }
 
+/// Cria um snapshot do conteúdo fornecido incondicionalmente, bypassando o
+/// throttle de `maybe_snapshot`. Usado por `restore_snapshot` (preserva a
+/// versão atual antes de sobrescrever) e pelo watcher de alteração externa
+/// (preserva a versão local antes de descartá-la num conflito, #10) — em
+/// ambos os casos a versão prestes a ser perdida não pode depender de ter
+/// passado o throttle de 5min.
+pub fn force_snapshot(hidden_dir: &Path, file_path: &Path, content: &str) -> Result<(), HistoryError> {
+    let dir = history_dir(hidden_dir, file_path);
+    write_snapshot(&dir, content)
+}
+
 pub fn list_snapshots(hidden_dir: &Path, file_path: &Path) -> Result<Vec<SnapshotInfo>, HistoryError> {
     let dir = history_dir(hidden_dir, file_path);
     let mut entries = snapshot_entries(&dir)?;
@@ -170,7 +181,7 @@ pub fn restore_snapshot(
     let dir = history_dir(hidden_dir, file_path);
 
     if let Ok(current_content) = fs::read_to_string(file_path) {
-        write_snapshot(&dir, &current_content)?;
+        force_snapshot(hidden_dir, file_path, &current_content)?;
     }
 
     let target_path = dir.join(format!("{timestamp}.md"));
@@ -279,6 +290,24 @@ mod tests {
         assert_eq!(snapshots.len(), 20);
         // As 20 mais recentes devem ter sobrevivido (maiores timestamps).
         assert!(snapshots.iter().all(|s| s.timestamp >= base + 5));
+    }
+
+    #[test]
+    fn force_snapshot_bypasses_throttle() {
+        let tmp = tempfile::tempdir().unwrap();
+        let hidden = tmp.path().join(".scrible");
+        let file_path = PathBuf::from("/docs/a.md");
+
+        force_snapshot(&hidden, &file_path, "versão 1").unwrap();
+        // Sleep curto só pra garantir timestamps (ms) distintos entre os dois
+        // arquivos de snapshot — não é um teste de throttle real.
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        // Chamado de novo "imediatamente" (bem abaixo do throttle de 5min):
+        // maybe_snapshot recusaria, force_snapshot não deve se importar.
+        force_snapshot(&hidden, &file_path, "versão 2").unwrap();
+
+        let snapshots = list_snapshots(&hidden, &file_path).unwrap();
+        assert_eq!(snapshots.len(), 2);
     }
 
     #[test]
