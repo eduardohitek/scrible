@@ -1,0 +1,27 @@
+[tools]
+node = "22"
+rust = "stable"
+
+[tasks.setup]
+description = "Instala as dependências npm e do Cargo"
+run = ["npm install", "cargo fetch --manifest-path src-tauri/Cargo.toml"]
+
+[tasks.dev]
+description = "Roda o scrible em modo desenvolvimento com hot reload"
+run = "npm run tauri dev"
+
+[tasks.build]
+description = "Compila o app e gera o .app/.dmg para macOS"
+run = "npm run tauri build"
+
+[tasks.lint]
+description = "Roda ESLint no frontend e clippy no backend Rust"
+run = ["npm run lint", "cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings"]
+
+[tasks.typecheck]
+description = "Verifica os tipos do TypeScript sem emitir arquivos"
+run = "npx tsc --noEmit"
+
+[tasks.test]
+description = "Roda os testes do frontend (Vitest) e do backend (cargo test)"
+run = ["npx vitest run", "cargo test --manifest-path src-tauri/Cargo.toml"]
