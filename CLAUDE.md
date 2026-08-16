@@ -16,7 +16,7 @@ O backlog vive nas issues do GitHub (`eduardohitek/scrible`), organizado nos mil
    - Issues: `feat/{numero-da-issue}-{slug}`.
    - Trabalho de processo sem issue associada: `chore/{slug}`.
 4. Implementar, verificar (`mise run lint`, `mise run typecheck`, `mise run test`, e verificação manual via `mise run dev` quando houver UI).
-5. Só commitar, dar push ou abrir PR quando o usuário pedir explicitamente. O PR fecha a issue correspondente (`Closes #N`) quando aplicável.
+5. Assim que o plano estiver implementado e verificado, commitar, dar push e abrir o PR — não é preciso esperar pedido explícito a cada vez. No corpo do PR (não só na mensagem de commit), usar sempre a palavra-chave em **inglês** `Closes #N` (não `Fecha #N`) quando o PR fechar uma issue — é a única forma que o GitHub reconhece para auto-fechar.
 6. Ao concluir uma issue cujas decisões possam afetar issues futuras, **atualizar `DECISIONS.md`** antes de considerar o trabalho fechado.
 
 ## Decisões de arquitetura
