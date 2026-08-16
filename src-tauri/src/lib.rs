@@ -1,5 +1,9 @@
+mod fs_ops;
 mod workspace;
 
+use std::path::PathBuf;
+
+use fs_ops::FsError;
 use tauri::Manager;
 use workspace::{WorkspaceError, WorkspacePaths};
 
@@ -16,6 +20,31 @@ fn workspace_status(state: tauri::State<WorkspaceState>) -> Result<WorkspacePath
     state.0.clone()
 }
 
+#[tauri::command]
+fn read_file(path: String) -> Result<String, FsError> {
+    fs_ops::read_file(&PathBuf::from(path))
+}
+
+#[tauri::command]
+fn save_file(path: String, content: String, expected_mtime: Option<i64>) -> Result<i64, FsError> {
+    fs_ops::save_file(&PathBuf::from(path), &content, expected_mtime)
+}
+
+#[tauri::command]
+fn rename_file(from: String, to: String) -> Result<(), FsError> {
+    fs_ops::rename_file(&PathBuf::from(from), &PathBuf::from(to))
+}
+
+#[tauri::command]
+fn delete_file(path: String) -> Result<(), FsError> {
+    fs_ops::delete_file(&PathBuf::from(path))
+}
+
+#[tauri::command]
+fn list_dir(path: String) -> Result<Vec<String>, FsError> {
+    fs_ops::list_dir(&PathBuf::from(path))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -28,7 +57,15 @@ pub fn run() {
             app.manage(WorkspaceState(result));
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![greet, workspace_status])
+        .invoke_handler(tauri::generate_handler![
+            greet,
+            workspace_status,
+            read_file,
+            save_file,
+            rename_file,
+            delete_file,
+            list_dir
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
