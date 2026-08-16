@@ -1,9 +1,11 @@
 mod fs_ops;
+mod history;
 mod workspace;
 
 use std::path::PathBuf;
 
 use fs_ops::FsError;
+use history::{HistoryError, RestoreResult, SnapshotInfo};
 use tauri::{AppHandle, Emitter, Manager, WindowEvent};
 use workspace::{WorkspaceError, WorkspacePaths};
 
@@ -26,8 +28,42 @@ fn read_file(path: String) -> Result<String, FsError> {
 }
 
 #[tauri::command]
-fn save_file(path: String, content: String, expected_mtime: Option<i64>) -> Result<i64, FsError> {
-    fs_ops::save_file(&PathBuf::from(path), &content, expected_mtime)
+fn save_file(
+    path: String,
+    content: String,
+    expected_mtime: Option<i64>,
+    state: tauri::State<WorkspaceState>,
+) -> Result<i64, FsError> {
+    let file_path = PathBuf::from(path);
+    let new_mtime = fs_ops::save_file(&file_path, &content, expected_mtime)?;
+
+    if let Ok(workspace) = &state.0 {
+        if let Err(err) = history::maybe_snapshot(&workspace.hidden, &file_path, &content) {
+            eprintln!("falha ao criar snapshot de histórico: {err}");
+        }
+    }
+
+    Ok(new_mtime)
+}
+
+#[tauri::command]
+fn list_snapshots(path: String, state: tauri::State<WorkspaceState>) -> Result<Vec<SnapshotInfo>, HistoryError> {
+    let workspace = state.0.as_ref().map_err(|err| HistoryError::Io {
+        message: err.to_string(),
+    })?;
+    history::list_snapshots(&workspace.hidden, &PathBuf::from(path))
+}
+
+#[tauri::command]
+fn restore_snapshot(
+    path: String,
+    timestamp: i64,
+    state: tauri::State<WorkspaceState>,
+) -> Result<RestoreResult, HistoryError> {
+    let workspace = state.0.as_ref().map_err(|err| HistoryError::Io {
+        message: err.to_string(),
+    })?;
+    history::restore_snapshot(&workspace.hidden, &PathBuf::from(path), timestamp)
 }
 
 #[tauri::command]
@@ -76,7 +112,9 @@ pub fn run() {
             rename_file,
             delete_file,
             list_dir,
-            quit_app
+            quit_app,
+            list_snapshots,
+            restore_snapshot
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
