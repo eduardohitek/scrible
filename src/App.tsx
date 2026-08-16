@@ -1,7 +1,13 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { EditorPane } from "./editor/EditorPane";
 import { PreviewPane } from "./preview/PreviewPane";
 import "./App.css";
+
+interface WorkspaceError {
+  kind: "PermissionDenied" | "Io";
+  message: string;
+}
 
 const SAMPLE_DOCUMENT = `# scrible
 
@@ -23,6 +29,21 @@ flowchart TD
 
 function App() {
   const [source, setSource] = useState(SAMPLE_DOCUMENT);
+  const [workspaceError, setWorkspaceError] = useState<WorkspaceError | null>(null);
+
+  useEffect(() => {
+    invoke("workspace_status").catch((err: WorkspaceError) => {
+      setWorkspaceError(err);
+    });
+  }, []);
+
+  if (workspaceError) {
+    return (
+      <div className="workspace-error">
+        Não foi possível preparar o workspace em ~/Documents/scrible: {workspaceError.message}
+      </div>
+    );
+  }
 
   return (
     <div className="app-shell">
