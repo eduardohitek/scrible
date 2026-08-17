@@ -3,8 +3,9 @@ import { EditorState, Transaction } from "@codemirror/state";
 import { EditorView, keymap, drawSelection } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { searchKeymap } from "@codemirror/search";
-import { markdown } from "@codemirror/lang-markdown";
+import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { markdownDecorations } from "./markdownDecorations";
+import { markdownEditingKeymap } from "./markdownCommands";
 
 interface EditorPaneProps {
   value: string;
@@ -14,8 +15,9 @@ interface EditorPaneProps {
 /**
  * Montagem do CodeMirror 6: edição de markdown com soft wrap, sem
  * numeração de linha (não é um editor de código), com decorations de
- * preview inline nível 2 (#12). Autocomplete e atalhos avançados chegam
- * nas issues dedicadas do editor.
+ * preview inline nível 2 (#12) e comportamentos automáticos de
+ * digitação (#13). Autocomplete de menu (`/`, fences) chega nas issues
+ * dedicadas de autocomplete.
  */
 export function EditorPane({ value, onChange }: EditorPaneProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -31,8 +33,9 @@ export function EditorPane({ value, onChange }: EditorPaneProps) {
         drawSelection(),
         EditorView.lineWrapping,
         keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap]),
-        markdown(),
+        markdown({ base: markdownLanguage }),
         markdownDecorations(),
+        markdownEditingKeymap,
         EditorView.updateListener.of((update) => {
           if (!update.docChanged) return;
           // Transações sem userEvent são sincronizações programáticas (ver

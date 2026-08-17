@@ -66,6 +66,37 @@ Antes de planejar uma nova issue, leia este arquivo inteiro — decisões de iss
 
 **Afeta:** `#22` (vai herdar/substituir as cores hardcoded aqui por tokens formais), `#13`/`#14`/`#15` (issues seguintes do editor, que podem reaproveitar ou estender `src/editor/markdownDecorations.ts`).
 
+## #13 — Autocomplete grupo A (comportamentos automáticos de digitação)
+
+- `markdown()` em `EditorPane.tsx` passou a usar `base: markdownLanguage` (GFM) em vez do
+  `commonmarkLanguage` default — corrige a decoration de `Strikethrough` da `#12`, que era código
+  morto (o nó nunca era produzido sem GFM), e habilita `Task`/`TaskMarker` para uso futuro.
+- Continuação/encerramento de lista no Enter (requisitos 1 e 2 da issue) **não foram
+  reimplementados** — já vêm de graça de `markdownKeymap`/`insertNewlineContinueMarkup`, que
+  `markdown()` já instala por padrão (`addKeymap: true`) com `Prec.high`. Comportamento real
+  confirmado por teste: item vazio único remove o marcador imediatamente; item vazio que não é o
+  primeiro da lista precisa de **dois Enters** (o primeiro insere linha em branco/afrouxa a lista,
+  o segundo remove o marcador) — bate com o texto da própria issue ("dois Enters seguidos
+  encerram").
+- Tab/Shift-Tab (`src/editor/markdownCommands.ts`, `listIndent`/`listOutdent`): alinhamento
+  dinâmico correto (coluna de conteúdo real do item vizinho, via regex sobre o texto da linha —
+  não há API pública no lezer-markdown para isso). Reindentam **só a linha do item** (não outras
+  linhas de um item multi-linha) e renumeram **só o item movido** — não recalculam em cascata os
+  irmãos afetados pela mudança de nível. Sem item-irmão/item-pai aplicável, os comandos não fazem
+  nada (`false`, sem side-effect).
+- Envolver seleção ao digitar `*`/`_`/`` ` `` usa o par de 1 caractere; `~` é a única exceção e
+  dobra para `~~texto~~` — riscado GFM exige o par duplo, um `~` só não é sintaxe válida.
+- Todo comando novo despacha com `userEvent: "input"` e **um único `dispatch()` por invocação** —
+  é isso (não o valor de `userEvent` sozinho) que garante 1 entrada de histórico por ação;
+  `userEvent: "input.type"` seria fundido pelo merge automático do `history()`.
+- Primeiro precedente de teste no repo que monta `EditorState` isolado (fora de componente React) —
+  `src/editor/markdownCommands.test.ts`. Útil de referência para `#14`/`#15` (demais issues do
+  editor) se precisarem do mesmo padrão.
+
+**Afeta:** `#14`/`#15` (podem reaproveitar `src/editor/markdownCommands.ts` e o padrão de teste
+headless de `EditorState`), `#22`/`#23` (a base GFM já habilitada aqui vale para qualquer
+decoration/comportamento futuro que dependa de `Task`/`TaskMarker`).
+
 ## #45 — Editor não sincroniza conteúdo quando muda por fora da digitação (bug)
 
 - Causa raiz: `EditorPane.tsx` criava o `EditorView` num `useEffect` com deps vazias — o `doc`
