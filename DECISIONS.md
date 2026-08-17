@@ -122,3 +122,49 @@ decoration/comportamento futuro que dependa de `Task`/`TaskMarker`).
 **Afeta:** `#21` (barra de abas) — agora que `EditorPane` reage a mudanças externas de `value`, a
 troca de aba pode não precisar mais remontar o componente inteiro por `key`; vale reavaliar esse
 ponto do design de `#21` quando chegar a vez dela.
+
+## #14 — Autocomplete grupo B (menu de comandos com `/`)
+
+- Novo módulo `src/editor/slashMenu.ts`: `autocompletion({ override: [slashCommandSource], icons: false })`
+  do `@codemirror/autocomplete` (já era dependência instalada desde `#11`, nunca usada até aqui).
+  `override` restringe a fonte ativa só ao menu `/` — não completa palavras genéricas.
+- Cada item da lista (Tabela, Bloco de código, Diagrama mermaid, Lista de tarefas, Citação, Link,
+  Imagem, Cabeçalho 1/2/3, Linha horizontal) é um `snippetCompletion` com tabstops `${...}` —
+  posicionamento do cursor e navegação Tab entre campos vêm de graça do `snippet()` da lib (registra
+  seu próprio keymap em `Prec.highest` só quando um snippet com campos está ativo). Cabeçalhos H1-H3
+  são 3 itens planos, não um submenu — decisão via sabatina, desproporcional criar um segundo nível
+  de `CompletionSource` para 3 opções (diferente do fluxo de tipos de diagrama mermaid da `#15`, que
+  de fato precisa de dois níveis).
+- `slashCommandSource` só dispara com `/` no início de uma linha (prefixo antes do `/` na linha
+  precisa ser só espaços — cobre o caso "e/ou" do AC) **e** fora de blocos de código com fence
+  (checagem via `syntaxTree().resolveInner` subindo até achar `FencedCode`/`CodeBlock`, mesmo padrão
+  de `markdownCommands.ts`/`markdownDecorations.ts`) — decisão via sabatina, vai além do AC literal
+  para evitar o falso positivo real de colar um script shell com linhas `/algo` dentro de um fence.
+- Item "Bloco de código" insere um fence **sem** campo de linguagem (` ``` \n${código}\n``` `) —
+  decisão via sabatina: a escolha de linguagem em si é escopo da `#15`. Mesma lógica para "Diagrama
+  mermaid": esqueleto mínimo de um `flowchart` só, sem o seletor dos 7 tipos de diagrama (`#15`).
+- **Armadilha real, encontrada só na verificação manual** (os testes headless do `CompletionSource`
+  isolado não pegaram, porque não exercitam o pipeline completo de filtragem do CM6): `from` do
+  `CompletionResult` precisa incluir o próprio `/` (é ele quem devia ser apagado ao aceitar o item),
+  mas o matcher default do CM6 filtra as opções comparando o label contra `sliceDoc(from, to)` — que
+  então sempre começa com `/`, e nenhum label bate. Resultado: o menu nunca abria (zero opções em
+  qualquer estado, mesmo digitando só `/`), embora `slashCommandSource` chamado isoladamente
+  retornasse a lista completa normalmente. Fix: `filter: false` + filtragem manual dentro da própria
+  fonte, comparando o texto digitado *depois* do `/` (`sliceDoc(word.from + 1, word.to)`) contra os
+  labels. Reproduzido/confirmado com um `EditorView` real em jsdom (`view.dispatch` simulando
+  `userEvent: "input.type"` + aguardar os timers internos do plugin), não só com `EditorState`
+  isolado — vale considerar esse tipo de teste (headless, mas com `EditorView` de verdade) para
+  qualquer futura fonte de `autocompletion()` com trigger char próprio (`#15` vai precisar disso
+  para `` ``` ``).
+- Fechar com `Esc`/clique fora e aceitar com `Enter` são o `completionKeymap` embutido em
+  `autocompletion()` (`Prec.highest`, sem precisar registrar keymap próprio nem entrar em conflito
+  com o `Tab`/`Shift-Tab` de `listIndent`/`listOutdent` de `#13` — o `/` nunca dispara dentro de um
+  item de lista, cujo prefixo de linha nunca é whitespace-only).
+- Testes (`src/editor/slashMenu.test.ts`) reaproveitam o padrão headless de `EditorState` de `#13`:
+  chamam `slashCommandSource` diretamente com um `CompletionContext` construído à mão, e para validar
+  a inserção chamam a `apply` de `snippetCompletion` com um "fake editor" (`{ state, dispatch }`) —
+  a assinatura de `apply` só usa essas duas propriedades, dispensando um `EditorView` real.
+
+**Afeta:** `#15` (grupo D) reaproveita `syntaxTree()`/checagem de posição em fence já presente aqui
+e o padrão de `snippetCompletion`/tabstops para os esqueletos de mermaid; herda a decisão de que o
+item "Bloco de código" desta issue fica sem linguagem — `#15` é quem resolve isso via fence real.
