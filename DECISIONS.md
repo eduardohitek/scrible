@@ -55,3 +55,13 @@ Antes de planejar uma nova issue, leia este arquivo inteiro — decisões de iss
 - UI (`src/history/HistoryPanel.tsx`): painel fixo (canto superior direito) acionado por um botão de toggle, fecha ao clicar fora (`mousedown` no `document` comparado contra um `ref` do container).
 
 **Afeta:** `#10` (reaproveita o padrão de "forçar snapshot bypassando throttle" de `restore_snapshot` para a versão descartada num conflito), `#21` (diretório de snapshots já é por path, então multiplexar por aba não exige mudança no `history.rs`), `#25` (exclusão de arquivo pelo explorador pode se apoiar no histórico como rede de segurança parcial).
+
+## #12 — Preview inline nível 2 (marcadores visíveis + texto estilizado)
+
+- CSS ad hoc agora (cores/tamanhos hardcoded via `light-dark()` em `App.css`), **sem esperar** a `#22` (design system/tokens) — decisão via sabatina: `#12` só depende de `#11`/`#1` (ambas fechadas), não de `#22`, e bloquear quebraria o fluxo de "uma issue por vez conforme dependências declaradas". `#22`, quando implementada, deve revisitar essas regras e migrar para tokens formais.
+- `src/editor/markdownDecorations.ts` (novo módulo, não dentro de `EditorPane.tsx`): um único `ViewPlugin` que usa `syntaxTree()` (de `@codemirror/language`, adicionada como dependência direta — antes só transitiva via `@codemirror/lang-markdown`) restrito a `view.visibleRanges` (não o documento inteiro) para performance em documentos grandes.
+- Dois grupos de classe CSS: um dicionário nó→classe para o conteúdo semântico (`cm-md-h1`..`h6`, `cm-md-strong`, `cm-md-em`, `cm-md-strike`, `cm-md-inline-code`, `cm-md-fenced-code`, `cm-md-link`) e uma classe única compartilhada `cm-md-marker` (opacidade reduzida) para todos os nós de marcador (`HeaderMark`, `EmphasisMark`, `CodeMark`, `StrikethroughMark`, `LinkMark`) — os marcadores nunca são removidos do DOM/conteúdo, só estilizados.
+- `FencedCode` recebe só fonte monoespaçada + fundo no bloco inteiro — **sem** syntax highlighting por linguagem (fora de escopo desta issue).
+- **Sem teste automatizado dedicado** para a lógica de decoration — decisão consciente do usuário via sabatina, primeira issue do projeto sem testes unitários próprios; verificação ficou só manual (`mise run dev`). Revisitar se `#13`/`#14`/`#15` (demais issues do editor) precisarem estender `markdownDecorations.ts` — pode valer a pena introduzir o padrão de teste headless de `EditorState`/`EditorView` (sem precedente no repo) nessa hora.
+
+**Afeta:** `#22` (vai herdar/substituir as cores hardcoded aqui por tokens formais), `#13`/`#14`/`#15` (issues seguintes do editor, que podem reaproveitar ou estender `src/editor/markdownDecorations.ts`).

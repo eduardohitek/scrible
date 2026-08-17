@@ -4,6 +4,7 @@ import { EditorView, keymap, drawSelection } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { searchKeymap } from "@codemirror/search";
 import { markdown } from "@codemirror/lang-markdown";
+import { markdownDecorations } from "./markdownDecorations";
 
 interface EditorPaneProps {
   value: string;
@@ -11,10 +12,10 @@ interface EditorPaneProps {
 }
 
 /**
- * Montagem mínima do CodeMirror 6 para provar o pipeline do scaffold:
- * edição de markdown com soft wrap, sem numeração de linha (não é um
- * editor de código). Decorations de preview inline, autocomplete e
- * atalhos avançados chegam nas issues dedicadas do editor.
+ * Montagem do CodeMirror 6: edição de markdown com soft wrap, sem
+ * numeração de linha (não é um editor de código), com decorations de
+ * preview inline nível 2 (#12). Autocomplete e atalhos avançados chegam
+ * nas issues dedicadas do editor.
  */
 export function EditorPane({ value, onChange }: EditorPaneProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -31,6 +32,7 @@ export function EditorPane({ value, onChange }: EditorPaneProps) {
         EditorView.lineWrapping,
         keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap]),
         markdown(),
+        markdownDecorations(),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
             onChange(update.state.doc.toString());
