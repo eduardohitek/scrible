@@ -96,3 +96,29 @@ Antes de planejar uma nova issue, leia este arquivo inteiro — decisões de iss
 **Afeta:** `#14`/`#15` (podem reaproveitar `src/editor/markdownCommands.ts` e o padrão de teste
 headless de `EditorState`), `#22`/`#23` (a base GFM já habilitada aqui vale para qualquer
 decoration/comportamento futuro que dependa de `Task`/`TaskMarker`).
+
+## #45 — Editor não sincroniza conteúdo quando muda por fora da digitação (bug)
+
+- Causa raiz: `EditorPane.tsx` criava o `EditorView` num `useEffect` com deps vazias — o `doc`
+  inicial só era gravado uma vez, na montagem. Mudanças em `value` depois disso (load assíncrono
+  do `documentStore.init()`, restauração de histórico via `applyExternalContent`, reload silencioso
+  do watcher `#10`) nunca eram propagadas pro CodeMirror — o preview atualizava (reage à prop
+  normalmente), o editor ficava travado no conteúdo do primeiro render.
+- Fix: novo `useEffect(() => {...}, [value])` separado do de montagem — despacha uma transação de
+  substituição total do doc quando `value` diverge do doc atual do `EditorView` (via `viewRef`).
+  Sem lógica especial pra "pular a primeira execução": como o efeito de montagem já grava o doc
+  inicial com esse mesmo `value`, a checagem de igualdade já é um no-op na primeira renderização.
+- A transação de sincronização é despachada **sem** `Transaction.userEvent`. O
+  `EditorView.updateListener` foi ajustado para só chamar `onChange` (→ `store.setContent` →
+  `dirty: true` + reagenda autosave) quando a transação que mudou o doc tiver alguma anotação de
+  `userEvent` — digitação, paste, undo/redo e os comandos de `#13` já despacham com
+  `userEvent: "input"`/"input.type"/etc.; a sincronização programática não tem nenhuma. Sem esse
+  filtro, sincronizar a prop reacenderia `dirty`/autosave sempre que `applyExternalContent` tivesse
+  acabado de zerar `dirty` — reintroduziria o tipo de save espúrio que `#6`/`#7`/`#10` foram
+  desenhados pra evitar.
+- Primeiro teste RTL (`@testing-library/react`) do `EditorPane` — `src/editor/EditorPane.test.tsx`,
+  cobrindo tanto a sincronização visual quanto a ausência de `onChange` espúrio.
+
+**Afeta:** `#21` (barra de abas) — agora que `EditorPane` reage a mudanças externas de `value`, a
+troca de aba pode não precisar mais remontar o componente inteiro por `key`; vale reavaliar esse
+ponto do design de `#21` quando chegar a vez dela.

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { EditorState } from "@codemirror/state";
+import { EditorState, Transaction } from "@codemirror/state";
 import { EditorView, keymap, drawSelection } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { searchKeymap } from "@codemirror/search";
@@ -37,7 +37,12 @@ export function EditorPane({ value, onChange }: EditorPaneProps) {
         markdownDecorations(),
         markdownEditingKeymap,
         EditorView.updateListener.of((update) => {
-          if (update.docChanged) {
+          if (!update.docChanged) return;
+          // Transações sem userEvent são sincronizações programáticas (ver
+          // efeito de `value` abaixo) — só ecoa pro store mudanças que o
+          // próprio usuário causou (digitação, paste, undo/redo, comandos).
+          const isUserChange = update.transactions.some((tr) => tr.annotation(Transaction.userEvent) !== undefined);
+          if (isUserChange) {
             onChange(update.state.doc.toString());
           }
         }),
@@ -53,6 +58,19 @@ export function EditorPane({ value, onChange }: EditorPaneProps) {
     return () => view.destroy();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- monta uma vez; troca de aba recria o componente
   }, []);
+
+  // Resincroniza o doc do CodeMirror quando `value` muda por fora da
+  // digitação (load inicial assíncrono, restauração de histórico, reload
+  // silencioso do watcher) — o efeito acima só grava o doc inicial.
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    if (value === view.state.doc.toString()) return;
+
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: value },
+    });
+  }, [value]);
 
   return <div className="editor-pane" ref={containerRef} />;
 }
