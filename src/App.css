@@ -44,6 +44,68 @@ body {
   font-size: 15px;
 }
 
+/* Decorations de markdown no editor (#12): marcadores visíveis e atenuados,
+   texto ao redor estilizado como ficará no preview final. */
+.cm-md-marker {
+  opacity: 0.45;
+}
+
+.cm-md-h1,
+.cm-md-h2,
+.cm-md-h3,
+.cm-md-h4,
+.cm-md-h5,
+.cm-md-h6 {
+  font-weight: bold;
+}
+
+.cm-md-h1 {
+  font-size: 1.6em;
+}
+
+.cm-md-h2 {
+  font-size: 1.45em;
+}
+
+.cm-md-h3 {
+  font-size: 1.3em;
+}
+
+.cm-md-h4 {
+  font-size: 1.15em;
+}
+
+.cm-md-h5 {
+  font-size: 1.05em;
+}
+
+.cm-md-h6 {
+  font-size: 1em;
+}
+
+.cm-md-strong {
+  font-weight: bold;
+}
+
+.cm-md-em {
+  font-style: italic;
+}
+
+.cm-md-strike {
+  text-decoration: line-through;
+}
+
+.cm-md-inline-code,
+.cm-md-fenced-code {
+  font-family: monospace;
+  background: light-dark(#f0f0f0, #2a2a2a);
+}
+
+.cm-md-link {
+  color: light-dark(#0969da, #58a6ff);
+  text-decoration: underline;
+}
+
 .preview-pane {
   padding: 1rem 2rem;
   line-height: 1.6;
