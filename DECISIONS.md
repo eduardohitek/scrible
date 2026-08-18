@@ -212,3 +212,50 @@ item "Bloco de código" desta issue fica sem linguagem — `#15` é quem resolve
 **Afeta:** `#23` (mecanismo de troca de tema manual/`matchMedia` consome os mesmos tokens, sem
 retrabalho pela composabilidade de `light-dark()`), demais issues de UI (abas, menus) que agora têm
 tokens prontos para consumir em vez de hardcodar cores novas.
+
+## #23 — Tema claro/escuro com opção de seguir o sistema
+
+- Override de `color-scheme` por preferência fixada (`:root[data-theme="light"|"dark"]`) vive em
+  `App.css`, ao lado do `color-scheme: light dark` que já estava lá — **não** em `tokens.css`, que
+  continua restrito a `#22` ("custom properties só, sem seletores além de `:root`"). `light-dark()`
+  já compõe com esse `color-scheme` mais específico sem nenhuma mudança nos tokens.
+- Persistência em `.scrible/settings.json` (`{"theme": "system"|"light"|"dark"}`) reaproveita os
+  commands Rust genéricos já existentes `read_file`/`save_file` (`#6`, sem validação de path) — sem
+  criar nenhum command novo. Efeito colateral aceito conscientemente: `save_file` sempre chama
+  `history::maybe_snapshot`, então toda troca de tema também gera uma entrada (nunca exposta na UI)
+  em `.scrible/history/<hash-do-path-de-settings.json>/`; custo desprezível dado o throttle de 5min
+  de `#8`.
+  Também aceito conscientemente: `settings.json` é gravado com overwrite completo (sem
+  read-merge-write), seguro hoje porque `theme` é o único campo. **A próxima feature que adicionar
+  uma segunda chave nesse arquivo precisa migrar para leitura+merge antes de escrever, ou vai apagar
+  o campo `theme` (ou vice-versa) silenciosamente.**
+- Novo `src/theme/themeStore.ts` (zustand, mesmo padrão de `init()`/tratamento de `FsError.NotFound`
+  de `documentStore.ts`): `preference` (persistido) + `resolved` (derivado via `matchMedia`, nunca
+  `"system"`). O listener de `matchMedia("(prefers-color-scheme: dark)")` só existe enquanto
+  `preference === "system"` — uma única função (`applyPreference`) decide isso tanto em `init()`
+  quanto em `setPreference()`, evitando a corrida entre uma mudança de tema do SO em segundo plano e
+  uma troca manual do usuário. O estado inicial da store é estático (sem chamar `matchMedia` na
+  criação) porque `PreviewPane.tsx` importa `themeStore.ts` e `jsdom`/`vitest` não implementa
+  `matchMedia` — só `init()` e o que ele aciona podem tocar nisso.
+- `document.documentElement.dataset.theme = resolved` (não um wrapper React) é o único ponto que
+  aplica o tema — é o que `:root[data-theme=...]` alcança. Aplicado sempre, mesmo com preferência
+  `"system"` (nesse caso `resolved` já é o valor concreto vindo da resolução via `matchMedia`).
+- `PreviewPane.tsx`: `mermaid.initialize` deixou de ser uma chamada única em module scope e passou a
+  rodar dentro do efeito que processa os blocos mermaid, dependente de `[html, resolved]`. Precisou
+  parar de usar `dangerouslySetInnerHTML` no JSX — o próprio efeito reescreve
+  `container.innerHTML = html` antes de reprocessar os blocos, porque diagramas já renderizados como
+  SVG substituem o `<pre><code>` original no DOM real, e sem essa reescrita eles não seriam
+  encontrados de novo para redesenhar num novo tema. Um guard `cancelled` (setado no cleanup)
+  evita que uma promise de `mermaid.render` de uma execução antiga escreva no DOM depois que um
+  efeito mais novo já reescreveu o container.
+- Sem teste automatizado para o wiring de `data-theme` em `App.tsx` (não existe `App.test.tsx`) —
+  mesma postura de `#12`/`#22` para esse tipo de integração de tema/CSS; verificação só manual via
+  `mise run dev`.
+- Resíduo aceito conscientemente: como `init()` do tema é assíncrono (round-trip IPC), há uma janela
+  breve de "flash de tema errado" (FOUC) só quando a preferência manual salva diverge do tema atual
+  do SO no boot — no caso `"system"` (default) não há flash, porque `color-scheme: light dark` já
+  resolve nativamente no primeiro paint. Eliminar isso exigiria uma segunda fonte de verdade síncrona
+  (ex: `localStorage`) — fora de escopo.
+- `src/theme/ThemeToggle.tsx`: dropdown de 3 opções explícitas (Sistema/Claro/Escuro), não um botão
+  de ciclo único — mostra o estado atual sem exigir interação. Mesmo padrão de interação de
+  `HistoryPanel.tsx` (toggle + fecha ao clicar fora via `mousedown` em `document`).

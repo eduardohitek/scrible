@@ -2,9 +2,11 @@
  * Design system base do scrible (#22): custom properties consumidas por
  * App.css e pelos módulos que precisam de tokens em JS (ex: editorTheme.ts).
  * Todo token de cor usa light-dark() direto, apoiado no `color-scheme: light
- * dark` de App.css — sem @media(prefers-color-scheme) nem [data-theme] ainda
- * (isso é escopo de #23; light-dark() já compõe com um color-scheme mais
- * específico no futuro, sem retrabalho).
+ * dark` de App.css. A preferência manual de tema (#23) sobrescreve
+ * `color-scheme` via `:root[data-theme="light"|"dark"]` em App.css — não
+ * aqui, para manter este arquivo só com custom properties, sem seletores
+ * além de `:root`. light-dark() compõe com esse color-scheme mais específico
+ * sem nenhum retrabalho nos tokens.
  */
 :root {
   /* Cores: superfícies e texto */

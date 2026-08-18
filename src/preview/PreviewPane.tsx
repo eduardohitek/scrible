@@ -4,16 +4,13 @@ import MarkdownIt from "markdown-it";
 import footnote from "markdown-it-footnote";
 import DOMPurify from "dompurify";
 import mermaid from "mermaid";
+import { useThemeStore } from "../theme/themeStore";
 
 interface PreviewPaneProps {
   source: string;
 }
 
 const md = new MarkdownIt({ html: false, linkify: true }).use(footnote);
-
-// Tema fixo ("default") por enquanto: mermaid não usa CSS custom properties,
-// então acompanhar claro/escuro em runtime é escopo de #23 (detecção de tema).
-mermaid.initialize({ startOnLoad: false, theme: "default" });
 
 let mermaidIdCounter = 0;
 
@@ -25,13 +22,24 @@ let mermaidIdCounter = 0;
  */
 export function PreviewPane({ source }: PreviewPaneProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const resolvedTheme = useThemeStore((state) => state.resolved);
 
   // Derivação pura de `source` — sem efeito colateral, não precisa de useEffect+useState.
   const html = useMemo(() => DOMPurify.sanitize(md.render(source)), [source]);
 
   useEffect(() => {
-    if (!containerRef.current) return;
-    const blocks = containerRef.current.querySelectorAll<HTMLElement>(
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: resolvedTheme === "dark" ? "dark" : "default",
+    });
+
+    const container = containerRef.current;
+    if (!container) return;
+
+    let cancelled = false;
+    container.innerHTML = html;
+
+    const blocks = container.querySelectorAll<HTMLElement>(
       'code.language-mermaid, pre > code[class*="mermaid"]',
     );
 
@@ -43,11 +51,13 @@ export function PreviewPane({ source }: PreviewPaneProps) {
 
       try {
         const { svg } = await mermaid.render(id, graphDefinition);
+        if (cancelled) return;
         const wrapper = document.createElement("div");
         wrapper.className = "mermaid-diagram";
         wrapper.innerHTML = svg;
         pre.replaceWith(wrapper);
       } catch (err) {
+        if (cancelled) return;
         const errorBox = document.createElement("div");
         errorBox.className = "mermaid-error";
         errorBox.textContent = `Erro de sintaxe no diagrama: ${
@@ -56,13 +66,11 @@ export function PreviewPane({ source }: PreviewPaneProps) {
         pre.replaceWith(errorBox);
       }
     });
-  }, [html]);
 
-  return (
-    <div
-      className="preview-pane"
-      ref={containerRef}
-      dangerouslySetInnerHTML={{ __html: html }}
-    />
-  );
+    return () => {
+      cancelled = true;
+    };
+  }, [html, resolvedTheme]);
+
+  return <div className="preview-pane" ref={containerRef} />;
 }
