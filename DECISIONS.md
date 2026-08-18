@@ -303,3 +303,37 @@ tokens prontos para consumir em vez de hardcodar cores novas.
 scaffold — só falta a issue formal), `#19`/`#20` (layout split e scroll sync, que devem derivar
 qualquer novo estado de `debouncedSource`, não de `source` bruto, para preservar a garantia do
 debounce), `#26`/`#27` (export HTML/PDF reaproveitam este pipeline como fonte da verdade).
+
+## #18 — Renderização de diagramas mermaid com isolamento de erro
+
+- **Nenhuma mudança em `PreviewPane.tsx`**: a renderização assíncrona por bloco, o isolamento de
+  erro (`.mermaid-error` por diagrama, sem afetar os vizinhos) e a reação a troca de tema já
+  existiam desde o scaffold original (`#1`/`#2`) e seguiam intactos após `#17`/`#23`. O trabalho
+  real desta issue foi fechar a lacuna de verificação, não implementar produção nova.
+- Achado: o ambiente de teste (`jsdom`, via Vitest) não implementa `getBBox`/`getComputedTextLength`
+  em elementos SVG — APIs que o mermaid usa para medir/posicionar nós e texto no layout. Sem elas,
+  `mermaid.render()` lança exceção para **qualquer** diagrama, válido ou não, sob jsdom — o teste de
+  isolamento de erro de `#17` só passava por coincidência (usa um diagrama propositalmente inválido,
+  que já lançaria de qualquer forma). Não era possível provar que um diagrama válido de fato
+  renderiza como SVG, critério de aceite literal da issue.
+- Novo `src/test-setup.ts` (registrado via `test.setupFiles` em `vite.config.ts`, afeta toda a
+  suíte) faz stub dessas duas APIs em `SVGElement.prototype` — **não** em `SVGGraphicsElement`/
+  `SVGTextContentElement`, os donos "corretos" pela spec do DOM. Motivo: jsdom instancia elementos
+  SVG sem interface dedicada (`<text>`, `<g>`, etc.) genericamente como `SVGElement` puro, não como
+  as subclasses especializadas — confirmado lendo a cadeia de protótipos de um `<text>` real
+  renderizado por jsdom. Usar as classes "certas" pela spec resultava em `text.getBBox is not a
+function` em runtime, apesar de compilar.
+- Com os stubs, os 3 critérios de aceite antes não-verificáveis viraram testes reais em
+  `PreviewPane.test.tsx`: diagrama válido renderiza `<svg>` dentro de `.mermaid-diagram`; 2 diagramas
+  válidos + 1 inválido no meio isolam corretamente (2 SVGs + 1 `.mermaid-error`); diagrama com 32 nós
+  renderiza com sucesso sem lançar.
+- **Sem debounce dedicado para mermaid** (decisão consciente, não omissão): o `useEffect` de mermaid
+  já depende de `[html, resolvedTheme]`, e `html` já deriva de `debouncedSource`
+  (`RENDER_DEBOUNCE_MS = 200`, `#17`) — toda edição de texto, o cenário dominante de "digitar
+  rapidamente com diagramas grandes", já está protegida. O único gatilho sem debounce é troca de
+  tema, uma ação discreta e pouco frequente do usuário, não um evento de disparo rápido repetido
+  como digitação — não justificou um segundo timer.
+
+**Afeta:** `#26`/`#27` (export HTML/PDF podem reaproveitar `src/test-setup.ts` para testar
+embutimento de SVG mermaid), `#20` (scroll sync deve estar ciente de que diagramas grandes recalculam
+altura de forma assíncrona, depois do primeiro paint).
