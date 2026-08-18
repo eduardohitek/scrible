@@ -50,6 +50,62 @@ describe("PreviewPane", () => {
     expect(container.textContent).toContain("Depois do diagrama.");
   });
 
+  it("renderiza um diagrama mermaid válido como SVG", async () => {
+    const source = ["```mermaid", "flowchart TD", "A-->B", "```"].join("\n");
+
+    const { container } = render(<PreviewPane source={source} />);
+
+    await waitFor(() => {
+      expect(container.querySelector(".mermaid-diagram svg")).not.toBeNull();
+    });
+
+    expect(container.querySelector(".mermaid-error")).toBeNull();
+  });
+
+  it("isola 1 diagrama inválido entre 2 válidos, sem afetar os vizinhos", async () => {
+    const source = [
+      "```mermaid",
+      "flowchart TD",
+      "A-->B",
+      "```",
+      "",
+      "```mermaid",
+      "isto não é mermaid válido {{{",
+      "```",
+      "",
+      "```mermaid",
+      "flowchart TD",
+      "C-->D",
+      "```",
+    ].join("\n");
+
+    const { container } = render(<PreviewPane source={source} />);
+
+    await waitFor(() => {
+      expect(container.querySelectorAll(".mermaid-diagram svg")).toHaveLength(2);
+    });
+
+    expect(container.querySelectorAll(".mermaid-error")).toHaveLength(1);
+  });
+
+  it("renderiza um diagrama grande (30+ nós) com sucesso", async () => {
+    // A garantia de "não trava a UI perceptivelmente" em si é uma propriedade
+    // arquitetural (cada bloco renderiza de forma assíncrona e independente,
+    // e o debounce de #17 já protege disparos vindos de digitação) — não algo
+    // que um teste em jsdom meça como tempo de bloqueio real. Este teste prova
+    // que o layout do mermaid não falha em escala.
+    const edges = Array.from({ length: 32 }, (_, i) => `N${i}-->N${i + 1}`).join("\n");
+    const source = ["```mermaid", "flowchart TD", edges, "```"].join("\n");
+
+    const { container } = render(<PreviewPane source={source} />);
+
+    await waitFor(() => {
+      expect(container.querySelector(".mermaid-diagram svg")).not.toBeNull();
+    });
+
+    expect(container.querySelector(".mermaid-error")).toBeNull();
+  });
+
   it("renderiza tabela GFM", async () => {
     const source = ["| a | b |", "| - | - |", "| 1 | 2 |"].join("\n");
 
