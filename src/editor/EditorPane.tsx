@@ -7,6 +7,7 @@ import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { markdownDecorations } from "./markdownDecorations";
 import { markdownEditingKeymap } from "./markdownCommands";
 import { slashMenu } from "./slashMenu";
+import { editorTheme } from "./editorTheme";
 
 interface EditorPaneProps {
   value: string;
@@ -38,6 +39,7 @@ export function EditorPane({ value, onChange }: EditorPaneProps) {
         markdownDecorations(),
         markdownEditingKeymap,
         slashMenu,
+        editorTheme,
         EditorView.updateListener.of((update) => {
           if (!update.docChanged) return;
           // Transações sem userEvent são sincronizações programáticas (ver
