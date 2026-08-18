@@ -2,6 +2,15 @@
   color-scheme: light dark;
 }
 
+/* Preferência fixada manualmente (#23) — sem isso, o app sempre segue o SO
+   via prefers-color-scheme nativo. */
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -130,6 +139,53 @@ body {
   position: fixed;
   top: var(--space-3);
   right: var(--space-4);
+}
+
+.theme-toggle-container {
+  position: fixed;
+  top: var(--space-3);
+  left: var(--space-4);
+}
+
+.theme-toggle {
+  font-size: var(--font-size-xs);
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  cursor: pointer;
+}
+
+.theme-menu {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  left: 0;
+  min-width: 120px;
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-panel);
+  padding: var(--space-1);
+  list-style: none;
+  margin: 0;
+}
+
+.theme-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font-size: var(--font-size-xs);
+  color: var(--color-text);
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  cursor: pointer;
+}
+
+.theme-menu button[aria-current="true"] {
+  background: var(--color-selection-bg);
 }
 
 .history-toggle {

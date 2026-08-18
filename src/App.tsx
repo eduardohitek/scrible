@@ -6,7 +6,9 @@ import { EditorPane } from "./editor/EditorPane";
 import { PreviewPane } from "./preview/PreviewPane";
 import { HistoryPanel } from "./history/HistoryPanel";
 import { ConflictBanner } from "./conflict/ConflictBanner";
+import { ThemeToggle } from "./theme/ThemeToggle";
 import { useDocumentStore } from "./store/documentStore";
+import { useThemeStore } from "./theme/themeStore";
 import "./theme/tokens.css";
 import "./App.css";
 
@@ -27,6 +29,8 @@ function App() {
   const status = useDocumentStore((state) => state.status);
   const init = useDocumentStore((state) => state.init);
   const flush = useDocumentStore((state) => state.flush);
+  const initTheme = useThemeStore((state) => state.init);
+  const resolvedTheme = useThemeStore((state) => state.resolved);
 
   useEffect(() => {
     invoke("workspace_status")
@@ -35,6 +39,14 @@ function App() {
         setWorkspaceError(err);
       });
   }, [init]);
+
+  useEffect(() => {
+    void initTheme();
+  }, [initTheme]);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = resolvedTheme;
+  }, [resolvedTheme]);
 
   useEffect(() => {
     const unlistenFocus = getCurrentWindow().onFocusChanged(({ payload: focused }) => {
@@ -69,6 +81,7 @@ function App() {
     <div className="app-shell">
       <EditorPane value={content} onChange={setContent} />
       <PreviewPane source={content} />
+      <ThemeToggle />
       <HistoryPanel />
       {status === "conflict" && <ConflictBanner />}
       {status === "saving" && <div className="save-indicator">Salvando…</div>}
