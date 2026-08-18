@@ -1,4 +1,4 @@
-import { render, waitFor } from "@testing-library/react";
+import { act, render, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import mermaid from "mermaid";
 import { PreviewPane } from "./PreviewPane";
@@ -50,6 +50,120 @@ describe("PreviewPane", () => {
     expect(container.textContent).toContain("Depois do diagrama.");
   });
 
+  it("renderiza tabela GFM", async () => {
+    const source = ["| a | b |", "| - | - |", "| 1 | 2 |"].join("\n");
+
+    const { container } = render(<PreviewPane source={source} />);
+
+    await waitFor(() => {
+      expect(container.querySelector("table")).not.toBeNull();
+    });
+
+    const headers = Array.from(container.querySelectorAll("th")).map((th) => th.textContent);
+    expect(headers).toEqual(["a", "b"]);
+    const cells = Array.from(container.querySelectorAll("td")).map((td) => td.textContent);
+    expect(cells).toEqual(["1", "2"]);
+  });
+
+  it("renderiza lista de tarefas com checkboxes desabilitados", async () => {
+    const source = ["- [x] feito", "- [ ] pendente"].join("\n");
+
+    const { container } = render(<PreviewPane source={source} />);
+
+    await waitFor(() => {
+      expect(container.querySelectorAll('input[type="checkbox"]')).toHaveLength(2);
+    });
+
+    const checkboxes = Array.from(
+      container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'),
+    );
+    expect(checkboxes[0].checked).toBe(true);
+    expect(checkboxes[1].checked).toBe(false);
+    expect(checkboxes.every((checkbox) => checkbox.disabled)).toBe(true);
+    expect(container.querySelectorAll("li.task-list-item")).toHaveLength(2);
+  });
+
+  it("renderiza texto riscado GFM", async () => {
+    const { container } = render(<PreviewPane source="~~texto~~" />);
+
+    await waitFor(() => {
+      expect(container.querySelector("s")).not.toBeNull();
+    });
+
+    expect(container.querySelector("s")?.textContent).toBe("texto");
+  });
+
+  it("renderiza nota de rodapé", async () => {
+    const source = ["Texto[^1]", "", "[^1]: Nota."].join("\n");
+
+    const { container } = render(<PreviewPane source={source} />);
+
+    await waitFor(() => {
+      expect(container.querySelector(".footnote-ref")).not.toBeNull();
+    });
+
+    expect(container.querySelector(".footnotes")).not.toBeNull();
+  });
+
+  it("renderiza front matter como tabela de metadados, não como hr + texto solto", async () => {
+    const source = ["---", "title: Teste", "---", "# Corpo"].join("\n");
+
+    const { container } = render(<PreviewPane source={source} />);
+
+    await waitFor(() => {
+      expect(container.querySelector(".front-matter-table")).not.toBeNull();
+    });
+
+    const rowText = container.querySelector(".front-matter-table tr")?.textContent;
+    expect(rowText).toContain("title");
+    expect(rowText).toContain("Teste");
+    expect(container.querySelector("hr")).toBeNull();
+    expect(container.querySelector("h1")?.textContent).toBe("Corpo");
+  });
+
+  it("sanitiza valor malicioso embutido no front matter", async () => {
+    const source = [
+      "---",
+      'title: <img src=x onerror="window.__fmPwned = true">',
+      "---",
+      "corpo",
+    ].join("\n");
+
+    const { container } = render(<PreviewPane source={source} />);
+
+    await waitFor(() => {
+      expect(container.querySelector(".front-matter-table")).not.toBeNull();
+    });
+
+    expect(container.querySelector(".front-matter-table img")).toBeNull();
+    expect((window as unknown as { __fmPwned?: boolean }).__fmPwned).toBeUndefined();
+  });
+
+  it("faz debounce do re-parse ao digitar rapidamente", async () => {
+    vi.useFakeTimers();
+    try {
+      const { container, rerender } = render(<PreviewPane source="# v1" />);
+      expect(container.querySelector("h1")?.textContent).toBe("v1");
+
+      act(() => {
+        rerender(<PreviewPane source="# v2" />);
+        rerender(<PreviewPane source="# v3" />);
+        rerender(<PreviewPane source="# v4" />);
+      });
+
+      // Antes do debounce expirar, o preview ainda mostra a primeira versão.
+      expect(container.querySelector("h1")?.textContent).toBe("v1");
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(250);
+      });
+
+      expect(container.querySelector("h1")?.textContent).toBe("v4");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   afterEach(() => {
     useThemeStore.setState({ resolved: "light" });
   });
@@ -63,17 +177,13 @@ describe("PreviewPane", () => {
     await waitFor(() => {
       expect(container.querySelector(".mermaid-error")).not.toBeNull();
     });
-    expect(initializeSpy).toHaveBeenLastCalledWith(
-      expect.objectContaining({ theme: "default" }),
-    );
+    expect(initializeSpy).toHaveBeenLastCalledWith(expect.objectContaining({ theme: "default" }));
 
     initializeSpy.mockClear();
     useThemeStore.setState({ resolved: "dark" });
 
     await waitFor(() => {
-      expect(initializeSpy).toHaveBeenLastCalledWith(
-        expect.objectContaining({ theme: "dark" }),
-      );
+      expect(initializeSpy).toHaveBeenLastCalledWith(expect.objectContaining({ theme: "dark" }));
     });
   });
 });

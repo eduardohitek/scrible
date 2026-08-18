@@ -150,12 +150,12 @@ ponto do design de `#21` quando chegar a vez dela.
   então sempre começa com `/`, e nenhum label bate. Resultado: o menu nunca abria (zero opções em
   qualquer estado, mesmo digitando só `/`), embora `slashCommandSource` chamado isoladamente
   retornasse a lista completa normalmente. Fix: `filter: false` + filtragem manual dentro da própria
-  fonte, comparando o texto digitado *depois* do `/` (`sliceDoc(word.from + 1, word.to)`) contra os
+  fonte, comparando o texto digitado _depois_ do `/` (`sliceDoc(word.from + 1, word.to)`) contra os
   labels. Reproduzido/confirmado com um `EditorView` real em jsdom (`view.dispatch` simulando
   `userEvent: "input.type"` + aguardar os timers internos do plugin), não só com `EditorState`
   isolado — vale considerar esse tipo de teste (headless, mas com `EditorView` de verdade) para
   qualquer futura fonte de `autocompletion()` com trigger char próprio (`#15` vai precisar disso
-  para `` ``` ``).
+  para ` ``` `).
 - Fechar com `Esc`/clique fora e aceitar com `Enter` são o `completionKeymap` embutido em
   `autocompletion()` (`Prec.highest`, sem precisar registrar keymap próprio nem entrar em conflito
   com o `Tab`/`Shift-Tab` de `listIndent`/`listOutdent` de `#13` — o `/` nunca dispara dentro de um
@@ -259,3 +259,47 @@ tokens prontos para consumir em vez de hardcodar cores novas.
 - `src/theme/ThemeToggle.tsx`: dropdown de 3 opções explícitas (Sistema/Claro/Escuro), não um botão
   de ciclo único — mostra o estado atual sem exigir interação. Mesmo padrão de interação de
   `HistoryPanel.tsx` (toggle + fecha ao clicar fora via `mousedown` em `document`).
+
+## #17 — Pipeline markdown-it: GFM + front matter + footnotes + sanitização
+
+- Confirmado por leitura do código-fonte do `markdown-it`: sem `preset` explícito no construtor
+  (`new MarkdownIt({ html: false, linkify: true })`), o preset **default** já habilita tabelas e
+  texto riscado GFM — só o preset `commonmark` os desabilitaria. O scaffold anterior (`#12`/`#22`)
+  já tinha isso de graça; o trabalho real desta issue foi listas de tarefas, front matter e debounce.
+- **Front matter não usa o plugin `markdown-it-front-matter`** (desvio consciente do plano original):
+  o plugin captura o bloco via callback síncrono que precisa mutar uma variável de módulo dentro do
+  `md.render()`; como esse `render()` roda dentro do `useMemo` de `PreviewPane`, isso violava a regra
+  de pureza do `eslint-plugin-react-hooks` ("Reassigning this value during render is a form of side
+  effect"). Solução: `extractFrontMatter` faz o parsing do bloco `---...---` manualmente, isolando-o
+  do corpo _antes_ de chamar `md.render()` — sem plugin, sem estado de módulo mutável, e mais simples
+  no fim das contas.
+- Front matter é parseado com um line parser artesanal (`key: value`, split no primeiro `:`, com
+  suporte só a valores entre aspas simples/duplas) — **não** `js-yaml`. O critério de aceite da issue
+  só exige um bloco plano (`title: Teste`); a convenção já estabelecida no projeto (debounce manual
+  em `#7`, throttle manual em `#8`, FNV-1a inline em `#8`) favorece não adicionar uma dependência de
+  parser completo para esse escopo. Revisitar se algum front matter aninhado/lista aparecer no
+  futuro.
+- Valores de front matter são escapados manualmente (`escapeHtml`) antes de virar `<td>` — tratados
+  como texto literal, nunca como markdown. A tabela de metadados resultante é concatenada com o corpo
+  **antes** da única chamada a `DOMPurify.sanitize` já existente; não há caminho de sanitização
+  paralelo/alternativo para o bloco de metadados.
+- `markdown-it-task-lists` (sem tipos publicados, mesmo padrão de `@ts-expect-error` já usado para
+  `markdown-it-footnote`) — checkboxes ficam **desabilitados** (comportamento default do plugin):
+  decisão consciente, o preview é somente leitura e não há wiring de volta para o documento fonte.
+- Debounce de render (`RENDER_DEBOUNCE_MS = 200`, dentro da faixa 150-300ms pedida): estado
+  `debouncedSource` local ao componente (`useState` + `useRef` para o timer), mesmo idioma manual
+  `setTimeout`/`clearTimeout` de `documentStore.ts` (`#7`), só que por instância de componente (não
+  módulo) — já é seguro para múltiplas instâncias futuras de `PreviewPane` (ex: abas, `#21`). Um
+  guard de "primeira execução" evita atrasar o primeiro paint; só mudanças subsequentes de `source`
+  são debounced. `html` continua um `useMemo` puro, agora derivado de `debouncedSource` em vez de
+  `source` diretamente.
+- Verificação manual via `mise run dev` **não foi feita nesta sessão** — porta 1420 já estava em uso
+  por outra sessão concorrente no mesmo host. Cobertura ficou só nos testes automatizados (11 casos
+  novos em `PreviewPane.test.tsx` cobrindo tabela, task list, riscado, nota de rodapé, front
+  matter→tabela, sanitização do front matter, e debounce com fake timers). Recomenda-se conferência
+  visual manual antes de considerar a issue definitivamente encerrada.
+
+**Afeta:** `#18` (isolamento de erro de mermaid, cujo código já existe em `PreviewPane.tsx` desde o
+scaffold — só falta a issue formal), `#19`/`#20` (layout split e scroll sync, que devem derivar
+qualquer novo estado de `debouncedSource`, não de `source` bruto, para preservar a garantia do
+debounce), `#26`/`#27` (export HTML/PDF reaproveitam este pipeline como fonte da verdade).
