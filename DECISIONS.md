@@ -168,3 +168,47 @@ ponto do design de `#21` quando chegar a vez dela.
 **Afeta:** `#15` (grupo D) reaproveita `syntaxTree()`/checagem de posição em fence já presente aqui
 e o padrão de `snippetCompletion`/tabstops para os esqueletos de mermaid; herda a decisão de que o
 item "Bloco de código" desta issue fica sem linguagem — `#15` é quem resolve isso via fence real.
+
+## #22 — Design system e tokens de tema
+
+- Novo `src/theme/tokens.css` (custom properties só, sem seletores além de `:root`), importado em
+  `App.tsx` antes de `App.css`. `App.css` continua sendo a única folha de estilo de componentes —
+  sem migração para CSS Modules/PostCSS/Tailwind, decisão via sabatina.
+- Todo token de cor usa `light-dark(claro, escuro)` diretamente na custom property (ex.:
+  `--color-border: light-dark(#ddd, #444)`), apoiado no `color-scheme: light dark` já existente em
+  `:root` — decisão via sabatina: nenhum `@media (prefers-color-scheme)`/`[data-theme]` agora, isso é
+  escopo da `#23`; como o override futuro da `#23` vai atuar só sobre `color-scheme` num escopo mais
+  específico, `light-dark()` já compõe corretamente sem retrabalho.
+- `--color-accent` reaproveita a cor de link já existente (`#0969da`/`#58a6ff`, cores de link do
+  GitHub Primer) como accent único do app — sem uma segunda cor de destaque.
+- Consolidação de duplicação: `.mermaid-error`/`.workspace-error` tinham os mesmos hexadecimais
+  hardcoded (`#b00020`/`#fdecea`) sem `light-dark()` (bug pré-existente, ilegível em dark mode) —
+  viraram `--color-danger-*` com variantes escuras novas, consumidos independentemente pelas duas
+  classes (sem fundir os componentes).
+- Bordas quase-duplicadas (`#e0e0e0`/`#ddd`/`#eee` em `.editor-pane`/`.history-toggle`/
+  `.history-panel`/`.history-item`) foram unificadas em dois tokens por semântica de uso, não por
+  coincidência de valor: `--color-border` (chrome flutuante/interativo: toggle, painel) e
+  `--color-border-subtle` (divisores em fluxo: borda do editor, linhas da lista de histórico) — o
+  agrupamento seguiu o valor do modo escuro (`#333` vs `#444`), que divergia mais entre os dois
+  grupos do que o valor do modo claro (quase idêntico nos três).
+- Tokens semânticos de markdown (`--color-markdown-heading`, `--color-markdown-code-bg`,
+  `--color-markdown-link`, `--color-markdown-quote`) criados por completude do escopo mínimo da
+  issue; `heading`/`link` são aliases sem efeito visual novo (headings já usavam a cor de texto
+  padrão, link já era o accent). `--color-markdown-quote` fica **sem consumidor** por enquanto —
+  `markdownDecorations.ts` não tem decoration de blockquote ainda.
+- CodeMirror: novo `src/editor/editorTheme.ts`, um único `EditorView.theme()` cobrindo seleção,
+  cursor e o tooltip do `autocompletion()` de `slashMenu.ts` (`#14`) — via `var(--token)` direto nos
+  valores do spec object, porque CodeMirror injeta essas três coisas com seu próprio `baseTheme()` e
+  uma regra solta em `App.css` não teria precedência garantida sobre ele. Fonte/tamanho do editor
+  continuam vindo de `.editor-pane .cm-editor` em `App.css` (cascata normal já funcionava para isso).
+- `mermaid.initialize({ theme: "default" })` (`PreviewPane.tsx`) **não foi tocado** — é conteúdo de
+  markdown (fora do escopo pelo próprio texto da issue) e depende de detecção de tema em runtime, que
+  é escopo da `#23`. `.mermaid-error` (banner de erro do scrible, não conteúdo do mermaid em si) já
+  está nos tokens de perigo.
+- Boilerplate do Tauri/Vite em `index.html` (título, favicon) — fora de escopo, não é token de design.
+- Sem teste automatizado dedicado (mesma decisão da `#12`) — verificação só manual via `mise run dev`
+  com toggle de aparência do macOS, aprovada visualmente pelo usuário conforme o critério de aceite.
+
+**Afeta:** `#23` (mecanismo de troca de tema manual/`matchMedia` consome os mesmos tokens, sem
+retrabalho pela composabilidade de `light-dark()`), demais issues de UI (abas, menus) que agora têm
+tokens prontos para consumir em vez de hardcodar cores novas.

@@ -7,6 +7,7 @@ import { PreviewPane } from "./preview/PreviewPane";
 import { HistoryPanel } from "./history/HistoryPanel";
 import { ConflictBanner } from "./conflict/ConflictBanner";
 import { useDocumentStore } from "./store/documentStore";
+import "./theme/tokens.css";
 import "./App.css";
 
 interface ExternalChangePayload {

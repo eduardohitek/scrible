@@ -11,6 +11,8 @@ interface PreviewPaneProps {
 
 const md = new MarkdownIt({ html: false, linkify: true }).use(footnote);
 
+// Tema fixo ("default") por enquanto: mermaid não usa CSS custom properties,
+// então acompanhar claro/escuro em runtime é escopo de #23 (detecção de tema).
 mermaid.initialize({ startOnLoad: false, theme: "default" });
 
 let mermaidIdCounter = 0;
