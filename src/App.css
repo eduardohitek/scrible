@@ -135,6 +135,60 @@ body {
   margin: var(--space-4) 0;
 }
 
+.preview-pane table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: var(--space-4) 0;
+  font-size: var(--font-size-sm);
+}
+
+.preview-pane th,
+.preview-pane td {
+  border: 1px solid var(--color-border);
+  padding: var(--space-1) var(--space-2);
+  text-align: left;
+}
+
+.preview-pane thead th {
+  background: var(--color-surface);
+}
+
+.preview-pane ul.contains-task-list {
+  list-style: none;
+  padding-left: var(--space-4);
+}
+
+.preview-pane .task-list-item {
+  list-style: none;
+}
+
+.preview-pane .task-list-item-checkbox {
+  margin-right: var(--space-2);
+}
+
+.front-matter {
+  margin-bottom: var(--space-4);
+}
+
+.front-matter-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+
+.front-matter-table th,
+.front-matter-table td {
+  text-align: left;
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.front-matter-table th {
+  color: var(--color-text-secondary);
+  font-weight: normal;
+  width: 30%;
+}
+
 .history-panel-container {
   position: fixed;
   top: var(--space-3);
