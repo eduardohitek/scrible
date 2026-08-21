@@ -398,3 +398,28 @@ serializável, então `#9` precisa decidir como extrair essa posição do `Edito
 persistir. `#24` (menu nativo) e `#25` (explorador) chamam `tabsStore.openTab`/`newTab` como os
 gatilhos de UI que faltam aqui. Qualquer issue futura de watcher multi-path deve substituir o
 roteamento por-path-fixo em `App.tsx` por algo que cubra todas as abas abertas.
+
+### Bugfix pós-merge: `EditorView` morta sob `React.StrictMode` (só em `mise run dev`)
+
+Reportado pelo usuário logo após o merge: em `mise run dev`, o conteúdo do arquivo não carregava
+no editor e não era possível digitar em nenhuma aba (nem a inicial, nem uma nova) — mas todos os
+113 testes e a verificação de `mise run dev` (só checando os logs de boot) tinham passado. Causa:
+`main.tsx` envolve `<App />` em `<React.StrictMode>`, que em dev faz o React invocar os efeitos de
+montagem duas vezes (`monta → limpa → monta de novo`) para expor bugs de efeito com side-effect
+não idempotente. O efeito de montagem do `EditorPane` (`[tabId]`) decide criar uma `EditorView`
+nova só quando `!viewRef.current`; um efeito **separado**, só de montagem (`[]`), destrói essa
+`EditorView` no cleanup — mas nunca zerava `viewRef.current` depois do `destroy()`. No ciclo de
+double-invoke do StrictMode, isso deixava `viewRef.current` apontando para uma `EditorView` já
+destruída; a segunda montagem via `!viewRef.current` como verdadeiro (a ref não é `null`) e caía
+no ramo `view.setState(...)` sobre uma view morta, em vez de criar uma nova — o editor ficava sem
+nenhuma `EditorView` viva de fato. Corrigido zerando `viewRef.current = null` no cleanup que
+destrói a view (`EditorPane.tsx`). Como o double-invoke do StrictMode só acontece em
+desenvolvimento (não em builds de produção nem em testes que não envolvem `<StrictMode>`
+explicitamente), nenhum teste existente pegava isso — os 113 testes originais renderizavam
+`EditorPane` "nu", sem o wrapper. Teste de regressão adicionado em `EditorPane.test.tsx`
+envolvendo o componente em `<StrictMode>` explicitamente e verificando que a `EditorView`
+resultante ainda aceita conteúdo/digitação — confirmado que falha sem o fix e passa com ele.
+**Lição geral:** qualquer efeito que crie/destrua um recurso imperativo fora do React (como um
+`EditorView`) precisa zerar a ref no cleanup que destrói, não só no efeito que cria — caso
+contrário o double-invoke do StrictMode (ou qualquer remontagem real) vê uma ref "preenchida mas
+morta" e pula a recriação.

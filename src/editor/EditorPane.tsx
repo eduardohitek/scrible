@@ -57,6 +57,13 @@ export function EditorPane({ tabId }: EditorPaneProps) {
         saveScrollTop(tabIdAtUnmount, view.scrollDOM.scrollTop);
       }
       view?.destroy();
+      // Sem isto, o StrictMode do React 18 (mount -> cleanup -> mount, só em
+      // dev) deixa `viewRef.current` apontando pra uma EditorView já
+      // destruída: o efeito de montagem, ao rodar de novo, vê a ref não-nula
+      // e cai no ramo de `setState()` num view morto em vez de criar um novo
+      // — o editor fica sem nenhuma EditorView viva (sem carregar conteúdo,
+      // sem aceitar digitação) só em `mise run dev`.
+      viewRef.current = null;
     };
   }, []);
 

@@ -1,5 +1,8 @@
-import { render, waitFor } from "@testing-library/react";
+import { StrictMode } from "react";
+import { act, render, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { EditorView } from "@codemirror/view";
+import { Transaction } from "@codemirror/state";
 import { EditorPane } from "./EditorPane";
 import { useDocumentStore, type DocumentEntry } from "../store/documentStore";
 import { discard } from "./editorStateRegistry";
@@ -79,5 +82,31 @@ describe("EditorPane", () => {
     await waitFor(() => {
       expect(container.querySelector(".cm-content")?.textContent).toBe("conteúdo da aba 1");
     });
+  });
+
+  it("sobrevive ao duplo-invoke de efeitos do StrictMode sem deixar a EditorView morta", async () => {
+    setDocument("tab-1", "conteúdo inicial");
+    const { container } = render(
+      <StrictMode>
+        <EditorPane tabId="tab-1" />
+      </StrictMode>,
+    );
+
+    await waitFor(() => {
+      expect(container.querySelector(".cm-content")?.textContent).toBe("conteúdo inicial");
+    });
+
+    const cmContent = container.querySelector(".cm-content") as HTMLElement;
+    const view = EditorView.findFromDOM(cmContent);
+    expect(view).not.toBeNull();
+
+    act(() => {
+      view!.dispatch({
+        changes: { from: view!.state.doc.length, insert: " digitado" },
+        annotations: Transaction.userEvent.of("input.type"),
+      });
+    });
+
+    expect(useDocumentStore.getState().documents["tab-1"].content).toBe("conteúdo inicial digitado");
   });
 });
