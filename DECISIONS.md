@@ -337,3 +337,89 @@ function` em runtime, apesar de compilar.
 **Afeta:** `#26`/`#27` (export HTML/PDF podem reaproveitar `src/test-setup.ts` para testar
 embutimento de SVG mermaid), `#20` (scroll sync deve estar ciente de que diagramas grandes recalculam
 altura de forma assíncrona, depois do primeiro paint).
+
+## #21 — Barra de abas: abrir, fechar, reordenar, renomear
+
+- **Nenhuma mudança no backend Rust.** `rename_file`/`list_dir` (`#6`) já eram genéricos o
+  suficiente — `rename_file(from, to)` não sabe o que é "aba", e `list_dir` (nomes de entrada,
+  não paths completos) já serve para checar colisão de `untitled-N.md` contra o conteúdo real do
+  workspace. `history.rs` também não mudou: o diretório de snapshot já era por hash do path
+  inteiro, então múltiplas abas simultâneas já produziam histórico isolado de graça (antecipado em
+  `#8`).
+- `documentStore.ts` generalizou de um documento único (`path` fixo) para
+  `documents: Record<tabId, DocumentEntry>`. O debounce de autosave, que era uma única variável de
+  módulo (`debounceTimer`), virou `Map<tabId, timer>` — cada aba tem seu próprio timer
+  independente, testado explicitamente (`setContent` numa aba não cancela nem adia o debounce de
+  outra). Nova `tabsStore.ts` cuida de ordem/título/aba ativa/navegação, delegando save/conteúdo/
+  conflito ao `documentStore` via `tabId`.
+- **Dívida consciente do watcher**: `watcher.rs` continua observando só o path fixo original
+  (`root/untitled.md`, decisão de `#7`/`#10`) — não foi generalizado para N paths nesta issue
+  (escopo grande demais para uma mudança de Rust não-trivial: thread, closure, evento com
+  identificador de arquivo). O evento `external-file-changed` (que não carrega path no payload) é
+  roteado em `App.tsx` só para a aba aberta cujo `path` bate exatamente com esse path fixo; se
+  nenhuma aba aberta bater (ex.: foi renomeada, ou o usuário nunca abriu esse arquivo), o evento é
+  silenciosamente ignorado. **Revisitar numa issue futura dedicada** — reconciliação de alteração
+  externa hoje só funciona para no máximo uma aba por vez.
+- Arquitetura do editor: um único `EditorView` compartilhado entre todas as abas — trocar de aba
+  não remonta `EditorPane`, só troca o `EditorState` via `view.setState()` (novo
+  `src/editor/editorStateRegistry.ts`, cache de `EditorState`/scrollTop por `tabId` fora do estado
+  React). Isso preserva undo/redo e seleção nativamente por aba, algo que remontar o componente
+  perderia. `EditorPane` persiste o estado/scroll da aba de saída no registry antes de trocar
+  (`saveEditorState`/`saveScrollTop`) — é isso que evita que a reconciliação de conteúdo (usada só
+  para abas em segundo plano que mudaram por fora, ex. conflito resolvido enquanto não estavam em
+  foco) dispare numa troca de aba comum, o que poluiria o histórico de undo com uma transação de
+  "substituir doc inteiro" desnecessária.
+- **Rename e histórico**: renomear uma aba muda o `path`, e o hash FNV-1a do diretório de
+  histórico (`history.rs::hash_path`) muda junto — snapshots anteriores ao rename ficam órfãos sob
+  o hash do path antigo, sem migração. Aceito conscientemente (mesmo comportamento de `mv` no
+  Unix: metadados de uma ferramenta não seguem o arquivo automaticamente).
+- **Abrir arquivo**: só a action `openTab(path)` foi implementada (com dedup — path já aberto só
+  foca a aba existente), sem nenhum gatilho de UI nesta issue. Os dois gatilhos reais previstos no
+  texto da issue (Cmd+O nativo, `#24`; clique no explorador, `#25`) ainda não existem — ambos
+  dependem de `#21` e vão chamar `openTab` quando chegarem. Verificação manual de "abrir múltiplos
+  arquivos existentes" fica adiada para lá.
+- Nome de aba nova (Cmd+T ou fechar a última aba): `untitled-N.md` incremental, primeiro nome
+  livre checado contra `list_dir` do workspace root (não só as abas abertas em memória) — evita
+  colidir com um `untitled-1.md` deixado de uma sessão anterior.
+- Fechar a última aba nunca deixa `tabs` vazio — abre automaticamente uma `untitled-N.md` nova.
+  Consequência: `App.tsx` nunca precisa tratar um estado "sem aba ativa" além do instante inicial
+  antes do bootstrap resolver.
+- Drag-and-drop de reordenação: HTML5 nativo (`draggable`/`onDragStart`/`onDragOver`/`onDrop`) com
+  o índice de origem guardado em estado local do componente — **sem** usar
+  `event.dataTransfer.setData`/`getData` (não precisou, já que a troca acontece toda dentro do
+  mesmo componente React) e **sem** lib nova (`@dnd-kit` etc. descartado), mesma postura de evitar
+  dependência nova para escopo pequeno já usada em `#7`/`#8`/`#17`.
+- Persistência da lista de abas entre reinícios do app é explicitamente escopo de `#9` —
+  `tabsStore` vive só em memória, sem `session.json`.
+
+**Afeta:** `#9` (sessão) vai persistir/restaurar `tabsStore.tabs`/`activeTabId`, incluindo
+`cursorPos`/`scrollTop` — hoje só vivem em `editorStateRegistry.ts`, fora de qualquer store
+serializável, então `#9` precisa decidir como extrair essa posição do `EditorState` na hora de
+persistir. `#24` (menu nativo) e `#25` (explorador) chamam `tabsStore.openTab`/`newTab` como os
+gatilhos de UI que faltam aqui. Qualquer issue futura de watcher multi-path deve substituir o
+roteamento por-path-fixo em `App.tsx` por algo que cubra todas as abas abertas.
+
+### Bugfix pós-merge: `EditorView` morta sob `React.StrictMode` (só em `mise run dev`)
+
+Reportado pelo usuário logo após o merge: em `mise run dev`, o conteúdo do arquivo não carregava
+no editor e não era possível digitar em nenhuma aba (nem a inicial, nem uma nova) — mas todos os
+113 testes e a verificação de `mise run dev` (só checando os logs de boot) tinham passado. Causa:
+`main.tsx` envolve `<App />` em `<React.StrictMode>`, que em dev faz o React invocar os efeitos de
+montagem duas vezes (`monta → limpa → monta de novo`) para expor bugs de efeito com side-effect
+não idempotente. O efeito de montagem do `EditorPane` (`[tabId]`) decide criar uma `EditorView`
+nova só quando `!viewRef.current`; um efeito **separado**, só de montagem (`[]`), destrói essa
+`EditorView` no cleanup — mas nunca zerava `viewRef.current` depois do `destroy()`. No ciclo de
+double-invoke do StrictMode, isso deixava `viewRef.current` apontando para uma `EditorView` já
+destruída; a segunda montagem via `!viewRef.current` como verdadeiro (a ref não é `null`) e caía
+no ramo `view.setState(...)` sobre uma view morta, em vez de criar uma nova — o editor ficava sem
+nenhuma `EditorView` viva de fato. Corrigido zerando `viewRef.current = null` no cleanup que
+destrói a view (`EditorPane.tsx`). Como o double-invoke do StrictMode só acontece em
+desenvolvimento (não em builds de produção nem em testes que não envolvem `<StrictMode>`
+explicitamente), nenhum teste existente pegava isso — os 113 testes originais renderizavam
+`EditorPane` "nu", sem o wrapper. Teste de regressão adicionado em `EditorPane.test.tsx`
+envolvendo o componente em `<StrictMode>` explicitamente e verificando que a `EditorView`
+resultante ainda aceita conteúdo/digitação — confirmado que falha sem o fix e passa com ele.
+**Lição geral:** qualquer efeito que crie/destrua um recurso imperativo fora do React (como um
+`EditorView`) precisa zerar a ref no cleanup que destrói, não só no efeito que cria — caso
+contrário o double-invoke do StrictMode (ou qualquer remontagem real) vê uma ref "preenchida mas
+morta" e pula a recriação.

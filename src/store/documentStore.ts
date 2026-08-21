@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 
 const AUTOSAVE_DEBOUNCE_MS = 800;
 
-const DEFAULT_DOCUMENT = `# scrible
+export const DEFAULT_DOCUMENT = `# scrible
 
 Um editor de **markdown** com preview em tempo real, para macOS.
 
@@ -20,11 +20,6 @@ flowchart TD
     C -->|Sim| D[🎉]
 \`\`\`
 `;
-
-interface WorkspacePaths {
-  root: string;
-  hidden: string;
-}
 
 interface FsErrorNotFound {
   kind: "NotFound";
@@ -52,54 +47,86 @@ interface DocumentConflict {
   currentContent: string;
 }
 
-interface DocumentState {
+export interface DocumentEntry {
   path: string | null;
   content: string;
   lastSavedMtime: number | null;
   status: DocumentStatus;
-  conflict: DocumentConflict | null;
   /** `true` desde a última edição não salva; `false` assim que o conteúdo
    * bate com o que está em disco (save bem-sucedido ou reload externo). */
   dirty: boolean;
-  init: () => Promise<void>;
-  setContent: (value: string) => void;
-  flush: () => Promise<void>;
-  applyExternalContent: (content: string, mtime: number) => void;
+  conflict: DocumentConflict | null;
+}
+
+interface DocumentStoreState {
+  documents: Record<string, DocumentEntry>;
+  /** Abre (ou recarrega) o documento de uma aba: lê `path`; se não existir,
+   * cria com `fallbackContent` (só a aba inicial recebe o texto de boas-vindas). */
+  initDocument: (tabId: string, path: string, fallbackContent?: string) => Promise<void>;
+  setContent: (tabId: string, value: string) => void;
+  flush: (tabId: string) => Promise<void>;
+  /** Salva imediatamente todos os documentos com debounce pendente — usado em
+   * blur da janela e fechamento do app, onde não dá pra esperar por tabId. */
+  flushAll: () => Promise<void>;
+  applyExternalContent: (tabId: string, content: string, mtime: number) => void;
   /** Chamado ao receber o evento `external-file-changed` do watcher (#10):
    * reload silencioso se não há edição local pendente, ou expõe o conflito
    * pra `ConflictBanner` se houver. */
-  handleExternalChange: (content: string, mtime: number) => void;
+  handleExternalChange: (tabId: string, content: string, mtime: number) => void;
   /** Resolve um conflito ativo: "mine" sobrescreve o disco com o conteúdo
    * local; "disk" descarta o conteúdo local (preservado antes via snapshot
    * forçado) e adota a versão do disco. */
-  resolveConflict: (choice: "mine" | "disk") => Promise<void>;
+  resolveConflict: (tabId: string, choice: "mine" | "disk") => Promise<void>;
+  /** Só atualiza o path após um rename bem-sucedido em disco — não mexe em
+   * content/lastSavedMtime, que continuam válidos (mesmo arquivo, novo nome). */
+  renameDocument: (tabId: string, newPath: string) => void;
+  removeDocument: (tabId: string) => void;
 }
 
-let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+const debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
-function clearPendingSave() {
-  if (debounceTimer !== null) {
-    clearTimeout(debounceTimer);
-    debounceTimer = null;
+function clearPendingSave(tabId: string) {
+  const timer = debounceTimers.get(tabId);
+  if (timer !== undefined) {
+    clearTimeout(timer);
+    debounceTimers.delete(tabId);
   }
 }
 
-async function performSave(get: () => DocumentState, set: (partial: Partial<DocumentState>) => void) {
-  const { path, content, lastSavedMtime } = get();
-  if (path === null) return;
+function patchDocument(
+  set: (fn: (state: DocumentStoreState) => Partial<DocumentStoreState>) => void,
+  tabId: string,
+  patch: Partial<DocumentEntry>,
+) {
+  set((state) => ({
+    documents: {
+      ...state.documents,
+      [tabId]: { ...state.documents[tabId], ...patch },
+    },
+  }));
+}
 
-  set({ status: "saving" });
+async function performSave(
+  tabId: string,
+  get: () => DocumentStoreState,
+  set: (fn: (state: DocumentStoreState) => Partial<DocumentStoreState>) => void,
+) {
+  const entry = get().documents[tabId];
+  if (!entry || entry.path === null) return;
+  const { path, content, lastSavedMtime } = entry;
+
+  patchDocument(set, tabId, { status: "saving" });
   try {
     const newMtime = await invoke<number>("save_file", {
       path,
       content,
       expectedMtime: lastSavedMtime,
     });
-    set({ lastSavedMtime: newMtime, status: "idle", dirty: false });
+    patchDocument(set, tabId, { lastSavedMtime: newMtime, status: "idle", dirty: false });
   } catch (err) {
     const fsError = err as FsError;
     if (fsError.kind === "ExternalChange") {
-      set({
+      patchDocument(set, tabId, {
         status: "conflict",
         conflict: {
           currentMtime: fsError.current_mtime,
@@ -108,84 +135,138 @@ async function performSave(get: () => DocumentState, set: (partial: Partial<Docu
       });
     } else {
       console.error("falha ao salvar o documento:", fsError);
-      set({ status: "error" });
+      patchDocument(set, tabId, { status: "error" });
     }
   }
 }
 
-export const useDocumentStore = create<DocumentState>((set, get) => ({
-  path: null,
-  content: "",
-  lastSavedMtime: null,
-  status: "idle",
-  conflict: null,
-  dirty: false,
+export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
+  documents: {},
 
-  init: async () => {
-    const { root } = await invoke<WorkspacePaths>("workspace_status");
-    const path = `${root}/untitled.md`;
-
+  initDocument: async (tabId, path, fallbackContent = "") => {
     try {
       const content = await invoke<string>("read_file", { path });
-      set({ path, content, status: "idle" });
+      set((state) => ({
+        documents: {
+          ...state.documents,
+          [tabId]: {
+            path,
+            content,
+            lastSavedMtime: state.documents[tabId]?.lastSavedMtime ?? null,
+            status: "idle",
+            conflict: null,
+            dirty: false,
+          },
+        },
+      }));
     } catch (err) {
       const fsError = err as FsError;
       if (fsError.kind !== "NotFound") {
-        console.error("falha ao abrir o documento padrão:", fsError);
-        set({ path, status: "error" });
+        console.error("falha ao abrir o documento:", fsError);
+        set((state) => ({
+          documents: {
+            ...state.documents,
+            [tabId]: {
+              path,
+              content: "",
+              lastSavedMtime: null,
+              status: "error",
+              conflict: null,
+              dirty: false,
+            },
+          },
+        }));
         return;
       }
       const newMtime = await invoke<number>("save_file", {
         path,
-        content: DEFAULT_DOCUMENT,
+        content: fallbackContent,
         expectedMtime: null,
       });
-      set({ path, content: DEFAULT_DOCUMENT, lastSavedMtime: newMtime, status: "idle" });
+      set((state) => ({
+        documents: {
+          ...state.documents,
+          [tabId]: {
+            path,
+            content: fallbackContent,
+            lastSavedMtime: newMtime,
+            status: "idle",
+            conflict: null,
+            dirty: false,
+          },
+        },
+      }));
     }
   },
 
-  setContent: (value) => {
-    set({ content: value, dirty: true });
-    clearPendingSave();
-    debounceTimer = setTimeout(() => {
-      debounceTimer = null;
-      void performSave(get, set);
+  setContent: (tabId, value) => {
+    patchDocument(set, tabId, { content: value, dirty: true });
+    clearPendingSave(tabId);
+    const timer = setTimeout(() => {
+      debounceTimers.delete(tabId);
+      void performSave(tabId, get, set);
     }, AUTOSAVE_DEBOUNCE_MS);
+    debounceTimers.set(tabId, timer);
   },
 
-  flush: async () => {
-    clearPendingSave();
-    await performSave(get, set);
+  flush: async (tabId) => {
+    clearPendingSave(tabId);
+    await performSave(tabId, get, set);
   },
 
-  applyExternalContent: (content, mtime) => {
-    clearPendingSave();
-    set({ content, lastSavedMtime: mtime, status: "idle", conflict: null, dirty: false });
+  flushAll: async () => {
+    const tabIds = Object.keys(get().documents);
+    await Promise.all(
+      tabIds.map((tabId) => {
+        clearPendingSave(tabId);
+        return performSave(tabId, get, set);
+      }),
+    );
   },
 
-  handleExternalChange: (content, mtime) => {
-    const { dirty, applyExternalContent } = get();
-    if (!dirty) {
-      applyExternalContent(content, mtime);
+  applyExternalContent: (tabId, content, mtime) => {
+    clearPendingSave(tabId);
+    patchDocument(set, tabId, { content, lastSavedMtime: mtime, status: "idle", conflict: null, dirty: false });
+  },
+
+  handleExternalChange: (tabId, content, mtime) => {
+    const entry = get().documents[tabId];
+    if (!entry) return;
+    if (!entry.dirty) {
+      get().applyExternalContent(tabId, content, mtime);
       return;
     }
-    set({
+    patchDocument(set, tabId, {
       status: "conflict",
       conflict: { currentMtime: mtime, currentContent: content },
     });
   },
 
-  resolveConflict: async (choice) => {
-    const { conflict, path, content, applyExternalContent } = get();
-    if (!conflict || path === null) return;
+  resolveConflict: async (tabId, choice) => {
+    const entry = get().documents[tabId];
+    if (!entry || !entry.conflict || entry.path === null) return;
+    const { conflict, path, content } = entry;
 
     if (choice === "disk") {
       await invoke("snapshot_before_discard", { path, content });
-      applyExternalContent(conflict.currentContent, conflict.currentMtime);
+      get().applyExternalContent(tabId, conflict.currentContent, conflict.currentMtime);
       return;
     }
 
-    set({ lastSavedMtime: conflict.currentMtime, conflict: null });
-    await performSave(get, set);
+    patchDocument(set, tabId, { lastSavedMtime: conflict.currentMtime, conflict: null });
+    await performSave(tabId, get, set);
+  },
+
+  renameDocument: (tabId, newPath) => {
+    patchDocument(set, tabId, { path: newPath });
+  },
+
+  removeDocument: (tabId) => {
+    clearPendingSave(tabId);
+    set((state) => {
+      const documents = { ...state.documents };
+      delete documents[tabId];
+      return { documents };
+    });
   },
 }));

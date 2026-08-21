@@ -7,7 +7,10 @@ import { PreviewPane } from "./preview/PreviewPane";
 import { HistoryPanel } from "./history/HistoryPanel";
 import { ConflictBanner } from "./conflict/ConflictBanner";
 import { ThemeToggle } from "./theme/ThemeToggle";
-import { useDocumentStore } from "./store/documentStore";
+import { TabBar } from "./tabs/TabBar";
+import { useTabShortcuts } from "./tabs/useTabShortcuts";
+import { useDocumentStore, DEFAULT_DOCUMENT } from "./store/documentStore";
+import { useTabsStore } from "./store/tabsStore";
 import { useThemeStore } from "./theme/themeStore";
 import "./theme/tokens.css";
 import "./App.css";
@@ -17,6 +20,11 @@ interface ExternalChangePayload {
   content: string;
 }
 
+interface WorkspacePaths {
+  root: string;
+  hidden: string;
+}
+
 interface WorkspaceError {
   kind: "PermissionDenied" | "Io";
   message: string;
@@ -24,21 +32,24 @@ interface WorkspaceError {
 
 function App() {
   const [workspaceError, setWorkspaceError] = useState<WorkspaceError | null>(null);
-  const content = useDocumentStore((state) => state.content);
-  const setContent = useDocumentStore((state) => state.setContent);
-  const status = useDocumentStore((state) => state.status);
-  const init = useDocumentStore((state) => state.init);
-  const flush = useDocumentStore((state) => state.flush);
+  const activeTabId = useTabsStore((state) => state.activeTabId);
+  const activeDoc = useDocumentStore((state) => (activeTabId ? state.documents[activeTabId] : undefined));
+  const flushAll = useDocumentStore((state) => state.flushAll);
   const initTheme = useThemeStore((state) => state.init);
   const resolvedTheme = useThemeStore((state) => state.resolved);
 
+  useTabShortcuts();
+
   useEffect(() => {
-    invoke("workspace_status")
-      .then(() => init())
+    invoke<WorkspacePaths>("workspace_status")
+      .then(async ({ root }) => {
+        useTabsStore.getState().setWorkspaceRoot(root);
+        await useTabsStore.getState().openTab(`${root}/untitled.md`, { fallbackContent: DEFAULT_DOCUMENT });
+      })
       .catch((err: WorkspaceError) => {
         setWorkspaceError(err);
       });
-  }, [init]);
+  }, []);
 
   useEffect(() => {
     void initTheme();
@@ -50,16 +61,24 @@ function App() {
 
   useEffect(() => {
     const unlistenFocus = getCurrentWindow().onFocusChanged(({ payload: focused }) => {
-      if (!focused) void flush();
+      if (!focused) void flushAll();
     });
     const unlistenClose = listen("app-close-requested", () => {
       void (async () => {
-        await flush();
+        await flushAll();
         await invoke("quit_app");
       })();
     });
     const unlistenExternalChange = listen<ExternalChangePayload>("external-file-changed", (event) => {
-      useDocumentStore.getState().handleExternalChange(event.payload.content, event.payload.mtime);
+      // O watcher (#10) só observa o path fixo original (dívida documentada
+      // em DECISIONS.md #21) — roteia o evento só se alguma aba aberta tiver
+      // exatamente esse path; se nenhuma bater (renomeada, ou nunca aberta),
+      // é ignorado.
+      const { workspaceRoot, tabs } = useTabsStore.getState();
+      const watchedPath = workspaceRoot ? `${workspaceRoot}/untitled.md` : null;
+      const tab = tabs.find((t) => t.path === watchedPath);
+      if (!tab) return;
+      useDocumentStore.getState().handleExternalChange(tab.id, event.payload.content, event.payload.mtime);
     });
 
     return () => {
@@ -67,7 +86,7 @@ function App() {
       void unlistenClose.then((fn) => fn());
       void unlistenExternalChange.then((fn) => fn());
     };
-  }, [flush]);
+  }, [flushAll]);
 
   if (workspaceError) {
     return (
@@ -79,12 +98,15 @@ function App() {
 
   return (
     <div className="app-shell">
-      <EditorPane value={content} onChange={setContent} />
-      <PreviewPane source={content} />
+      <TabBar />
+      <div className="app-main">
+        {activeTabId && <EditorPane tabId={activeTabId} />}
+        <PreviewPane source={activeDoc?.content ?? ""} />
+      </div>
       <ThemeToggle />
       <HistoryPanel />
-      {status === "conflict" && <ConflictBanner />}
-      {status === "saving" && <div className="save-indicator">Salvando…</div>}
+      {activeDoc?.status === "conflict" && <ConflictBanner />}
+      {activeDoc?.status === "saving" && <div className="save-indicator">Salvando…</div>}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useDocumentStore } from "../store/documentStore";
+import { useTabsStore } from "../store/tabsStore";
 
 interface SnapshotInfo {
   timestamp: number;
@@ -31,7 +32,8 @@ export function HistoryPanel() {
   const [open, setOpen] = useState(false);
   const [snapshots, setSnapshots] = useState<SnapshotInfo[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
-  const path = useDocumentStore((state) => state.path);
+  const activeTabId = useTabsStore((state) => state.activeTabId);
+  const path = useDocumentStore((state) => (activeTabId ? (state.documents[activeTabId]?.path ?? null) : null));
   const applyExternalContent = useDocumentStore((state) => state.applyExternalContent);
 
   useEffect(() => {
@@ -56,9 +58,9 @@ export function HistoryPanel() {
   }
 
   async function handleRestore(timestamp: number) {
-    if (!path) return;
+    if (!path || !activeTabId) return;
     const result = await invoke<RestoreResult>("restore_snapshot", { path, timestamp });
-    applyExternalContent(result.content, result.mtime);
+    applyExternalContent(activeTabId, result.content, result.mtime);
     setOpen(false);
   }
 

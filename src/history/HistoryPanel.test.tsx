@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { invoke } from "@tauri-apps/api/core";
 import { HistoryPanel } from "./HistoryPanel";
 import { useDocumentStore } from "../store/documentStore";
+import { useTabsStore } from "../store/tabsStore";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
@@ -13,12 +14,21 @@ const mockedInvoke = vi.mocked(invoke);
 describe("HistoryPanel", () => {
   beforeEach(() => {
     mockedInvoke.mockReset();
+    useTabsStore.setState({
+      tabs: [{ id: "tab-1", path: "/tmp/doc.md", title: "doc.md" }],
+      activeTabId: "tab-1",
+    });
     useDocumentStore.setState({
-      path: "/tmp/doc.md",
-      content: "conteúdo atual",
-      lastSavedMtime: 1000,
-      status: "idle",
-      conflict: null,
+      documents: {
+        "tab-1": {
+          path: "/tmp/doc.md",
+          content: "conteúdo atual",
+          lastSavedMtime: 1000,
+          status: "idle",
+          conflict: null,
+          dirty: false,
+        },
+      },
     });
   });
 
@@ -57,8 +67,9 @@ describe("HistoryPanel", () => {
     });
 
     await waitFor(() => {
-      expect(useDocumentStore.getState().content).toBe("versão restaurada");
-      expect(useDocumentStore.getState().lastSavedMtime).toBe(5000);
+      const entry = useDocumentStore.getState().documents["tab-1"];
+      expect(entry.content).toBe("versão restaurada");
+      expect(entry.lastSavedMtime).toBe(5000);
     });
   });
 
