@@ -51,6 +51,9 @@
   --font-size-h6: 1em;
   --opacity-muted: 0.45;
 
+  /* Layout */
+  --tab-bar-height: 2.25rem;
+
   /* Espaçamento */
   --space-1: 0.25rem;
   --space-2: 0.5rem;
