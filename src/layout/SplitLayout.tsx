@@ -21,7 +21,7 @@ export function SplitLayout({ tabId, source }: SplitLayoutProps) {
 
   const editorRef = useRef<EditorPaneHandle>(null);
   const previewRef = useRef<PreviewPaneHandle>(null);
-  useScrollSync(editorRef, previewRef, source, previewVisible);
+  useScrollSync(editorRef, previewRef, source, previewVisible, tabId);
 
   function handleDividerMouseDown(event: React.MouseEvent) {
     event.preventDefault();

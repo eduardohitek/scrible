@@ -19,6 +19,7 @@ export function useScrollSync(
   previewRef: RefObject<PreviewPaneHandle | null>,
   source: string,
   enabled: boolean,
+  tabId: string | null,
 ): void {
   // Guardado numa ref (atualizada em efeito próprio, não durante o render)
   // pra não precisar re-anexar os listeners de scroll a cada tecla digitada
@@ -30,6 +31,12 @@ export function useScrollSync(
 
   useEffect(() => {
     if (!enabled) return;
+    // No boot, `tabId` começa `null` (bootstrap assíncrono do workspace, ver
+    // `App.tsx`) — `EditorPane` só é montado depois disso (`{tabId && ...}`
+    // em `SplitLayout`), então `editorRef.current` ainda não existe nesse
+    // primeiro mount. `tabId` precisa estar nas deps pra este efeito rodar
+    // de novo assim que a primeira aba real aparecer — sem isso, o early
+    // return abaixo seria permanente (refs não disparam re-render sozinhas).
 
     const editorHandle = editorRef.current;
     const previewHandle = previewRef.current;
@@ -94,5 +101,5 @@ export function useScrollSync(
       editorScrollDOM.removeEventListener("scroll", handleEditorScroll);
       previewContainer.removeEventListener("scroll", handlePreviewScroll);
     };
-  }, [editorRef, previewRef, enabled]);
+  }, [editorRef, previewRef, enabled, tabId]);
 }

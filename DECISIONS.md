@@ -501,13 +501,31 @@ morta" e pula a recriação.
 - Geometria do lado do editor não precisou de interpolação própria — `EditorView.lineBlockAt`/
   `lineBlockAtHeight` (CodeMirror 6) já dão `top`/`height` exatos por linha, relativos ao topo do
   documento.
-- **Sem teste automatizado para o wiring de DOM/scroll real** (mesma postura de #12/#18/#22/#23):
-  só a matemática pura de `scrollMapping.ts` tem testes unitários; a integração via `mise run dev`
-  ficou como verificação manual.
 - Sem resync explícito ao trocar de aba ou dar toggle no preview — o mecanismo natural de eventos
   de scroll já cobre a troca de aba (via `scrollDOM.scrollTop = getScrollTop(tabId)`, #21); toggle
   do preview pode nascer levemente desalinhado até o próximo scroll do usuário, aceito
   conscientemente (fora do critério de aceite da issue).
+
+### Bugfix pós-implementação: sync nunca funcionava (reportado pelo usuário logo após o PR)
+
+Causa: `useScrollSync` roda num `useEffect` de `SplitLayout` cujo array de dependências original
+era `[editorRef, previewRef, enabled]` — sem `tabId`. No boot real do app (`App.tsx`), `activeTabId`
+começa `null` (o bootstrap do workspace/abas é assíncrono via `invoke`), e `SplitLayout` só monta
+`EditorPane` quando `tabId` é truthy (`{tabId && <EditorPane ... />}`). No primeiro mount do efeito,
+`editorRef.current` portanto ainda era `null`, e o early-return por handle ausente disparava — mas
+como `editorRef`/`previewRef` são refs (identidade estável, não mudam) e `enabled` não muda sozinho,
+o efeito nunca tinha motivo pra rodar de novo depois que a aba real aparecesse. Resultado: a
+sincronização nunca chegava a se anexar em uso normal do app, só funcionaria por acaso num teste que
+já montasse com `tabId` não-nulo desde o início (que é exatamente o que os testes originais, sem
+cobertura de DOM/scroll, não pegaram). Fix: `tabId` entrou nas deps do efeito principal de
+`useScrollSync` (assinatura ganhou um 5º parâmetro `tabId: string | null`), então o efeito roda de
+novo assim que a primeira aba real monta e a handle do editor passa a existir. Novo
+`src/layout/useScrollSync.test.ts` (usando `renderHook`, refs mockadas — sem depender de CodeMirror
+real) cobre esse cenário como regressão, além de um teste de ida-e-volta simples (rolar o editor
+rola o preview proporcionalmente) e do caso `enabled = false`. **Lição geral:** qualquer efeito que
+lê `ref.current` de um componente irmão/filho condicionalmente montado precisa incluir na lista de
+deps algum valor que mude no exato momento em que essa montagem acontece — a ref em si nunca
+dispara um re-run sozinha.
 
 **Afeta:** `#24`/`#25` (menu nativo/explorador) podem reaproveitar o padrão de `forwardRef`+
 `useImperativeHandle` se precisarem de acesso imperativo aos painéis. Qualquer issue futura que
