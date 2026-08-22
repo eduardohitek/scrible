@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { EditorPane } from "../editor/EditorPane";
-import { PreviewPane } from "../preview/PreviewPane";
+import { EditorPane, type EditorPaneHandle } from "../editor/EditorPane";
+import { PreviewPane, type PreviewPaneHandle } from "../preview/PreviewPane";
 import { useLayoutStore } from "./layoutStore";
 import { clampSplitRatio } from "./constants";
+import { useScrollSync } from "./useScrollSync";
 
 interface SplitLayoutProps {
   tabId: string | null;
@@ -17,6 +18,10 @@ export function SplitLayout({ tabId, source }: SplitLayoutProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const dragRatioRef = useRef(splitRatio);
   const [isDragging, setIsDragging] = useState(false);
+
+  const editorRef = useRef<EditorPaneHandle>(null);
+  const previewRef = useRef<PreviewPaneHandle>(null);
+  useScrollSync(containerRef, editorRef, previewRef, source, previewVisible);
 
   function handleDividerMouseDown(event: React.MouseEvent) {
     event.preventDefault();
@@ -69,7 +74,7 @@ export function SplitLayout({ tabId, source }: SplitLayoutProps) {
       ref={containerRef}
       style={{ "--split-ratio": splitRatio } as CSSProperties}
     >
-      {tabId && <EditorPane tabId={tabId} />}
+      {tabId && <EditorPane ref={editorRef} tabId={tabId} />}
       {previewVisible && (
         <>
           <div
@@ -78,7 +83,7 @@ export function SplitLayout({ tabId, source }: SplitLayoutProps) {
             aria-orientation="vertical"
             onMouseDown={handleDividerMouseDown}
           />
-          <PreviewPane source={source} />
+          <PreviewPane ref={previewRef} source={source} />
         </>
       )}
       {isDragging && <div className="split-drag-overlay" />}

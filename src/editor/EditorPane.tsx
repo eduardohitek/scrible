@@ -1,10 +1,22 @@
-import { useEffect, useRef } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { EditorView } from "@codemirror/view";
 import { useDocumentStore } from "../store/documentStore";
 import { getOrCreateEditorState, getScrollTop, saveEditorState, saveScrollTop } from "./editorStateRegistry";
 
 interface EditorPaneProps {
   tabId: string;
+}
+
+/** API imperativa mínima para o sync de scroll (#20) orquestrar o editor
+ * a partir de `SplitLayout`/`useScrollSync`, sem expor o `EditorView` bruto. */
+export interface EditorPaneHandle {
+  getScrollDOM(): HTMLElement | null;
+  /** Linha visível no topo do editor, 0-indexada (mesma unidade de
+   * `token.map` do markdown-it) e fracionária — a parte fracionária é a
+   * posição relativa dentro da linha. */
+  getTopVisibleLine(): number;
+  /** Rola o editor até a linha (0-indexada, fracionária) informada. */
+  scrollToLine(line: number): void;
 }
 
 /**
@@ -19,7 +31,7 @@ interface EditorPaneProps {
  * `view.setState`, preservando undo/redo e seleção por aba (ver
  * `editorStateRegistry.ts`).
  */
-export function EditorPane({ tabId }: EditorPaneProps) {
+export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function EditorPane({ tabId }, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const mountedTabIdRef = useRef<string | null>(null);
@@ -82,5 +94,31 @@ export function EditorPane({ tabId }: EditorPaneProps) {
     });
   }, [content, tabId]);
 
+  useImperativeHandle(
+    ref,
+    () => ({
+      getScrollDOM: () => viewRef.current?.scrollDOM ?? null,
+      getTopVisibleLine: () => {
+        const view = viewRef.current;
+        if (!view) return 0;
+        const scrollTop = view.scrollDOM.scrollTop;
+        const block = view.lineBlockAtHeight(scrollTop);
+        const docLine = view.state.doc.lineAt(block.from);
+        const fraction = block.height > 0 ? (scrollTop - block.top) / block.height : 0;
+        return docLine.number - 1 + fraction;
+      },
+      scrollToLine: (line) => {
+        const view = viewRef.current;
+        if (!view) return;
+        const lineNumber = Math.min(Math.max(Math.floor(line) + 1, 1), view.state.doc.lines);
+        const docLine = view.state.doc.line(lineNumber);
+        const block = view.lineBlockAt(docLine.from);
+        const fraction = line - Math.floor(line);
+        view.scrollDOM.scrollTop = block.top + fraction * block.height;
+      },
+    }),
+    [],
+  );
+
   return <div className="editor-pane" ref={containerRef} />;
-}
+});

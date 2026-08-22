@@ -471,3 +471,132 @@ morta" e pula a recriação.
 
 **Afeta:** qualquer issue futura que adicione uma terceira chave a `settings.json` já tem
 `appSettings.ts` como o lugar certo para ler/escrever — não precisa reabrir essa discussão.
+
+## #20 — Sincronização de rolagem entre editor e preview
+
+- `EditorPane`/`PreviewPane` passaram a `forwardRef`, expondo uma API imperativa mínima
+  (`EditorPaneHandle`/`PreviewPaneHandle`) em vez de `SplitLayout` acessar seus internals via
+  wrapper-div+`querySelector` ou via uma store zustand nova — decisão via sabatina. `SplitLayout`
+  é quem monta as refs e passa pro novo hook `src/layout/useScrollSync.ts`, mantendo a lógica de
+  sync isolada da lógica de drag/`splitRatio` já existente ali.
+- Blocos de topo do preview (`token.level === 0` — parágrafo, heading, blockquote, lista, tabela,
+  fence, hr; exclui aninhados como `list_item_open`, nível 1) ganham `data-source-line` via uma
+  regra `core` hand-rolled no pipeline `markdown-it` (`sourceLinePlugin`, `PreviewPane.tsx`), mesmo
+  padrão de `extractFrontMatter` (#17) — sem plugin de terceiros. `DOMPurify.sanitize` preserva o
+  atributo sem configuração extra (`ALLOW_DATA_ATTR` é `true` por padrão).
+- **Achado de implementação**: markdown-it renderiza os atributos de um token `fence` no `<code>`,
+  não no `<pre>` — ao trocar um bloco mermaid por `.mermaid-diagram`/`.mermaid-error`
+  (`PreviewPane.tsx`), o `data-source-line` precisou ser copiado explicitamente do `<code>`
+  original pro elemento substituto, senão a âncora se perdia depois da renderização assíncrona.
+- Mapeamento por interpolação linear proporcional entre as âncoras vizinhas (`src/layout/scrollMapping.ts`,
+  funções puras `lineToOffset`/`offsetToLine`, testadas isoladamente), recalculada **ao vivo** a
+  cada evento de scroll a partir de `getBoundingClientRect()` — nunca cacheada entre renders. É
+  isso que torna o sync tolerante a diagramas mermaid que mudam de altura de forma assíncrona sem
+  nenhum tratamento especial: o próximo evento de scroll já vê a geometria atualizada. A lista de
+  âncoras inclui duas sintéticas (início do documento e fim, usando `scrollHeight`/total de linhas)
+  para que os extremos do documento interpolem corretamente, não só entre blocos marcados.
+- Guard anti-loop: uma variável local (`syncing: "editor" | "preview" | null`) setada antes do
+  scroll programático do painel alvo, checada no início do listener desse mesmo painel para
+  ignorar o eco, liberada no próximo `requestAnimationFrame`.
+- Geometria do lado do editor não precisou de interpolação própria — `EditorView.lineBlockAt`/
+  `lineBlockAtHeight` (CodeMirror 6) já dão `top`/`height` exatos por linha, relativos ao topo do
+  documento.
+- Sem resync explícito ao trocar de aba ou dar toggle no preview — o mecanismo natural de eventos
+  de scroll já cobre a troca de aba (via `scrollDOM.scrollTop = getScrollTop(tabId)`, #21); toggle
+  do preview pode nascer levemente desalinhado até o próximo scroll do usuário, aceito
+  conscientemente (fora do critério de aceite da issue).
+
+### Bugfix pós-implementação: sync nunca funcionava (reportado pelo usuário logo após o PR)
+
+Causa: `useScrollSync` roda num `useEffect` de `SplitLayout` cujo array de dependências original
+era `[editorRef, previewRef, enabled]` — sem `tabId`. No boot real do app (`App.tsx`), `activeTabId`
+começa `null` (o bootstrap do workspace/abas é assíncrono via `invoke`), e `SplitLayout` só monta
+`EditorPane` quando `tabId` é truthy (`{tabId && <EditorPane ... />}`). No primeiro mount do efeito,
+`editorRef.current` portanto ainda era `null`, e o early-return por handle ausente disparava — mas
+como `editorRef`/`previewRef` são refs (identidade estável, não mudam) e `enabled` não muda sozinho,
+o efeito nunca tinha motivo pra rodar de novo depois que a aba real aparecesse. Resultado: a
+sincronização nunca chegava a se anexar em uso normal do app, só funcionaria por acaso num teste que
+já montasse com `tabId` não-nulo desde o início (que é exatamente o que os testes originais, sem
+cobertura de DOM/scroll, não pegaram). Fix: `tabId` entrou nas deps do efeito principal de
+`useScrollSync` (assinatura ganhou um 5º parâmetro `tabId: string | null`), então o efeito roda de
+novo assim que a primeira aba real monta e a handle do editor passa a existir. Novo
+`src/layout/useScrollSync.test.ts` (usando `renderHook`, refs mockadas — sem depender de CodeMirror
+real) cobre esse cenário como regressão, além de um teste de ida-e-volta simples (rolar o editor
+rola o preview proporcionalmente) e do caso `enabled = false`. **Lição geral:** qualquer efeito que
+lê `ref.current` de um componente irmão/filho condicionalmente montado precisa incluir na lista de
+deps algum valor que mude no exato momento em que essa montagem acontece — a ref em si nunca
+dispara um re-run sozinha.
+
+### Bugfix pós-implementação #2: só preview→editor funcionava (reportado pelo usuário depois do fix acima)
+
+O fix do `tabId` nas deps resolveu o boot (efeito passou a rodar depois que a aba real aparece), mas
+expôs um problema mais profundo, sob `React.StrictMode` (que o app real usa em `main.tsx`, mas os
+testes anteriores não): quando `EditorPane` monta pela primeira vez (transição `tabId: null →
+"tab-1"`), o React duplica os efeitos de montagem **dela especificamente** (cria um `EditorView`
+v1 → destrói (zerando `viewRef.current`, fix de `#21`) → cria v2) — esse é o comportamento padrão de
+`StrictMode` para qualquer componente que está montando pela primeira vez, independente de quando no
+tempo de vida do app isso acontece. O efeito de `useScrollSync` em `SplitLayout`, por outro lado,
+**não** é uma montagem nova (`SplitLayout` já existia; é só uma re-execução por dependência
+mudada) — então esse efeito específico **não** sofre o duplo-invoke. Capturar `editorHandle.getScrollDOM()`
+uma única vez no corpo do efeito (abordagem original) corria o risco real de rodar entre a
+destruição de v1 e a criação de v2 (ou logo após v1, antes da destruição) — grudando o listener num
+`scrollDOM` morto/obsoleto, nunca o mesmo elemento que fica de fato na tela. `previewContainer`
+não sofre disso: `PreviewPane` nunca destrói/recria seu container (só reescreve `innerHTML`), então
+seu elemento tem identidade estável — por isso só a direção preview→editor funcionava. Confirmado
+empiricamente: um teste que renderiza `SplitLayout` dentro de `<StrictMode>` de verdade e dispara um
+evento `scroll` real no `.cm-scroller` (via `container.querySelector`, pegando o elemento que
+realmente está no DOM) só passou a mover `previewPane.scrollTop` depois do fix abaixo — sem
+`StrictMode`, o bug não se manifestava, o que explica por que os testes da primeira rodada (sem
+`StrictMode`) não pegaram isso.
+
+Fix (mais robusto que só ajustar deps de novo): `useScrollSync` passou a anexar um **único listener
+delegado**, em fase de *capture*, no container estável de `SplitLayout` (`containerRef`, o
+`.app-main`, que nunca é destruído) — `"scroll"` não faz bubbling, mas ainda passa pela fase de
+captura ao descer até o alvo, então um listener `{capture: true}` num ancestral recebe o evento de
+qualquer descendente. Dentro do handler, a handle do editor/preview e o elemento de scroll são
+resolvidos **a cada evento** (`event.target` comparado contra `editorHandle.getScrollDOM()`/
+`previewHandle.getContainer()` chamados ali mesmo, nunca cacheados fora do handler) — então o
+listener nunca fica "grudado" num elemento específico, e sobrevive a qualquer remontagem futura do
+editor sem precisar caçar a próxima dependência certa pra colocar no array de deps. Isso também
+tornou o parâmetro `tabId` (do fix anterior) desnecessário — removido: a assinatura agora é
+`useScrollSync(containerRef, editorRef, previewRef, source, enabled)`, e o efeito roda só uma vez
+(gate único em `enabled`), sem precisar reagir a troca de aba. `useScrollSync.test.ts` foi reescrito
+pra montar uma árvore DOM real (`root > editorScrollDOM, previewContainer`) e cobrir explicitamente
+"o elemento de scroll do editor troca de identidade sem o efeito rodar de novo, e o próximo scroll
+ainda funciona" — a regressão exata do bug.
+
+**Lição geral:** um `useEffect` que lê `ref.current` de um filho **não pode assumir que a
+identidade do elemento resolvido nesse momento é a mesma que vai ficar montada** quando esse filho
+sofre uma montagem sujeita ao duplo-invoke do `StrictMode` (dev) — mesmo que o próprio efeito leitor
+não seja, ele, uma montagem nova. Testes sem `<StrictMode>` explícito não pegam esse tipo de bug (só
+o teste de `#21`/`EditorPane.test.tsx` que já envolvia `<StrictMode>` deliberadamente o teria
+revelado; nenhum teste de `#20` fazia isso na primeira rodada). Delegação num ancestral estável,
+resolvendo a handle/elemento **dentro** do handler em vez de capturá-los no setup do efeito,
+elimina a classe inteira desse problema em vez de perseguir a próxima dependência certa.
+
+### Bugfix pós-implementação #3: scroll do editor lento/borrado (reportado pelo usuário depois do fix #2)
+
+Causa: `getPreviewAnchors` (`querySelectorAll` + um `getBoundingClientRect` por bloco marcado, que
+força layout síncrono) rodava dentro do handler de `"scroll"` em todo evento bruto — scroll por
+trackpad/inertial no WKWebView (Tauri no macOS) dispara isso numa frequência bem maior que 60fps,
+travando a main thread e deixando o próprio scroll do editor com frames perdidos/texto
+aparentemente borrado (motion blur por frame skipping, não é um problema de renderização do
+CodeMirror em si). Fix: cada direção (editor→preview e preview→editor) agora é *throttled* a no
+máximo uma execução do cálculo pesado por frame, via um guard booleano (`editorSyncScheduled`/
+`previewSyncScheduled`) que só permite um `requestAnimationFrame` pendente por vez — eventos extras
+durante a mesma rajada são descartados, não enfileirados. A posição (linha do editor/`scrollTop` do
+preview) é relida **dentro** do callback do rAF, não capturada no momento do evento — então mesmo
+throttled, o sync sempre usa a posição mais recente quando o frame efetivamente roda, sem perder
+precisão por causa do throttle. Novo teste em `useScrollSync.test.ts` dispara uma rajada de 5
+eventos "scroll" sintéticos antes de deixar qualquer frame rodar e confirma que o cálculo pesado
+(`getTopVisibleLine`) só é chamado 1 vez, não 5.
+
+**Lição geral:** qualquer handler de `"scroll"` que faça leitura de geometria (`getBoundingClientRect`,
+`offsetTop`, etc.) — que força layout síncrono — precisa de throttle por frame; scroll nativo por
+trackpad no WebKit dispara eventos numa taxa alta o bastante pra isso travar a main thread de forma
+perceptível, mesmo que o trabalho em si pareça barato à primeira vista.
+
+**Afeta:** `#24`/`#25` (menu nativo/explorador) podem reaproveitar o padrão de `forwardRef`+
+`useImperativeHandle` se precisarem de acesso imperativo aos painéis. Qualquer issue futura que
+mude a estrutura de blocos de topo do `markdown-it` (novo plugin, novo tipo de token) deve
+verificar se `sourceLinePlugin` continua marcando os blocos esperados.
