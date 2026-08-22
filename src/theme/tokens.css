@@ -53,6 +53,7 @@
 
   /* Layout */
   --tab-bar-height: 2.25rem;
+  --pane-min-width: 240px;
 
   /* Espaçamento */
   --space-1: 0.25rem;

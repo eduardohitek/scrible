@@ -2,13 +2,15 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
-import { EditorPane } from "./editor/EditorPane";
-import { PreviewPane } from "./preview/PreviewPane";
 import { HistoryPanel } from "./history/HistoryPanel";
 import { ConflictBanner } from "./conflict/ConflictBanner";
 import { ThemeToggle } from "./theme/ThemeToggle";
 import { TabBar } from "./tabs/TabBar";
 import { useTabShortcuts } from "./tabs/useTabShortcuts";
+import { SplitLayout } from "./layout/SplitLayout";
+import { PreviewToggleButton } from "./layout/PreviewToggleButton";
+import { useLayoutShortcuts } from "./layout/useLayoutShortcuts";
+import { useLayoutStore } from "./layout/layoutStore";
 import { useDocumentStore, DEFAULT_DOCUMENT } from "./store/documentStore";
 import { useTabsStore } from "./store/tabsStore";
 import { useThemeStore } from "./theme/themeStore";
@@ -37,8 +39,10 @@ function App() {
   const flushAll = useDocumentStore((state) => state.flushAll);
   const initTheme = useThemeStore((state) => state.init);
   const resolvedTheme = useThemeStore((state) => state.resolved);
+  const initLayout = useLayoutStore((state) => state.init);
 
   useTabShortcuts();
+  useLayoutShortcuts();
 
   useEffect(() => {
     invoke<WorkspacePaths>("workspace_status")
@@ -54,6 +58,10 @@ function App() {
   useEffect(() => {
     void initTheme();
   }, [initTheme]);
+
+  useEffect(() => {
+    void initLayout();
+  }, [initLayout]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = resolvedTheme;
@@ -99,12 +107,10 @@ function App() {
   return (
     <div className="app-shell">
       <TabBar />
-      <div className="app-main">
-        {activeTabId && <EditorPane tabId={activeTabId} />}
-        <PreviewPane source={activeDoc?.content ?? ""} />
-      </div>
+      <SplitLayout tabId={activeTabId} source={activeDoc?.content ?? ""} />
       <ThemeToggle />
       <HistoryPanel />
+      <PreviewToggleButton />
       {activeDoc?.status === "conflict" && <ConflictBanner />}
       {activeDoc?.status === "saving" && <div className="save-indicator">Salvando…</div>}
     </div>

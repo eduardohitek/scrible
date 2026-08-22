@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
+import { invoke } from "@tauri-apps/api/core";
 import { ThemeToggle } from "./ThemeToggle";
 import { useThemeStore } from "./themeStore";
 
@@ -7,10 +8,17 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
 }));
 
+const mockedInvoke = vi.mocked(invoke);
+
 describe("ThemeToggle", () => {
   beforeEach(() => {
+    mockedInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "workspace_status") return { root: "/ws", hidden: "/ws/.scrible" };
+      if (cmd === "read_file") throw { kind: "NotFound", path: "/ws/.scrible/settings.json" };
+      if (cmd === "save_file") return 1000;
+      throw new Error(`unexpected invoke: ${cmd}`);
+    });
     useThemeStore.setState({
-      settingsPath: "/tmp/settings.json",
       preference: "system",
       resolved: "light",
     });
