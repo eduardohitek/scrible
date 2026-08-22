@@ -1,9 +1,9 @@
-import { StrictMode } from "react";
+import { createRef, StrictMode } from "react";
 import { act, render, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { EditorView } from "@codemirror/view";
 import { Transaction } from "@codemirror/state";
-import { EditorPane } from "./EditorPane";
+import { EditorPane, type EditorPaneHandle } from "./EditorPane";
 import { useDocumentStore, type DocumentEntry } from "../store/documentStore";
 import { discard } from "./editorStateRegistry";
 
@@ -108,5 +108,21 @@ describe("EditorPane", () => {
     });
 
     expect(useDocumentStore.getState().documents["tab-1"].content).toBe("conteúdo inicial digitado");
+  });
+
+  it("openSearch() abre o painel de busca (#24, disparado pelo menu nativo)", async () => {
+    setDocument("tab-1", "conteúdo");
+    const ref = createRef<EditorPaneHandle>();
+    const { container } = render(<EditorPane ref={ref} tabId="tab-1" />);
+
+    await waitFor(() => {
+      expect(container.querySelector(".cm-content")).not.toBeNull();
+    });
+
+    expect(container.querySelector(".cm-search")).toBeNull();
+    act(() => {
+      ref.current!.openSearch();
+    });
+    expect(container.querySelector(".cm-search")).not.toBeNull();
   });
 });

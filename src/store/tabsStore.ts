@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-dialog";
 import { useDocumentStore } from "./documentStore";
 import { discard as discardEditorState } from "../editor/editorStateRegistry";
 
@@ -13,10 +14,17 @@ interface TabsState {
   workspaceRoot: string | null;
   tabs: Tab[];
   activeTabId: string | null;
+  /** Aba cujo título está em edição inline na `TabBar` — subido de estado local
+   * do componente pra cá porque o menu nativo (#24) também precisa disparar a
+   * mesma UI de fora da árvore React. */
+  editingTabId: string | null;
   setWorkspaceRoot: (root: string) => void;
   /** Abre uma aba para `path`; se já houver uma aba aberta com esse path,
    * só a foca em vez de duplicar. */
   openTab: (path: string, opts?: { fallbackContent?: string }) => Promise<void>;
+  /** Abre um seletor nativo de arquivo filtrado por `.md` (#24) e abre a
+   * aba correspondente ao path escolhido. No-op se o usuário cancelar. */
+  openFileDialog: () => Promise<void>;
   /** Cria uma aba nova apontando para `untitled-N.md` (primeiro nome livre
    * checado contra o conteúdo real do workspace, não só as abas abertas). */
   newTab: () => Promise<void>;
@@ -29,6 +37,13 @@ interface TabsState {
    * aba/documento — snapshots de histórico anteriores ao rename ficam sob
    * o hash do path antigo, sem migração (ver DECISIONS.md #21). */
   renameTab: (tabId: string, newTitle: string) => Promise<void>;
+  /** Entra em modo de edição inline do título da aba (duplo-clique na
+   * `TabBar` ou item "Renomear" do menu nativo). */
+  startRenaming: (tabId: string) => void;
+  /** Sai do modo de edição sem aplicar mudança (Esc). */
+  cancelRenaming: () => void;
+  /** Aplica o novo título via `renameTab` e sai do modo de edição. */
+  commitRenaming: (tabId: string, newTitle: string) => Promise<void>;
   /** 1-indexado e literal: Cmd+9 vai pra 9ª aba, não pra última. */
   focusTabByIndex: (n: number) => void;
   focusNextTab: () => void;
@@ -49,6 +64,7 @@ export const useTabsStore = create<TabsState>((set, get) => ({
   workspaceRoot: null,
   tabs: [],
   activeTabId: null,
+  editingTabId: null,
 
   setWorkspaceRoot: (root) => set({ workspaceRoot: root }),
 
@@ -63,6 +79,18 @@ export const useTabsStore = create<TabsState>((set, get) => ({
     const title = basename(path);
     set((state) => ({ tabs: [...state.tabs, { id, path, title }], activeTabId: id }));
     await useDocumentStore.getState().initDocument(id, path, opts?.fallbackContent);
+  },
+
+  openFileDialog: async () => {
+    const { workspaceRoot } = get();
+    const path = await open({
+      title: "Abrir arquivo",
+      filters: [{ name: "Markdown", extensions: ["md"] }],
+      defaultPath: workspaceRoot ?? undefined,
+      multiple: false,
+      directory: false,
+    });
+    if (typeof path === "string") await get().openTab(path);
   },
 
   newTab: async () => {
@@ -139,6 +167,15 @@ export const useTabsStore = create<TabsState>((set, get) => ({
     set((state) => ({
       tabs: state.tabs.map((t) => (t.id === tabId ? { ...t, path: newPath, title: normalizedTitle } : t)),
     }));
+  },
+
+  startRenaming: (tabId) => set({ editingTabId: tabId }),
+
+  cancelRenaming: () => set({ editingTabId: null }),
+
+  commitRenaming: async (tabId, newTitle) => {
+    set({ editingTabId: null });
+    if (newTitle.trim()) await get().renameTab(tabId, newTitle.trim());
   },
 
   focusTabByIndex: (n) => {
