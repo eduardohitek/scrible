@@ -7,12 +7,13 @@ export function TabBar() {
   const setActiveTab = useTabsStore((state) => state.setActiveTab);
   const closeTab = useTabsStore((state) => state.closeTab);
   const reorderTabs = useTabsStore((state) => state.reorderTabs);
-  const renameTab = useTabsStore((state) => state.renameTab);
   const newTab = useTabsStore((state) => state.newTab);
+  const editingTabId = useTabsStore((state) => state.editingTabId);
+  const startRenaming = useTabsStore((state) => state.startRenaming);
+  const cancelRenaming = useTabsStore((state) => state.cancelRenaming);
+  const commitRenaming = useTabsStore((state) => state.commitRenaming);
 
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
-  const [editingTabId, setEditingTabId] = useState<string | null>(null);
-  const [draftTitle, setDraftTitle] = useState("");
 
   function handleDragOver(event: DragEvent<HTMLDivElement>) {
     // Obrigatório: sem preventDefault() o navegador recusa o drop.
@@ -26,22 +27,11 @@ export function TabBar() {
     setDraggedIndex(null);
   }
 
-  function startEditing(tabId: string, currentTitle: string) {
-    setEditingTabId(tabId);
-    setDraftTitle(currentTitle);
-  }
-
-  function commitEditing(tabId: string) {
-    const title = draftTitle.trim();
-    setEditingTabId(null);
-    if (title) void renameTab(tabId, title);
-  }
-
   function handleEditingKeyDown(event: KeyboardEvent<HTMLInputElement>, tabId: string) {
     if (event.key === "Enter") {
-      commitEditing(tabId);
+      void commitRenaming(tabId, event.currentTarget.value);
     } else if (event.key === "Escape") {
-      setEditingTabId(null);
+      cancelRenaming();
     }
   }
 
@@ -58,17 +48,22 @@ export function TabBar() {
           onClick={() => setActiveTab(tab.id)}
         >
           {editingTabId === tab.id ? (
+            // Não-controlado (defaultValue, não value) — evita precisar de um
+            // `useState` de rascunho inicializado via efeito só pra cobrir o
+            // gatilho externo do menu nativo (#24, `startRenaming` chamado de
+            // fora desta árvore). Remonta com o título atual sempre que o
+            // input aparece, porque a alternância span/input já monta uma
+            // instância nova a cada vez.
             <input
               className="tab-title-input"
               autoFocus
-              value={draftTitle}
-              onChange={(event) => setDraftTitle(event.target.value)}
-              onBlur={() => commitEditing(tab.id)}
+              defaultValue={tab.title}
+              onBlur={(event) => void commitRenaming(tab.id, event.currentTarget.value)}
               onKeyDown={(event) => handleEditingKeyDown(event, tab.id)}
               onClick={(event) => event.stopPropagation()}
             />
           ) : (
-            <span className="tab-title" onDoubleClick={() => startEditing(tab.id, tab.title)}>
+            <span className="tab-title" onDoubleClick={() => startRenaming(tab.id)}>
               {tab.title}
             </span>
           )}

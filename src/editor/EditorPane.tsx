@@ -1,5 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { EditorView } from "@codemirror/view";
+import { openSearchPanel } from "@codemirror/search";
 import { useDocumentStore } from "../store/documentStore";
 import { getOrCreateEditorState, getScrollTop, saveEditorState, saveScrollTop } from "./editorStateRegistry";
 
@@ -17,6 +18,10 @@ export interface EditorPaneHandle {
   getTopVisibleLine(): number;
   /** Rola o editor até a linha (0-indexada, fracionária) informada. */
   scrollToLine(line: number): void;
+  /** Abre o painel de busca/substituição (#16), disparado pelo item "Buscar"
+   * do menu nativo (#24) — Cmd+F em si vira exclusividade do menu, ver
+   * `useTabShortcuts.ts`. */
+  openSearch(): void;
 }
 
 /**
@@ -115,6 +120,10 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
         const block = view.lineBlockAt(docLine.from);
         const fraction = line - Math.floor(line);
         view.scrollDOM.scrollTop = block.top + fraction * block.height;
+      },
+      openSearch: () => {
+        const view = viewRef.current;
+        if (view) openSearchPanel(view);
       },
     }),
     [],

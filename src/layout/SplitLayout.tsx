@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type CSSProperties } from "react";
 import { EditorPane, type EditorPaneHandle } from "../editor/EditorPane";
 import { PreviewPane, type PreviewPaneHandle } from "../preview/PreviewPane";
 import { useLayoutStore } from "./layoutStore";
@@ -10,7 +10,18 @@ interface SplitLayoutProps {
   source: string;
 }
 
-export function SplitLayout({ tabId, source }: SplitLayoutProps) {
+/** API imperativa mínima exposta ao `App.tsx` — hoje só o item "Buscar" do
+ * menu nativo (#24) precisa alcançar o editor de fora desta árvore. Mesmo
+ * padrão de `EditorPaneHandle`/`PreviewPaneHandle` (#20): não vaza a
+ * `EditorView` bruta, só a ação. */
+export interface SplitLayoutHandle {
+  openSearch(): void;
+}
+
+export const SplitLayout = forwardRef<SplitLayoutHandle, SplitLayoutProps>(function SplitLayout(
+  { tabId, source },
+  ref,
+) {
   const splitRatio = useLayoutStore((state) => state.splitRatio);
   const previewVisible = useLayoutStore((state) => state.previewVisible);
   const setSplitRatio = useLayoutStore((state) => state.setSplitRatio);
@@ -22,6 +33,10 @@ export function SplitLayout({ tabId, source }: SplitLayoutProps) {
   const editorRef = useRef<EditorPaneHandle>(null);
   const previewRef = useRef<PreviewPaneHandle>(null);
   useScrollSync(containerRef, editorRef, previewRef, source, previewVisible);
+
+  useImperativeHandle(ref, () => ({
+    openSearch: () => editorRef.current?.openSearch(),
+  }));
 
   function handleDividerMouseDown(event: React.MouseEvent) {
     event.preventDefault();
@@ -89,4 +104,4 @@ export function SplitLayout({ tabId, source }: SplitLayoutProps) {
       {isDragging && <div className="split-drag-overlay" />}
     </div>
   );
-}
+});

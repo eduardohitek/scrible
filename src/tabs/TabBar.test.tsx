@@ -21,6 +21,7 @@ describe("TabBar", () => {
       workspaceRoot: "/root",
       tabs: threeTabs(),
       activeTabId: "tab-1",
+      editingTabId: null,
       openTab: vi.fn(),
       newTab: vi.fn(),
       closeTab: vi.fn().mockResolvedValue(undefined),

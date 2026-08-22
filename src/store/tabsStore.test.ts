@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-dialog";
 import { useTabsStore } from "./tabsStore";
 import { useDocumentStore, type DocumentEntry } from "./documentStore";
 
@@ -7,7 +8,12 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
 }));
 
+vi.mock("@tauri-apps/plugin-dialog", () => ({
+  open: vi.fn(),
+}));
+
 const mockedInvoke = vi.mocked(invoke);
+const mockedOpen = vi.mocked(open);
 
 function docEntry(overrides: Partial<DocumentEntry> = {}): DocumentEntry {
   return {
@@ -24,7 +30,8 @@ function docEntry(overrides: Partial<DocumentEntry> = {}): DocumentEntry {
 describe("tabsStore", () => {
   beforeEach(() => {
     mockedInvoke.mockReset();
-    useTabsStore.setState({ workspaceRoot: "/root", tabs: [], activeTabId: null });
+    mockedOpen.mockReset();
+    useTabsStore.setState({ workspaceRoot: "/root", tabs: [], activeTabId: null, editingTabId: null });
     useDocumentStore.setState({ documents: {} });
   });
 
@@ -189,6 +196,71 @@ describe("tabsStore", () => {
     expect(useTabsStore.getState().tabs[0].path).toBe("/root/a.md");
     expect(useTabsStore.getState().tabs[0].title).toBe("a.md");
     consoleSpy.mockRestore();
+  });
+
+  it("startRenaming seta editingTabId; cancelRenaming limpa sem chamar invoke", () => {
+    useTabsStore.getState().startRenaming("tab-1");
+    expect(useTabsStore.getState().editingTabId).toBe("tab-1");
+
+    useTabsStore.getState().cancelRenaming();
+    expect(useTabsStore.getState().editingTabId).toBeNull();
+    expect(mockedInvoke).not.toHaveBeenCalled();
+  });
+
+  it("commitRenaming aplica renameTab e limpa editingTabId", async () => {
+    useTabsStore.setState({
+      tabs: [{ id: "tab-1", path: "/root/a.md", title: "a.md" }],
+      activeTabId: "tab-1",
+      editingTabId: "tab-1",
+    });
+    useDocumentStore.setState({ documents: { "tab-1": docEntry({ path: "/root/a.md" }) } });
+    mockedInvoke.mockResolvedValueOnce(1000); // flush
+    mockedInvoke.mockResolvedValueOnce(undefined); // rename_file
+
+    await useTabsStore.getState().commitRenaming("tab-1", "notas");
+
+    expect(useTabsStore.getState().editingTabId).toBeNull();
+    expect(useTabsStore.getState().tabs[0].title).toBe("notas.md");
+  });
+
+  it("commitRenaming com título em branco não chama renameTab, só limpa editingTabId", async () => {
+    useTabsStore.setState({
+      tabs: [{ id: "tab-1", path: "/root/a.md", title: "a.md" }],
+      activeTabId: "tab-1",
+      editingTabId: "tab-1",
+    });
+
+    await useTabsStore.getState().commitRenaming("tab-1", "   ");
+
+    expect(useTabsStore.getState().editingTabId).toBeNull();
+    expect(mockedInvoke).not.toHaveBeenCalled();
+    expect(useTabsStore.getState().tabs[0].title).toBe("a.md");
+  });
+
+  it("openFileDialog abre a aba do path escolhido, filtrado por .md", async () => {
+    mockedOpen.mockResolvedValueOnce("/root/notas.md");
+    mockedInvoke.mockResolvedValueOnce("conteúdo"); // read_file do openTab
+
+    await useTabsStore.getState().openFileDialog();
+
+    expect(mockedOpen).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filters: [{ name: "Markdown", extensions: ["md"] }],
+        defaultPath: "/root",
+        multiple: false,
+        directory: false,
+      }),
+    );
+    expect(useTabsStore.getState().tabs[0].path).toBe("/root/notas.md");
+  });
+
+  it("openFileDialog não abre aba se o usuário cancelar o seletor", async () => {
+    mockedOpen.mockResolvedValueOnce(null);
+
+    await useTabsStore.getState().openFileDialog();
+
+    expect(useTabsStore.getState().tabs).toHaveLength(0);
+    expect(mockedInvoke).not.toHaveBeenCalled();
   });
 
   it("focusTabByIndex é 1-indexado e literal", () => {

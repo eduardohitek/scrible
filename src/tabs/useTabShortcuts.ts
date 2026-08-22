@@ -2,27 +2,19 @@ import { useEffect } from "react";
 import { useTabsStore } from "../store/tabsStore";
 
 /**
- * Atalhos globais de abas (Cmd+T/W/1-9/Shift+]/[). Registrados em `window`
- * (não há menu nativo — #24 — nem keymap do CodeMirror usando essas teclas
- * hoje, então não há conflito de foco a resolver).
+ * Atalhos globais de abas (Cmd+1-9/Shift+]/[). Registrados em `window` — não
+ * têm equivalente no menu nativo (#24), que só cobre Novo/Fechar aba
+ * (Cmd+T/Cmd+W, agora exclusividade do menu: um `NSMenuItem` com o mesmo
+ * accelerator intercepta o evento antes dele chegar à webview, então os
+ * antigos branches `t`/`w` daqui nunca mais seriam alcançados — removidos).
  */
 export function useTabShortcuts() {
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (!event.metaKey) return;
 
-      const { newTab, closeTab, activeTabId, focusTabByIndex, focusNextTab, focusPrevTab } = useTabsStore.getState();
+      const { focusTabByIndex, focusNextTab, focusPrevTab } = useTabsStore.getState();
 
-      if (event.key === "t") {
-        event.preventDefault();
-        void newTab();
-        return;
-      }
-      if (event.key === "w") {
-        event.preventDefault();
-        if (activeTabId) void closeTab(activeTabId);
-        return;
-      }
       if (event.shiftKey && event.key === "]") {
         event.preventDefault();
         focusNextTab();

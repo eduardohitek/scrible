@@ -639,3 +639,65 @@ verificar se `sourceLinePlugin` continua marcando os blocos esperados.
 
 **Afeta:** `#24` (menu nativo) volta a estar desbloqueada — o item "Buscar" do menu Editar pode
 disparar o mesmo `openSearchPanel`/atalho já expostos aqui.
+
+## #24 — Menu nativo do macOS e atalhos de teclado
+
+- **"Abrir pasta" (Cmd+O) é, na prática, abrir arquivo**: o texto da issue fala em "Abrir pasta",
+  mas não existe conceito de trocar workspace no app (`#21` já tinha antecipado isso: "Cmd+O
+  nativo, #24" é um dos dois gatilhos previstos pra `openTab(path)`, junto do clique no explorador
+  de `#25`). Implementado com `tauri-plugin-dialog` (nova dependência Rust+JS): seletor nativo
+  filtrado por `.md`, `defaultPath` no workspace root, resultado passado direto pra
+  `tabsStore.openTab`. Permissão `dialog:default` adicionada a `capabilities/default.json`.
+- **"Novo" usa Cmd+T, não Cmd+N** (sugestão literal do texto da issue) — Cmd+T já era o atalho
+  implementado pra nova aba desde `#21`; a própria issue exige que o menu não duplique lógica, então
+  o accelerator seguiu o que já existia, não o texto.
+- **Exportar HTML/PDF ficou fora do menu Arquivo nesta issue** — `#26`/`#27` não existem ainda.
+  Quando `#26` for implementada, ela é quem registra o item (mesmo padrão de `#16` desbloqueando
+  `#24`).
+- **Tema no menu Visualizar** (submenu Sistema/Claro/Escuro) são 3 `MenuItem` planos disparando
+  `themeStore.setPreference`, **sem** checkmark nativo sincronizado com a preferência atual —
+  evitaria sincronização bidirecional JS↔Rust só pra refletir estado que o `ThemeToggle.tsx`
+  já mostra dentro do app.
+- **Achado técnico (molda boa parte da implementação)**: no macOS, um `NSMenuItem` com accelerator
+  intercepta o evento de teclado *antes* de chegar à `WKWebView` — a barra de menu nativa do
+  sistema recebe o `performKeyEquivalent` primeiro. Assim que os itens nativos existem com os
+  mesmos atalhos, os listeners JS equivalentes nunca mais são alcançados: removidos os branches
+  `t`/`w` de `src/tabs/useTabShortcuts.ts` (Cmd+T/Cmd+W viram exclusividade do menu; `Shift+]`/`[`
+  e `1-9` continuam JS, sem equivalente no menu) e apagado `src/layout/useLayoutShortcuts.ts`
+  inteiro (Cmd+Shift+P também vira exclusividade do menu). Cmd+F sofre o mesmo efeito: o item
+  "Buscar" do menu passa a ser o único caminho pra *abrir* o painel — o `searchKeymap` do CodeMirror
+  continua registrado e funcional pra Enter/Shift-Enter/Esc **dentro** do painel já aberto. Cmd+Option+F
+  (`Mod-Alt-f`, foco no campo replace, `#16`) não tem item de menu equivalente e não foi afetado.
+- **Sair (Cmd+Q)**: item customizado (id `"quit"`, **não** `PredefinedMenuItem::quit()`) cujo
+  handler em `src-tauri/src/app_menu.rs`/`lib.rs` chama `window.close()` em vez de `app.exit()`
+  direto — no Tauri 2, `WebviewWindow::close` dispara o mesmo `WindowEvent::CloseRequested` já
+  tratado desde `#7` (`prevent_close` + `emit("app-close-requested")` → frontend `flushAll()` →
+  `invoke("quit_app")`), reaproveitando o handshake de flush existente sem nenhum código novo de
+  IPC. `PredefinedMenuItem::quit()` pularia esse handshake e arriscaria perder até os 800ms de
+  debounce do autosave.
+- **Renomear**: `editingTabId` (só o id, não o rascunho de texto) subiu de estado local de
+  `TabBar.tsx` pra `tabsStore` (`startRenaming`/`cancelRenaming`/`commitRenaming`) — o item de menu
+  precisa disparar a mesma UI de edição inline de fora da árvore React. O campo de texto em si
+  (`src/tabs/TabBar.tsx`) virou **não-controlado** (`defaultValue`, sem `useState` de rascunho): um
+  `useEffect` setando `useState` a partir de `editingTabId` disparava o lint
+  `react-hooks/set-state-in-effect` (cascading render); como o input já monta uma instância nova
+  toda vez que aparece (alternância span/input no JSX), `defaultValue={tab.title}` resolve sem
+  efeito nenhum.
+- Estrutura do menu (`src-tauri/src/app_menu.rs`, `MenuBuilder`/`SubmenuBuilder`): submenu "scrible"
+  **primeiro** na lista — vira automaticamente o app menu do macOS (não precisa de nenhuma chamada
+  extra) — com só o item Sair; Arquivo (Novo/Abrir arquivo/Fechar aba/Renomear); Editar
+  (Undo/Redo/Cut/Copy/Paste nativos do `PredefinedMenuItem`, sem wiring — CodeMirror 6 já trata os
+  eventos `beforeinput` de `historyUndo`/`historyRedo` que o SO dispara via esses itens — + Buscar);
+  Visualizar (Alternar preview + submenu Tema); Janela (`minimize`/`maximize`, "zoom" no macOS).
+  Dispatch central em `app.on_menu_event`: `"quit"` tratado 100% em Rust, os demais ids customizados
+  viram `app.emit("menu", id)`, consumido por um único listener em `App.tsx` que roteia pros stores
+  (`tabsStore`/`layoutStore`/`themeStore`) ou pro novo `SplitLayoutHandle.openSearch()`
+  (`forwardRef`+`useImperativeHandle`, mesmo padrão reaproveitado de `#20`).
+- Sem teste automatizado para `app_menu.rs`/o wiring do evento `"menu"` em `App.tsx` — mesma postura
+  já registrada para `#22`/`#23` (integração nativa/visual sem precedente de teste no repo);
+  verificação real ficou manual via `mise run dev`.
+
+**Afeta:** `#25` (explorador) ganha um segundo gatilho de referência pro padrão de disparar
+`tabsStore.openTab` fora de clique direto na `TabBar`. `#26`/`#27` (export), quando implementadas,
+devem registrar seus próprios itens em `app_menu.rs` (submenu Arquivo) em vez de reabrir essa
+decisão.

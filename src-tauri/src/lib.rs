@@ -1,3 +1,4 @@
+mod app_menu;
 mod fs_ops;
 mod history;
 mod watcher;
@@ -106,6 +107,7 @@ fn quit_app(app: AppHandle) {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
@@ -126,6 +128,19 @@ pub fn run() {
 
             app.manage(WorkspaceState(result));
             app.manage(last_save_mtime);
+
+            app.set_menu(app_menu::build(app.handle())?)?;
+            app.on_menu_event(|app, event| {
+                let id = event.id().0.as_str();
+                if id == "quit" {
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.close();
+                    }
+                    return;
+                }
+                let _ = app.emit("menu", id);
+            });
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

@@ -22,6 +22,7 @@ function makeEditorHandle(scrollDOM: HTMLElement): EditorPaneHandle {
     getScrollDOM: () => scrollDOM,
     getTopVisibleLine: () => 0,
     scrollToLine: vi.fn(),
+    openSearch: vi.fn(),
   };
 }
 
