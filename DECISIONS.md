@@ -574,6 +574,28 @@ revelado; nenhum teste de `#20` fazia isso na primeira rodada). Delegação num 
 resolvendo a handle/elemento **dentro** do handler em vez de capturá-los no setup do efeito,
 elimina a classe inteira desse problema em vez de perseguir a próxima dependência certa.
 
+### Bugfix pós-implementação #3: scroll do editor lento/borrado (reportado pelo usuário depois do fix #2)
+
+Causa: `getPreviewAnchors` (`querySelectorAll` + um `getBoundingClientRect` por bloco marcado, que
+força layout síncrono) rodava dentro do handler de `"scroll"` em todo evento bruto — scroll por
+trackpad/inertial no WKWebView (Tauri no macOS) dispara isso numa frequência bem maior que 60fps,
+travando a main thread e deixando o próprio scroll do editor com frames perdidos/texto
+aparentemente borrado (motion blur por frame skipping, não é um problema de renderização do
+CodeMirror em si). Fix: cada direção (editor→preview e preview→editor) agora é *throttled* a no
+máximo uma execução do cálculo pesado por frame, via um guard booleano (`editorSyncScheduled`/
+`previewSyncScheduled`) que só permite um `requestAnimationFrame` pendente por vez — eventos extras
+durante a mesma rajada são descartados, não enfileirados. A posição (linha do editor/`scrollTop` do
+preview) é relida **dentro** do callback do rAF, não capturada no momento do evento — então mesmo
+throttled, o sync sempre usa a posição mais recente quando o frame efetivamente roda, sem perder
+precisão por causa do throttle. Novo teste em `useScrollSync.test.ts` dispara uma rajada de 5
+eventos "scroll" sintéticos antes de deixar qualquer frame rodar e confirma que o cálculo pesado
+(`getTopVisibleLine`) só é chamado 1 vez, não 5.
+
+**Lição geral:** qualquer handler de `"scroll"` que faça leitura de geometria (`getBoundingClientRect`,
+`offsetTop`, etc.) — que força layout síncrono — precisa de throttle por frame; scroll nativo por
+trackpad no WebKit dispara eventos numa taxa alta o bastante pra isso travar a main thread de forma
+perceptível, mesmo que o trabalho em si pareça barato à primeira vista.
+
 **Afeta:** `#24`/`#25` (menu nativo/explorador) podem reaproveitar o padrão de `forwardRef`+
 `useImperativeHandle` se precisarem de acesso imperativo aos painéis. Qualquer issue futura que
 mude a estrutura de blocos de topo do `markdown-it` (novo plugin, novo tipo de token) deve

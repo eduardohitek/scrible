@@ -1,8 +1,21 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderHook } from "@testing-library/react";
 import { useScrollSync } from "./useScrollSync";
 import type { EditorPaneHandle } from "../editor/EditorPane";
 import type { PreviewPaneHandle } from "../preview/PreviewPane";
+
+// O sync agora faz throttle do trabalho pesado a 1x por frame via
+// requestAnimationFrame (ver useScrollSync.ts) — roda o callback na hora,
+// síncrono, pra manter os testes determinísticos sem depender de timing real.
+beforeEach(() => {
+  vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+    cb(0);
+    return 0;
+  });
+});
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 function makeEditorHandle(scrollDOM: HTMLElement): EditorPaneHandle {
   return {
@@ -146,5 +159,41 @@ describe("useScrollSync", () => {
     // marcado (rect.top=100) vira a âncora {line: 10, top: 150}. Consultar
     // offset 50 entre as âncoras {0,0} e {10,150} dá linha 50/150*10 = 10/3.
     expect(editorHandle.scrollToLine).toHaveBeenCalledWith(expect.closeTo(10 / 3, 10));
+  });
+
+  it("faz throttle do trabalho pesado a no máximo uma execução por frame durante uma rajada de scroll", () => {
+    // Regressão de performance: scroll por trackpad/inertial dispara MUITOS
+    // eventos "scroll" brutos por segundo — sem throttle, cada um forçava
+    // querySelectorAll+getBoundingClientRect (layout síncrono), travando a
+    // main thread e deixando o próprio scroll do editor visualmente truncado.
+    vi.unstubAllGlobals();
+    const rafCallbacks: FrameRequestCallback[] = [];
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+      rafCallbacks.push(cb);
+      return rafCallbacks.length;
+    });
+
+    const { root, editorScrollDOM, previewContainer } = makeTree();
+    const editorHandle = makeEditorHandle(editorScrollDOM);
+    const getTopVisibleLineSpy = vi.spyOn(editorHandle, "getTopVisibleLine").mockReturnValue(0);
+
+    const editorRef = { current: editorHandle };
+    const previewRef = { current: makePreviewHandle(previewContainer) };
+    const containerRef = { current: root };
+
+    renderHook(() => useScrollSync(containerRef, editorRef, previewRef, "linha única", true));
+
+    // Rajada de 5 eventos "scroll" brutos antes de qualquer frame rodar —
+    // só o primeiro deveria agendar um rAF (o resto é descartado pelo guard
+    // `editorSyncScheduled`, mesma lógica de debounce por frame).
+    for (let i = 0; i < 5; i++) {
+      editorScrollDOM.dispatchEvent(new Event("scroll"));
+    }
+    expect(getTopVisibleLineSpy).not.toHaveBeenCalled();
+    expect(rafCallbacks.length).toBe(1);
+
+    // Roda o frame throttled: o cálculo pesado acontece só agora, uma vez.
+    rafCallbacks[0](0);
+    expect(getTopVisibleLineSpy).toHaveBeenCalledTimes(1);
   });
 });

@@ -57,6 +57,17 @@ export function useScrollSync(
     // ignorado pelo próprio listener do painel alvo.
     let syncing: "editor" | "preview" | null = null;
 
+    // O trabalho de sync (querySelectorAll + getBoundingClientRect, que força
+    // layout síncrono) é caro demais pra rodar em todo evento "scroll" bruto
+    // — scroll por trackpad/inertial dispara isso numa frequência bem maior
+    // que 60fps, travando a main thread e deixando o próprio scroll do
+    // editor visualmente truncado/borrado. Cada direção é throttled a no
+    // máximo uma execução por frame (rAF); a posição é relida dentro do
+    // callback (não capturada no momento do evento), então mesmo throttled
+    // o sync sempre usa a posição mais recente quando o frame roda.
+    let editorSyncScheduled = false;
+    let previewSyncScheduled = false;
+
     function getPreviewAnchors(previewContainer: HTMLElement): LineAnchor[] {
       const containerRect = previewContainer.getBoundingClientRect();
       const blocks = previewContainer.querySelectorAll<HTMLElement>("[data-source-line]");
@@ -75,6 +86,35 @@ export function useScrollSync(
       return [{ line: 0, top: 0 }, ...anchors, { line: totalLines, top: scrollHeight }];
     }
 
+    function syncEditorToPreview() {
+      if (syncing === "editor") return;
+      const editorHandle = editorRef.current;
+      const previewContainer = previewRef.current?.getContainer();
+      if (!editorHandle || !previewContainer) return;
+
+      const line = editorHandle.getTopVisibleLine();
+      const targetTop = lineToOffset(getPreviewAnchors(previewContainer), line);
+      syncing = "preview";
+      previewContainer.scrollTop = targetTop;
+      requestAnimationFrame(() => {
+        syncing = null;
+      });
+    }
+
+    function syncPreviewToEditor() {
+      if (syncing === "preview") return;
+      const editorHandle = editorRef.current;
+      const previewContainer = previewRef.current?.getContainer();
+      if (!editorHandle || !previewContainer) return;
+
+      const line = offsetToLine(getPreviewAnchors(previewContainer), previewContainer.scrollTop);
+      syncing = "editor";
+      editorHandle.scrollToLine(line);
+      requestAnimationFrame(() => {
+        syncing = null;
+      });
+    }
+
     function handleScroll(event: Event) {
       const editorHandle = editorRef.current;
       const previewHandle = previewRef.current;
@@ -87,21 +127,18 @@ export function useScrollSync(
       const target = event.target;
 
       if (target === editorScrollDOM) {
-        if (syncing === "editor" || !previewContainer) return;
-        const line = editorHandle.getTopVisibleLine();
-        const targetTop = lineToOffset(getPreviewAnchors(previewContainer), line);
-        syncing = "preview";
-        previewContainer.scrollTop = targetTop;
+        if (syncing === "editor" || editorSyncScheduled) return;
+        editorSyncScheduled = true;
         requestAnimationFrame(() => {
-          syncing = null;
+          editorSyncScheduled = false;
+          syncEditorToPreview();
         });
       } else if (target === previewContainer) {
-        if (syncing === "preview" || !previewContainer) return;
-        const line = offsetToLine(getPreviewAnchors(previewContainer), previewContainer.scrollTop);
-        syncing = "editor";
-        editorHandle.scrollToLine(line);
+        if (syncing === "preview" || previewSyncScheduled) return;
+        previewSyncScheduled = true;
         requestAnimationFrame(() => {
-          syncing = null;
+          previewSyncScheduled = false;
+          syncPreviewToEditor();
         });
       }
     }
