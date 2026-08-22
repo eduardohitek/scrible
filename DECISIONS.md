@@ -600,3 +600,42 @@ perceptível, mesmo que o trabalho em si pareça barato à primeira vista.
 `useImperativeHandle` se precisarem de acesso imperativo aos painéis. Qualquer issue futura que
 mude a estrutura de blocos de topo do `markdown-it` (novo plugin, novo tipo de token) deve
 verificar se `sourceLinePlugin` continua marcando os blocos esperados.
+
+## #16 — Busca e substituição no documento
+
+- **Bug latente encontrado**: `editorStateRegistry.ts` já importava e registrava `searchKeymap` de
+  `@codemirror/search` desde antes desta issue (não dá pra saber desde quando), mas nunca incluía a
+  extensão `search()` em si — sem ela não existe `StateField` de busca nem painel pra abrir, então
+  Cmd+F não fazia nada. O trabalho real desta issue foi ligar a extensão que faltava, não
+  reimplementar busca/substituição do zero.
+- **Cmd+Option+F não abre um painel "com replace visível"**: confirmado lendo o código-fonte da
+  versão instalada de `@codemirror/search` — o painel padrão (`SearchPanel`) sempre renderiza os
+  campos de busca e substituição juntos, não existe um estado oculto/visível pro replace. Decisão
+  via sabatina: Cmd+Option+F (`src/editor/searchExtensions.ts`, keymap customizado `Mod-Alt-f`)
+  chama o mesmo `openSearchPanel` e só move o foco pro campo de replace — desvio consciente do
+  texto literal da issue, que supunha um toggle que não existe nessa versão da lib.
+- `search({ top: true })` (painel no topo do editor, conforme a issue) + o keymap customizado vivem
+  em `src/editor/searchExtensions.ts`, novo módulo dedicado — mesmo padrão de `slashMenu.ts`/
+  `markdownCommands.ts` (uma extensão CodeMirror auto-contida por concern, não tudo dentro de
+  `editorStateRegistry.ts`).
+- Estilização do painel (`src/editor/editorTheme.ts`): `.cm-panel.cm-search`, `.cm-textfield`,
+  `.cm-button`, `.cm-searchMatch`/`.cm-searchMatch-selected` com tokens de `tokens.css` — dois
+  tokens novos (`--color-search-match-bg`, `--color-search-match-selected-bg`), já que não havia
+  nenhum token semântico pra highlight de ocorrências. `@codemirror/search` já injeta cores default
+  pra essas classes via `baseTheme` (menor precedência), então um `EditorView.theme()` normal
+  sobrescreve sem precisar de `!important` nem seletor mais específico.
+- **Achado de teste**: o resto do comportamento (Enter/Shift-Enter navegam, Esc fecha e devolve o
+  foco, replace/replace all) já vem de graça do `searchKeymap`/`SearchPanel` da lib — não foi
+  reimplementado, só coberto por teste. Highlight de ocorrências (`.cm-searchMatch`) só aparece com
+  o painel **aberto** (`searchHighlighter` do CM6 checa `panel` no `searchState` antes de decorar) —
+  testes que só chamam `setSearchQuery` sem abrir o painel primeiro (via `openSearchPanel`) não vêem
+  nenhum highlight, mesmo com a query válida.
+- **Achado de ambiente de teste**: `navigator.platform` no jsdom do Vitest deste projeto vem vazio
+  (não bate com `/Mac/`), então a detecção de plataforma do CodeMirror trata bindings `Mod-*` como
+  `Ctrl-*` nesse ambiente, não `Meta-*` — mesmo rodando em uma máquina macOS real. Testes que
+  simulam `KeyboardEvent` reais pra exercitar keymap (`src/editor/searchExtensions.test.ts`) usam
+  `ctrlKey: true` em vez de `metaKey: true` por causa disso, com comentário explicando; verificação
+  manual via `mise run dev` é quem confirma que Cmd (não Ctrl) funciona no app real.
+
+**Afeta:** `#24` (menu nativo) volta a estar desbloqueada — o item "Buscar" do menu Editar pode
+disparar o mesmo `openSearchPanel`/atalho já expostos aqui.

@@ -28,4 +28,32 @@ export const editorTheme = EditorView.theme({
     backgroundColor: "var(--color-selection-bg)",
     color: "var(--color-text)",
   },
+  ".cm-panel.cm-search": {
+    backgroundColor: "var(--color-surface-elevated)",
+    color: "var(--color-text)",
+    borderBottom: "1px solid var(--color-border)",
+    boxShadow: "var(--shadow-panel)",
+  },
+  ".cm-search .cm-textfield": {
+    backgroundColor: "var(--color-bg)",
+    color: "var(--color-text)",
+    border: "1px solid var(--color-border)",
+    borderRadius: "var(--radius-sm)",
+  },
+  ".cm-search .cm-button": {
+    backgroundColor: "var(--color-surface)",
+    color: "var(--color-text)",
+    border: "1px solid var(--color-border)",
+    borderRadius: "var(--radius-sm)",
+    cursor: "pointer",
+  },
+  ".cm-search .cm-button:hover": {
+    backgroundColor: "var(--color-selection-bg)",
+  },
+  ".cm-searchMatch": {
+    backgroundColor: "var(--color-search-match-bg)",
+  },
+  ".cm-searchMatch-selected": {
+    backgroundColor: "var(--color-search-match-selected-bg)",
+  },
 });
