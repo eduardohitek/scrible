@@ -423,3 +423,51 @@ resultante ainda aceita conteúdo/digitação — confirmado que falha sem o fix
 `EditorView`) precisa zerar a ref no cleanup que destrói, não só no efeito que cria — caso
 contrário o double-invoke do StrictMode (ou qualquer remontagem real) vê uma ref "preenchida mas
 morta" e pula a recriação.
+
+## #19 — Layout split redimensionável com toggle do preview
+
+- **`src/settings/appSettings.ts`** (novo módulo de infraestrutura, não uma store zustand): fecha o
+  loop do aviso já registrado em `#22`/`#23` — `themeStore.ts` gravava `settings.json` com
+  **overwrite completo** (só `{ theme }`), e `#19` precisava adicionar um segundo campo (`layout`)
+  no mesmo arquivo. Decisão via sabatina: em vez de `layoutStore.ts` fazer seu próprio
+  read-merge-write independente, `themeStore.ts` e `layoutStore.ts` passaram a delegar todo IO a
+  este módulo compartilhado. Motivo: um `layoutStore.ts` independente **não eliminaria** a race
+  mais perigosa, que não é a escrita interativa (rara, sequencial), e sim o **boot concorrente** —
+  dois `init()` (tema e layout) disparados quase juntos no boot do app, contra um arquivo que ainda
+  não existe, poderiam cada um decidir "não existe, vou criar só com meu campo" e um apagaria o
+  outro. `loadAppSettings()` memoiza a leitura inicial (chamadas concorrentes reaproveitam a mesma
+  promise) e `patchAppSettings(patch)` serializa as escritas numa fila (`writeQueue`), sempre
+  gravando o cache mais recente com todos os patches já aplicados.
+- `AppSettings` ganhou `layout: { splitRatio: number; previewVisible: boolean }` ao lado de
+  `theme`. Defaults (`splitRatio: 0.5, previewVisible: true`) preservam o comportamento visual do
+  split fixo 50/50 que existia antes desta issue.
+- `themeStore.ts` perdeu o campo `settingsPath` do seu estado (não precisa mais saber o path do
+  arquivo — isso agora é interno a `appSettings.ts`) e passou a chamar `loadAppSettings()`/
+  `patchAppSettings({ theme })` em vez de `invoke("read_file"/"save_file")` diretamente.
+  `themeStore.test.ts`/`ThemeToggle.test.tsx` precisaram ser atualizados (asserções de `save_file`
+  agora incluem `layout`; testes de `themeStore` passaram a usar `vi.resetModules()` + import
+  dinâmico por teste, já que `appSettings.ts` guarda cache em escopo de módulo compartilhado entre
+  os testes de um mesmo arquivo).
+- **Unidade do split**: `splitRatio` (fração 0–1), não pixels — decisão via sabatina. CSS usa
+  `flex-basis` percentual (`calc(var(--split-ratio, 0.5) * 100%)`) + `min-width` fixo
+  (`--pane-min-width`, espelhando `MIN_PANE_WIDTH_PX = 240` em `src/layout/constants.ts`) — ao
+  redimensionar a janela do SO, os painéis escalam proporcionalmente sem re-clamp em JS.
+  `flex-grow: 1` em **ambos** os painéis (não `flex: 0 0 ...`) é o que faz o toggle do preview
+  funcionar sem CSS condicional: quando `.preview-pane` não é renderizado, `.editor-pane` (único
+  item com `flex-grow`) absorve 100% do espaço automaticamente.
+- Mecânica do drag (`src/layout/SplitLayout.tsx`): durante o arraste, só uma custom property CSS
+  muda (`--split-ratio`, mutação direta do DOM via ref, throttled por `requestAnimationFrame`) —
+  zero chamadas a `patchAppSettings`/`save_file` por `mousemove`, decisão via sabatina. O commit
+  (`setSplitRatio`, que persiste) acontece uma única vez, no `mouseup`. Um overlay full-screen
+  (`.split-drag-overlay`) captura o mouse durante o drag para o CodeMirror não iniciar seleção de
+  texto simultânea ao resize.
+- Botão de toggle (`PreviewToggleButton.tsx`): canto fixo `bottom-left`, novo — decisão via
+  sabatina, espelha o `.save-indicator` que já ocupa `bottom-right`, sem mexer em
+  `ThemeToggle`/`HistoryPanel` existentes. Atalho `Cmd+Shift+P` (`useLayoutShortcuts.ts`, mesmo
+  padrão de `useTabShortcuts.ts`) — sem conflito hoje; revisitar se `#24` (menu nativo) ou uma
+  command palette usarem a mesma combinação no futuro.
+- **Débito consciente**: o divisor (`role="separator" aria-orientation="vertical"`) não tem
+  navegação por teclado (setas para ajustar largura) — fora do critério de aceite desta issue.
+
+**Afeta:** qualquer issue futura que adicione uma terceira chave a `settings.json` já tem
+`appSettings.ts` como o lugar certo para ler/escrever — não precisa reabrir essa discussão.

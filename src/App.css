@@ -112,21 +112,64 @@ body {
   cursor: pointer;
 }
 
+/* flex-grow: 1 em ambos os painéis (não flex: 0 0 ...) é o que faz o toggle
+   do preview funcionar sem CSS condicional: quando .preview-pane não é
+   renderizado (#19), .editor-pane fica como único item flex e absorve 100%
+   do espaço automaticamente. min-width garante o piso mesmo em janela
+   estreita, mesmo com flex-shrink (default do shorthand) tentando encolher
+   além disso. */
 .editor-pane,
 .preview-pane {
-  flex: 1 1 50%;
-  min-width: 0;
   height: 100%;
   overflow-y: auto;
+  min-width: var(--pane-min-width, 240px);
 }
 
 .editor-pane {
-  border-right: 1px solid var(--color-border-subtle);
+  flex: 1 1 calc(var(--split-ratio, 0.5) * 100%);
+}
+
+.preview-pane {
+  flex: 1 1 auto;
 }
 
 .editor-pane .cm-editor {
   height: 100%;
   font-size: var(--font-size-base);
+}
+
+.split-divider {
+  flex: 0 0 8px;
+  cursor: col-resize;
+  background: transparent;
+}
+
+.split-divider::after {
+  content: "";
+  display: block;
+  width: 1px;
+  height: 100%;
+  margin: 0 auto;
+  background: var(--color-border-subtle);
+}
+
+.split-divider:hover::after,
+.is-resizing .split-divider::after {
+  background: var(--color-accent);
+}
+
+/* Cobre a janela inteira enquanto o divisor é arrastado: sem isso, mover o
+   mouse rápido sobre o editor faria o CodeMirror iniciar uma seleção de
+   texto simultânea ao resize. */
+.split-drag-overlay {
+  position: fixed;
+  inset: 0;
+  cursor: col-resize;
+  z-index: 20;
+}
+
+.is-resizing {
+  user-select: none;
 }
 
 /* Decorations de markdown no editor (#12): marcadores visíveis e atenuados,
@@ -406,6 +449,22 @@ body {
   background: transparent;
   color: inherit;
   padding: var(--space-1) var(--space-2);
+}
+
+.preview-toggle-container {
+  position: fixed;
+  bottom: var(--space-3);
+  left: var(--space-4);
+}
+
+.preview-toggle {
+  font-size: var(--font-size-xs);
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  cursor: pointer;
 }
 
 .save-indicator {

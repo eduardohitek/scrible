@@ -1,0 +1,102 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { invoke } from "@tauri-apps/api/core";
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn(),
+}));
+
+const mockedInvoke = vi.mocked(invoke);
+
+// Cada teste importa uma instância fresca do módulo: appSettings.ts guarda
+// cache/loadPromise/writeQueue em escopo de módulo (por design, ver
+// comentário no próprio arquivo), então testes concorrentes/sucessivos
+// precisam de estado isolado.
+async function freshModule() {
+  vi.resetModules();
+  return import("./appSettings");
+}
+
+describe("appSettings", () => {
+  beforeEach(() => {
+    mockedInvoke.mockReset();
+  });
+
+  it("primeira execução (settings.json ausente): grava e retorna os defaults completos", async () => {
+    const { loadAppSettings } = await freshModule();
+    mockedInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "workspace_status") return { root: "/ws", hidden: "/ws/.scrible" };
+      if (cmd === "read_file") throw { kind: "NotFound", path: "/ws/.scrible/settings.json" };
+      if (cmd === "save_file") return 1000;
+      throw new Error(`unexpected invoke: ${cmd}`);
+    });
+
+    const settings = await loadAppSettings();
+
+    expect(settings).toEqual({ theme: "system", layout: { splitRatio: 0.5, previewVisible: true } });
+    expect(mockedInvoke).toHaveBeenCalledWith("save_file", {
+      path: "/ws/.scrible/settings.json",
+      content: JSON.stringify({ theme: "system", layout: { splitRatio: 0.5, previewVisible: true } }),
+      expectedMtime: null,
+    });
+  });
+
+  it("chamadas concorrentes a loadAppSettings() disparam só uma leitura", async () => {
+    const { loadAppSettings } = await freshModule();
+    let readCalls = 0;
+    mockedInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "workspace_status") return { root: "/ws", hidden: "/ws/.scrible" };
+      if (cmd === "read_file") {
+        readCalls += 1;
+        return JSON.stringify({ theme: "dark", layout: { splitRatio: 0.6, previewVisible: false } });
+      }
+      throw new Error(`unexpected invoke: ${cmd}`);
+    });
+
+    const [a, b, c] = await Promise.all([loadAppSettings(), loadAppSettings(), loadAppSettings()]);
+
+    expect(readCalls).toBe(1);
+    expect(a).toEqual(b);
+    expect(b).toEqual(c);
+  });
+
+  it("patchAppSettings preserva a outra chave (prova da correção da race documentada em DECISIONS.md)", async () => {
+    const { loadAppSettings, patchAppSettings } = await freshModule();
+    mockedInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "workspace_status") return { root: "/ws", hidden: "/ws/.scrible" };
+      if (cmd === "read_file") return JSON.stringify({ theme: "dark", layout: { splitRatio: 0.5, previewVisible: true } });
+      if (cmd === "save_file") return 2000;
+      throw new Error(`unexpected invoke: ${cmd}`);
+    });
+    await loadAppSettings();
+
+    await patchAppSettings({ layout: { splitRatio: 0.7, previewVisible: true } });
+
+    expect(mockedInvoke).toHaveBeenCalledWith("save_file", {
+      path: "/ws/.scrible/settings.json",
+      content: JSON.stringify({ theme: "dark", layout: { splitRatio: 0.7, previewVisible: true } }),
+      expectedMtime: null,
+    });
+
+    await patchAppSettings({ theme: "light" });
+
+    expect(mockedInvoke).toHaveBeenLastCalledWith("save_file", {
+      path: "/ws/.scrible/settings.json",
+      content: JSON.stringify({ theme: "light", layout: { splitRatio: 0.7, previewVisible: true } }),
+      expectedMtime: null,
+    });
+  });
+
+  it("erro de leitura diferente de NotFound não sobrescreve o arquivo, usa defaults em memória", async () => {
+    const { loadAppSettings } = await freshModule();
+    mockedInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "workspace_status") return { root: "/ws", hidden: "/ws/.scrible" };
+      if (cmd === "read_file") throw { kind: "PermissionDenied" };
+      throw new Error(`unexpected invoke: ${cmd}`);
+    });
+
+    const settings = await loadAppSettings();
+
+    expect(settings).toEqual({ theme: "system", layout: { splitRatio: 0.5, previewVisible: true } });
+    expect(mockedInvoke).not.toHaveBeenCalledWith("save_file", expect.anything());
+  });
+});

@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
-import { useThemeStore } from "./themeStore";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
@@ -8,12 +7,12 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 const mockedInvoke = vi.mocked(invoke);
 
-function resetStore() {
-  useThemeStore.setState({
-    settingsPath: null,
-    preference: "system",
-    resolved: "light",
-  });
+// appSettings.ts (dependência de themeStore.ts) guarda cache/loadPromise em
+// escopo de módulo — cada teste precisa de uma instância fresca de ambos.
+async function freshThemeStore() {
+  vi.resetModules();
+  const mod = await import("./themeStore");
+  return mod.useThemeStore;
 }
 
 function mockMatchMedia(initialMatches: boolean) {
@@ -43,14 +42,13 @@ function mockMatchMedia(initialMatches: boolean) {
 describe("themeStore", () => {
   beforeEach(() => {
     mockedInvoke.mockReset();
-    resetStore();
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it("na primeira execução (settings.json ausente) usa 'system' e persiste o default", async () => {
+  it("na primeira execução (settings.json ausente) usa 'system' e persiste os defaults completos", async () => {
     mockMatchMedia(false);
     mockedInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === "workspace_status") return { root: "/ws", hidden: "/ws/.scrible" };
@@ -58,12 +56,13 @@ describe("themeStore", () => {
       if (cmd === "save_file") return 1000;
       throw new Error(`unexpected invoke: ${cmd}`);
     });
+    const useThemeStore = await freshThemeStore();
 
     await useThemeStore.getState().init();
 
     expect(mockedInvoke).toHaveBeenCalledWith("save_file", {
       path: "/ws/.scrible/settings.json",
-      content: JSON.stringify({ theme: "system" }),
+      content: JSON.stringify({ theme: "system", layout: { splitRatio: 0.5, previewVisible: true } }),
       expectedMtime: null,
     });
     const state = useThemeStore.getState();
@@ -75,9 +74,10 @@ describe("themeStore", () => {
     mockMatchMedia(false);
     mockedInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === "workspace_status") return { root: "/ws", hidden: "/ws/.scrible" };
-      if (cmd === "read_file") return JSON.stringify({ theme: "dark" });
+      if (cmd === "read_file") return JSON.stringify({ theme: "dark", layout: { splitRatio: 0.5, previewVisible: true } });
       throw new Error(`unexpected invoke: ${cmd}`);
     });
+    const useThemeStore = await freshThemeStore();
 
     await useThemeStore.getState().init();
 
@@ -86,16 +86,21 @@ describe("themeStore", () => {
     expect(state.resolved).toBe("dark");
   });
 
-  it("setPreference persiste a escolha e atualiza resolved imediatamente", async () => {
+  it("setPreference persiste a escolha preservando layout, e atualiza resolved imediatamente", async () => {
     mockMatchMedia(false);
-    useThemeStore.setState({ settingsPath: "/ws/.scrible/settings.json" });
-    mockedInvoke.mockResolvedValueOnce(2000);
+    mockedInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "workspace_status") return { root: "/ws", hidden: "/ws/.scrible" };
+      if (cmd === "read_file") return JSON.stringify({ theme: "light", layout: { splitRatio: 0.6, previewVisible: false } });
+      if (cmd === "save_file") return 2000;
+      throw new Error(`unexpected invoke: ${cmd}`);
+    });
+    const useThemeStore = await freshThemeStore();
 
     await useThemeStore.getState().setPreference("dark");
 
-    expect(mockedInvoke).toHaveBeenCalledWith("save_file", {
+    expect(mockedInvoke).toHaveBeenLastCalledWith("save_file", {
       path: "/ws/.scrible/settings.json",
-      content: JSON.stringify({ theme: "dark" }),
+      content: JSON.stringify({ theme: "dark", layout: { splitRatio: 0.6, previewVisible: false } }),
       expectedMtime: null,
     });
     expect(useThemeStore.getState().resolved).toBe("dark");
@@ -103,8 +108,13 @@ describe("themeStore", () => {
 
   it("registra o listener de sistema só enquanto preference === 'system'", async () => {
     const media = mockMatchMedia(false);
-    useThemeStore.setState({ settingsPath: "/ws/.scrible/settings.json" });
-    mockedInvoke.mockResolvedValue(2000);
+    mockedInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "workspace_status") return { root: "/ws", hidden: "/ws/.scrible" };
+      if (cmd === "read_file") return JSON.stringify({ theme: "system", layout: { splitRatio: 0.5, previewVisible: true } });
+      if (cmd === "save_file") return 2000;
+      throw new Error(`unexpected invoke: ${cmd}`);
+    });
+    const useThemeStore = await freshThemeStore();
 
     await useThemeStore.getState().setPreference("system");
     expect(media.listenerCount()).toBe(1);
@@ -118,8 +128,13 @@ describe("themeStore", () => {
 
   it("mudança do tema do sistema só atualiza resolved quando preference === 'system'", async () => {
     const media = mockMatchMedia(false);
-    useThemeStore.setState({ settingsPath: "/ws/.scrible/settings.json" });
-    mockedInvoke.mockResolvedValue(2000);
+    mockedInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "workspace_status") return { root: "/ws", hidden: "/ws/.scrible" };
+      if (cmd === "read_file") return JSON.stringify({ theme: "system", layout: { splitRatio: 0.5, previewVisible: true } });
+      if (cmd === "save_file") return 2000;
+      throw new Error(`unexpected invoke: ${cmd}`);
+    });
+    const useThemeStore = await freshThemeStore();
 
     await useThemeStore.getState().setPreference("system");
     media.emit(true);

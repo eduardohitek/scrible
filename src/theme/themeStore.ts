@@ -1,26 +1,10 @@
 import { create } from "zustand";
-import { invoke } from "@tauri-apps/api/core";
+import { loadAppSettings, patchAppSettings, type ThemePreference } from "../settings/appSettings";
 
-export type ThemePreference = "system" | "light" | "dark";
+export type { ThemePreference };
 export type ResolvedTheme = "light" | "dark";
 
-interface WorkspacePaths {
-  root: string;
-  hidden: string;
-}
-
-interface FsErrorNotFound {
-  kind: "NotFound";
-  path: string;
-}
-type FsError = FsErrorNotFound | { kind: "PermissionDenied" | "Io" | "ExternalChange" };
-
-interface AppSettings {
-  theme: ThemePreference;
-}
-
 interface ThemeState {
-  settingsPath: string | null;
   preference: ThemePreference;
   resolved: ResolvedTheme;
   init: () => Promise<void>;
@@ -67,16 +51,7 @@ function applyPreference(preference: ThemePreference, set: (partial: Partial<The
   }
 }
 
-async function persistPreference(settingsPath: string, preference: ThemePreference) {
-  await invoke("save_file", {
-    path: settingsPath,
-    content: JSON.stringify({ theme: preference } satisfies AppSettings),
-    expectedMtime: null,
-  });
-}
-
-export const useThemeStore = create<ThemeState>((set, get) => ({
-  settingsPath: null,
+export const useThemeStore = create<ThemeState>((set) => ({
   // Default estático — sem chamar matchMedia aqui. themeStore.ts é importado
   // por PreviewPane.tsx, e jsdom (vitest) não implementa matchMedia; só init()
   // e as funções que ele aciona podem tocar nisso.
@@ -84,35 +59,14 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
   resolved: "light",
 
   init: async () => {
-    const { hidden } = await invoke<WorkspacePaths>("workspace_status");
-    const settingsPath = `${hidden}/settings.json`;
-    let preference: ThemePreference = "system";
-
-    try {
-      const raw = await invoke<string>("read_file", { path: settingsPath });
-      const parsed = JSON.parse(raw) as Partial<AppSettings>;
-      if (parsed.theme === "light" || parsed.theme === "dark" || parsed.theme === "system") {
-        preference = parsed.theme;
-      }
-    } catch (err) {
-      const fsError = err as FsError;
-      if (fsError.kind !== "NotFound") {
-        console.error("falha ao ler settings.json:", fsError);
-      } else {
-        await persistPreference(settingsPath, preference);
-      }
-    }
-
-    set({ settingsPath });
-    applyPreference(preference, set);
+    const settings = await loadAppSettings();
+    applyPreference(settings.theme, set);
   },
 
   setPreference: async (preference) => {
     applyPreference(preference, set);
-    const { settingsPath } = get();
-    if (!settingsPath) return;
     try {
-      await persistPreference(settingsPath, preference);
+      await patchAppSettings({ theme: preference });
     } catch (err) {
       console.error("falha ao persistir preferência de tema:", err);
     }
