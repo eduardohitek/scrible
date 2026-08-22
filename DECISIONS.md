@@ -527,6 +527,53 @@ lê `ref.current` de um componente irmão/filho condicionalmente montado precisa
 deps algum valor que mude no exato momento em que essa montagem acontece — a ref em si nunca
 dispara um re-run sozinha.
 
+### Bugfix pós-implementação #2: só preview→editor funcionava (reportado pelo usuário depois do fix acima)
+
+O fix do `tabId` nas deps resolveu o boot (efeito passou a rodar depois que a aba real aparece), mas
+expôs um problema mais profundo, sob `React.StrictMode` (que o app real usa em `main.tsx`, mas os
+testes anteriores não): quando `EditorPane` monta pela primeira vez (transição `tabId: null →
+"tab-1"`), o React duplica os efeitos de montagem **dela especificamente** (cria um `EditorView`
+v1 → destrói (zerando `viewRef.current`, fix de `#21`) → cria v2) — esse é o comportamento padrão de
+`StrictMode` para qualquer componente que está montando pela primeira vez, independente de quando no
+tempo de vida do app isso acontece. O efeito de `useScrollSync` em `SplitLayout`, por outro lado,
+**não** é uma montagem nova (`SplitLayout` já existia; é só uma re-execução por dependência
+mudada) — então esse efeito específico **não** sofre o duplo-invoke. Capturar `editorHandle.getScrollDOM()`
+uma única vez no corpo do efeito (abordagem original) corria o risco real de rodar entre a
+destruição de v1 e a criação de v2 (ou logo após v1, antes da destruição) — grudando o listener num
+`scrollDOM` morto/obsoleto, nunca o mesmo elemento que fica de fato na tela. `previewContainer`
+não sofre disso: `PreviewPane` nunca destrói/recria seu container (só reescreve `innerHTML`), então
+seu elemento tem identidade estável — por isso só a direção preview→editor funcionava. Confirmado
+empiricamente: um teste que renderiza `SplitLayout` dentro de `<StrictMode>` de verdade e dispara um
+evento `scroll` real no `.cm-scroller` (via `container.querySelector`, pegando o elemento que
+realmente está no DOM) só passou a mover `previewPane.scrollTop` depois do fix abaixo — sem
+`StrictMode`, o bug não se manifestava, o que explica por que os testes da primeira rodada (sem
+`StrictMode`) não pegaram isso.
+
+Fix (mais robusto que só ajustar deps de novo): `useScrollSync` passou a anexar um **único listener
+delegado**, em fase de *capture*, no container estável de `SplitLayout` (`containerRef`, o
+`.app-main`, que nunca é destruído) — `"scroll"` não faz bubbling, mas ainda passa pela fase de
+captura ao descer até o alvo, então um listener `{capture: true}` num ancestral recebe o evento de
+qualquer descendente. Dentro do handler, a handle do editor/preview e o elemento de scroll são
+resolvidos **a cada evento** (`event.target` comparado contra `editorHandle.getScrollDOM()`/
+`previewHandle.getContainer()` chamados ali mesmo, nunca cacheados fora do handler) — então o
+listener nunca fica "grudado" num elemento específico, e sobrevive a qualquer remontagem futura do
+editor sem precisar caçar a próxima dependência certa pra colocar no array de deps. Isso também
+tornou o parâmetro `tabId` (do fix anterior) desnecessário — removido: a assinatura agora é
+`useScrollSync(containerRef, editorRef, previewRef, source, enabled)`, e o efeito roda só uma vez
+(gate único em `enabled`), sem precisar reagir a troca de aba. `useScrollSync.test.ts` foi reescrito
+pra montar uma árvore DOM real (`root > editorScrollDOM, previewContainer`) e cobrir explicitamente
+"o elemento de scroll do editor troca de identidade sem o efeito rodar de novo, e o próximo scroll
+ainda funciona" — a regressão exata do bug.
+
+**Lição geral:** um `useEffect` que lê `ref.current` de um filho **não pode assumir que a
+identidade do elemento resolvido nesse momento é a mesma que vai ficar montada** quando esse filho
+sofre uma montagem sujeita ao duplo-invoke do `StrictMode` (dev) — mesmo que o próprio efeito leitor
+não seja, ele, uma montagem nova. Testes sem `<StrictMode>` explícito não pegam esse tipo de bug (só
+o teste de `#21`/`EditorPane.test.tsx` que já envolvia `<StrictMode>` deliberadamente o teria
+revelado; nenhum teste de `#20` fazia isso na primeira rodada). Delegação num ancestral estável,
+resolvendo a handle/elemento **dentro** do handler em vez de capturá-los no setup do efeito,
+elimina a classe inteira desse problema em vez de perseguir a próxima dependência certa.
+
 **Afeta:** `#24`/`#25` (menu nativo/explorador) podem reaproveitar o padrão de `forwardRef`+
 `useImperativeHandle` se precisarem de acesso imperativo aos painéis. Qualquer issue futura que
 mude a estrutura de blocos de topo do `markdown-it` (novo plugin, novo tipo de token) deve
