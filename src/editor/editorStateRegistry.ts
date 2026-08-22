@@ -7,6 +7,7 @@ import { markdownDecorations } from "./markdownDecorations";
 import { markdownEditingKeymap } from "./markdownCommands";
 import { slashMenu } from "./slashMenu";
 import { editorTheme } from "./editorTheme";
+import { searchExtensions } from "./searchExtensions";
 
 const states = new Map<string, EditorState>();
 const scrollTops = new Map<string, number>();
@@ -21,6 +22,7 @@ function buildExtensions(onChange: (value: string) => void) {
     markdownDecorations(),
     markdownEditingKeymap,
     slashMenu,
+    searchExtensions,
     editorTheme,
     EditorView.updateListener.of((update) => {
       if (!update.docChanged) return;
