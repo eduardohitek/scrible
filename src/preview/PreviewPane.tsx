@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import MarkdownIt from "markdown-it";
 // @ts-expect-error -- markdown-it-footnote não publica tipos
 import footnote from "markdown-it-footnote";
@@ -12,6 +12,29 @@ interface PreviewPaneProps {
   source: string;
 }
 
+/** API imperativa mínima para o sync de scroll (#20) orquestrar o preview
+ * a partir de `SplitLayout`/`useScrollSync`. */
+export interface PreviewPaneHandle {
+  getContainer(): HTMLDivElement | null;
+}
+
+// Marca cada token de bloco de topo (level 0 — parágrafo, heading,
+// blockquote, lista, tabela, fence, hr; exclui tokens aninhados como
+// `list_item_open`, level 1) com a linha de origem no markdown, via
+// `token.map` (já calculado pelo parser). Regra `core` hand-rolled, mesmo
+// padrão de `extractFrontMatter` abaixo: sem plugin de terceiros, sem mutar
+// estado de módulo dentro do useMemo de render. `data-source-line` sobrevive
+// à sanitização do DOMPurify (ALLOW_DATA_ATTR é true por padrão).
+function sourceLinePlugin(mdInstance: InstanceType<typeof MarkdownIt>): void {
+  mdInstance.core.ruler.push("source_line_attrs", (state) => {
+    for (const token of state.tokens) {
+      if (token.map && token.level === 0) {
+        token.attrSet("data-source-line", String(token.map[0]));
+      }
+    }
+  });
+}
+
 // Debounce de re-parse/sanitização (150-300ms pedido pela issue #17) — ver
 // `debouncedSource` abaixo, que é quem `html` deriva de fato.
 const RENDER_DEBOUNCE_MS = 200;
@@ -20,7 +43,8 @@ const md = new MarkdownIt({ html: false, linkify: true })
   .use(footnote)
   // Checkboxes ficam `disabled` (padrão do plugin): o preview é somente
   // leitura, não há wiring de volta para o documento fonte.
-  .use(taskLists);
+  .use(taskLists)
+  .use(sourceLinePlugin);
 
 function escapeHtml(text: string): string {
   return text
@@ -96,8 +120,13 @@ let mermaidIdCounter = 0;
  * rodapé) com sanitização via DOMPurify, e renderização de blocos
  * ```mermaid``` via mermaid.js.
  */
-export function PreviewPane({ source }: PreviewPaneProps) {
+export const PreviewPane = forwardRef<PreviewPaneHandle, PreviewPaneProps>(function PreviewPane(
+  { source },
+  ref,
+) {
   const containerRef = useRef<HTMLDivElement>(null);
+
+  useImperativeHandle(ref, () => ({ getContainer: () => containerRef.current }), []);
   const resolvedTheme = useThemeStore((state) => state.resolved);
 
   // Debounce do parse/sanitização: o primeiro render é imediato (useState já
@@ -159,12 +188,18 @@ export function PreviewPane({ source }: PreviewPaneProps) {
       const pre = block.parentElement;
       if (!pre) return;
 
+      // `data-source-line` (#20) vive no <code> (é onde markdown-it renderiza
+      // os atributos de um token `fence`) — precisa ser copiado pro elemento
+      // que substitui o <pre> pra não perder a âncora de scroll sync.
+      const sourceLine = block.dataset.sourceLine;
+
       try {
         const { svg } = await mermaid.render(id, graphDefinition);
         if (cancelled) return;
         const wrapper = document.createElement("div");
         wrapper.className = "mermaid-diagram";
         wrapper.innerHTML = svg;
+        if (sourceLine !== undefined) wrapper.dataset.sourceLine = sourceLine;
         pre.replaceWith(wrapper);
       } catch (err) {
         if (cancelled) return;
@@ -173,6 +208,7 @@ export function PreviewPane({ source }: PreviewPaneProps) {
         errorBox.textContent = `Erro de sintaxe no diagrama: ${
           err instanceof Error ? err.message : String(err)
         }`;
+        if (sourceLine !== undefined) errorBox.dataset.sourceLine = sourceLine;
         pre.replaceWith(errorBox);
       }
     });
@@ -183,4 +219,4 @@ export function PreviewPane({ source }: PreviewPaneProps) {
   }, [html, resolvedTheme]);
 
   return <div className="preview-pane" ref={containerRef} />;
-}
+});

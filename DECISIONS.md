@@ -471,3 +471,45 @@ morta" e pula a recriação.
 
 **Afeta:** qualquer issue futura que adicione uma terceira chave a `settings.json` já tem
 `appSettings.ts` como o lugar certo para ler/escrever — não precisa reabrir essa discussão.
+
+## #20 — Sincronização de rolagem entre editor e preview
+
+- `EditorPane`/`PreviewPane` passaram a `forwardRef`, expondo uma API imperativa mínima
+  (`EditorPaneHandle`/`PreviewPaneHandle`) em vez de `SplitLayout` acessar seus internals via
+  wrapper-div+`querySelector` ou via uma store zustand nova — decisão via sabatina. `SplitLayout`
+  é quem monta as refs e passa pro novo hook `src/layout/useScrollSync.ts`, mantendo a lógica de
+  sync isolada da lógica de drag/`splitRatio` já existente ali.
+- Blocos de topo do preview (`token.level === 0` — parágrafo, heading, blockquote, lista, tabela,
+  fence, hr; exclui aninhados como `list_item_open`, nível 1) ganham `data-source-line` via uma
+  regra `core` hand-rolled no pipeline `markdown-it` (`sourceLinePlugin`, `PreviewPane.tsx`), mesmo
+  padrão de `extractFrontMatter` (#17) — sem plugin de terceiros. `DOMPurify.sanitize` preserva o
+  atributo sem configuração extra (`ALLOW_DATA_ATTR` é `true` por padrão).
+- **Achado de implementação**: markdown-it renderiza os atributos de um token `fence` no `<code>`,
+  não no `<pre>` — ao trocar um bloco mermaid por `.mermaid-diagram`/`.mermaid-error`
+  (`PreviewPane.tsx`), o `data-source-line` precisou ser copiado explicitamente do `<code>`
+  original pro elemento substituto, senão a âncora se perdia depois da renderização assíncrona.
+- Mapeamento por interpolação linear proporcional entre as âncoras vizinhas (`src/layout/scrollMapping.ts`,
+  funções puras `lineToOffset`/`offsetToLine`, testadas isoladamente), recalculada **ao vivo** a
+  cada evento de scroll a partir de `getBoundingClientRect()` — nunca cacheada entre renders. É
+  isso que torna o sync tolerante a diagramas mermaid que mudam de altura de forma assíncrona sem
+  nenhum tratamento especial: o próximo evento de scroll já vê a geometria atualizada. A lista de
+  âncoras inclui duas sintéticas (início do documento e fim, usando `scrollHeight`/total de linhas)
+  para que os extremos do documento interpolem corretamente, não só entre blocos marcados.
+- Guard anti-loop: uma variável local (`syncing: "editor" | "preview" | null`) setada antes do
+  scroll programático do painel alvo, checada no início do listener desse mesmo painel para
+  ignorar o eco, liberada no próximo `requestAnimationFrame`.
+- Geometria do lado do editor não precisou de interpolação própria — `EditorView.lineBlockAt`/
+  `lineBlockAtHeight` (CodeMirror 6) já dão `top`/`height` exatos por linha, relativos ao topo do
+  documento.
+- **Sem teste automatizado para o wiring de DOM/scroll real** (mesma postura de #12/#18/#22/#23):
+  só a matemática pura de `scrollMapping.ts` tem testes unitários; a integração via `mise run dev`
+  ficou como verificação manual.
+- Sem resync explícito ao trocar de aba ou dar toggle no preview — o mecanismo natural de eventos
+  de scroll já cobre a troca de aba (via `scrollDOM.scrollTop = getScrollTop(tabId)`, #21); toggle
+  do preview pode nascer levemente desalinhado até o próximo scroll do usuário, aceito
+  conscientemente (fora do critério de aceite da issue).
+
+**Afeta:** `#24`/`#25` (menu nativo/explorador) podem reaproveitar o padrão de `forwardRef`+
+`useImperativeHandle` se precisarem de acesso imperativo aos painéis. Qualquer issue futura que
+mude a estrutura de blocos de topo do `markdown-it` (novo plugin, novo tipo de token) deve
+verificar se `sourceLinePlugin` continua marcando os blocos esperados.

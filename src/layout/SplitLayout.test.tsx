@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { forwardRef } from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { SplitLayout } from "./SplitLayout";
 import { useLayoutStore } from "./layoutStore";
@@ -8,12 +9,19 @@ vi.mock("@tauri-apps/api/core", () => ({
 }));
 
 // Isola SplitLayout do CodeMirror/mermaid reais — o que interessa aqui é a
-// mecânica de resize/toggle, não o conteúdo interno dos painéis.
+// mecânica de resize/toggle, não o conteúdo interno dos painéis. Seguem
+// `forwardRef` (sem implementar a API imperativa: useScrollSync trata
+// handles ausentes/nulos como "sync desabilitado" e não faz nada) só pra não
+// gerar o warning do React de passar `ref` pra um function component puro.
 vi.mock("../editor/EditorPane", () => ({
-  EditorPane: ({ tabId }: { tabId: string }) => <div data-testid="editor-pane">{tabId}</div>,
+  EditorPane: forwardRef<unknown, { tabId: string }>(({ tabId }) => (
+    <div data-testid="editor-pane">{tabId}</div>
+  )),
 }));
 vi.mock("../preview/PreviewPane", () => ({
-  PreviewPane: ({ source }: { source: string }) => <div data-testid="preview-pane">{source}</div>,
+  PreviewPane: forwardRef<unknown, { source: string }>(({ source }) => (
+    <div data-testid="preview-pane">{source}</div>
+  )),
 }));
 
 describe("SplitLayout", () => {
