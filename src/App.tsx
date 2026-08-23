@@ -16,8 +16,10 @@ import { useExplorerStore } from "./explorer/explorerStore";
 import { ExplorerPanel } from "./explorer/ExplorerPanel";
 import { ExplorerToggleTab } from "./explorer/ExplorerToggleTab";
 import { useThemeStore, type ThemePreference } from "./theme/themeStore";
+import { exportActiveTabAsHtml } from "./export/exportHtml";
 import "./theme/tokens.css";
 import "./App.css";
+import "./preview/PreviewPane.css";
 
 const THEME_MENU_PREFERENCE: Record<string, ThemePreference> = {
   theme_system: "system",
@@ -129,6 +131,9 @@ function App() {
           break;
         case "toggle_explorer":
           useExplorerStore.getState().toggle();
+          break;
+        case "export_html":
+          void exportActiveTabAsHtml();
           break;
         case "theme_system":
         case "theme_light":

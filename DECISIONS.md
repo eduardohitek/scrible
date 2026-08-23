@@ -768,3 +768,54 @@ decisão.
 **Afeta:** `#26`/`#27` (export) devem registrar seus próprios itens em `app_menu.rs` sem reabrir a
 decisão de `#24`. Qualquer issue futura que precise de outro botão flutuante deve usar
 `.app-shell-content` como containing block (não o viewport) — os 4 cantos já estão ocupados.
+
+## #26 — Exportar para HTML standalone
+
+- **Pipeline de markdown extraído para `src/preview/markdownPipeline.ts`** (nova): a instância `md`
+  (`MarkdownIt` + `footnote` + `taskLists` + `sourceLinePlugin`), `extractFrontMatter`,
+  `renderFrontMatterTable`, `escapeHtml` saíram de dentro de `PreviewPane.tsx` sem nenhuma mudança
+  de comportamento — é o que a própria issue pede ("reaproveitar o pipeline do preview como fonte
+  da verdade"); sem esse split, o export duplicaria a definição do `md`. `PreviewPane.tsx` continua
+  dono do `useMemo`/debounce/efeito de mermaid, só importa as funções puras de lá agora.
+- **CSS de conteúdo extraído para `src/preview/PreviewPane.css`** (nova, movida de `App.css`):
+  `.preview-pane`, `.mermaid-diagram`/`.mermaid-error`, tabelas e `.front-matter*`. O export importa
+  o mesmo arquivo como texto cru via `?raw` do Vite, embutindo o CSS real no HTML gerado em vez de
+  duplicar as regras — qualquer ajuste futuro de estilo do preview propaga automaticamente pro
+  export.
+  **Achado de implementação:** por padrão o Vitest troca **todo** import de `.css` (inclusive com
+  `?raw`/`?inline`) por um módulo vazio, mesmo fora de qualquer mock explícito — é uma otimização
+  de performance do runner, não um bug do Vite. Sem `test: { css: true }` em `vite.config.ts`, os
+  testes do export liam string vazia de `tokens.css`/`PreviewPane.css` e passavam silenciosamente
+  (nenhum teste comparava o HTML final contra um token real o bastante pra pegar isso sem inspeção
+  manual do output). Fix: `css: true` ligado globalmente pro projeto de teste — sem escopo por
+  arquivo, já que qualquer suíte futura que precise de conteúdo real de CSS (não só `#26`) bateria
+  no mesmo problema.
+- **Tema do export é congelado no valor resolvido na tela no momento do clique** (decisão via
+  sabatina) — sem diálogo adicional de escolher claro/escuro, ao contrário do que o texto original
+  da issue sugeria como opção. Motivo: o SVG do mermaid já é renderizado com paleta fixa
+  (`theme: "dark"|"default"`) no momento do `mermaid.render`, então só congelar no tema atual
+  garante fidelidade exata ao preview — uma escolha independente no diálogo poderia produzir um
+  HTML com CSS de um tema e mermaid de outro.
+- `renderStaticBodyHtml` (`src/export/exportHtml.ts`) replica o efeito de mermaid de
+  `PreviewPane.tsx` mas como função assíncrona pura sobre um `<div>` **desanexado** (nunca inserido
+  no DOM visível — `mermaid.render()` não depende disso, gerencia seu próprio elemento temporário
+  internamente) rodando sobre o conteúdo **vivo** da aba (`documentStore`), não o `debouncedSource`
+  do preview (debounce é otimização de digitação, irrelevante pra um export único). Diferença
+  deliberada do efeito ao vivo: resolve todos os blocos mermaid com `await Promise.all(...)` (não o
+  `forEach(async ...)` fire-and-forget), porque o export precisa que todo `mermaid.render` termine
+  antes de ler `container.innerHTML` de volta.
+- **Novo command Rust `write_export_file`** (`fs_ops.rs`/`lib.rs`), deliberadamente **não**
+  reaproveitando `save_file`: esse grava `LastSaveMtime` global (usado pelo watcher do path fixo
+  `untitled.md`, #10) e sempre dispara `history::maybe_snapshot` — efeitos colaterais do fluxo de
+  autosave do workspace, sem sentido (e ruidosos — criaria diretório de histórico) pra um path de
+  export arbitrário fora do workspace. `write_export_file` é só `fs::write` + `FsError::from_io`,
+  sem escrita atômica via temp+rename (não compete com nenhum autosave/watcher no mesmo path).
+- Menu: novo item `export_html` em `file_menu` (`app_menu.rs`), sem nenhuma mudança em
+  `lib.rs::on_menu_event` — cai no `app.emit("menu", id)` genérico já existente; `App.tsx` só ganhou
+  mais um `case` no switch.
+- Diálogo de salvar via `save()` de `@tauri-apps/plugin-dialog` — primeiro uso desse método no
+  repo (só `open`/`ask` existiam antes, de `#21`/`#25`); capability `dialog:default` já cobria.
+
+**Afeta:** `#27` (exportar PDF) deve reaproveitar `renderStaticBodyHtml`/`buildStandaloneHtml` como
+fonte de HTML de entrada em vez de reimplementar o pipeline, e herda a mesma decisão de congelar no
+tema resolvido no momento do export.

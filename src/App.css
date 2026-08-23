@@ -248,81 +248,9 @@ body {
   text-decoration: underline;
 }
 
-.preview-pane {
-  padding: var(--space-4) var(--space-6);
-  line-height: var(--line-height-base);
-}
-
-.mermaid-diagram {
-  display: flex;
-  justify-content: center;
-  margin: var(--space-4) 0;
-}
-
-.mermaid-error {
-  color: var(--color-danger-text);
-  background: var(--color-danger-bg);
-  border: 1px solid var(--color-danger-border);
-  border-radius: var(--radius-sm);
-  padding: var(--space-2) var(--space-3);
-  font-family: var(--font-mono);
-  font-size: var(--font-size-sm);
-  margin: var(--space-4) 0;
-}
-
-.preview-pane table {
-  border-collapse: collapse;
-  width: 100%;
-  margin: var(--space-4) 0;
-  font-size: var(--font-size-sm);
-}
-
-.preview-pane th,
-.preview-pane td {
-  border: 1px solid var(--color-border);
-  padding: var(--space-1) var(--space-2);
-  text-align: left;
-}
-
-.preview-pane thead th {
-  background: var(--color-surface);
-}
-
-.preview-pane ul.contains-task-list {
-  list-style: none;
-  padding-left: var(--space-4);
-}
-
-.preview-pane .task-list-item {
-  list-style: none;
-}
-
-.preview-pane .task-list-item-checkbox {
-  margin-right: var(--space-2);
-}
-
-.front-matter {
-  margin-bottom: var(--space-4);
-}
-
-.front-matter-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--font-size-sm);
-}
-
-.front-matter-table th,
-.front-matter-table td {
-  text-align: left;
-  padding: var(--space-1) var(--space-2);
-  border-bottom: 1px solid var(--color-border-subtle);
-}
-
-.front-matter-table th {
-  color: var(--color-text-secondary);
-  font-weight: normal;
-  width: 30%;
-}
+/* Estilos de conteúdo do preview (.preview-pane, mermaid, tabelas, front
+   matter) vivem em src/preview/PreviewPane.css (#26) — extraídos daqui pra
+   serem reaproveitados literalmente (import `?raw`) pelo export HTML. */
 
 .history-panel-container {
   position: absolute;
