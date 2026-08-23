@@ -65,7 +65,11 @@ describe("layoutStore", () => {
     expect(useLayoutStore.getState().splitRatio).toBe(0.72);
     expect(mockedInvoke).toHaveBeenLastCalledWith("save_file", {
       path: "/ws/.scrible/settings.json",
-      content: JSON.stringify({ theme: "dark", layout: { splitRatio: 0.72, previewVisible: true } }),
+      content: JSON.stringify({
+        theme: "dark",
+        layout: { splitRatio: 0.72, previewVisible: true },
+        explorer: { visible: true, width: 240 },
+      }),
       expectedMtime: null,
     });
   });
@@ -85,7 +89,11 @@ describe("layoutStore", () => {
     expect(useLayoutStore.getState().previewVisible).toBe(false);
     expect(mockedInvoke).toHaveBeenLastCalledWith("save_file", {
       path: "/ws/.scrible/settings.json",
-      content: JSON.stringify({ theme: "system", layout: { splitRatio: 0.5, previewVisible: false } }),
+      content: JSON.stringify({
+        theme: "system",
+        layout: { splitRatio: 0.5, previewVisible: false },
+        explorer: { visible: true, width: 240 },
+      }),
       expectedMtime: null,
     });
 

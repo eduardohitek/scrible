@@ -30,9 +30,23 @@ body {
 
 .app-shell {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   height: 100vh;
   width: 100vw;
+}
+
+/* Coluna original (TabBar + SplitLayout + chrome flutuante) — vira um item
+   flex ao lado do explorador (#25). `position: relative` faz dela o
+   containing block dos elementos flutuantes abaixo (antes ancorados no
+   viewport inteiro via `position: fixed`), pra não ficarem sobrepostos pelo
+   explorador quando ele está visível. */
+.app-shell-content {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
 }
 
 .app-main {
@@ -311,13 +325,13 @@ body {
 }
 
 .history-panel-container {
-  position: fixed;
+  position: absolute;
   top: calc(var(--tab-bar-height) + var(--space-3));
   right: var(--space-4);
 }
 
 .theme-toggle-container {
-  position: fixed;
+  position: absolute;
   top: calc(var(--tab-bar-height) + var(--space-3));
   left: var(--space-4);
 }
@@ -419,7 +433,7 @@ body {
 }
 
 .conflict-banner {
-  position: fixed;
+  position: absolute;
   top: 0;
   left: 0;
   right: 0;
@@ -452,7 +466,7 @@ body {
 }
 
 .preview-toggle-container {
-  position: fixed;
+  position: absolute;
   bottom: var(--space-3);
   left: var(--space-4);
 }
@@ -468,7 +482,7 @@ body {
 }
 
 .save-indicator {
-  position: fixed;
+  position: absolute;
   bottom: var(--space-3);
   right: var(--space-4);
   font-size: var(--font-size-xs);
@@ -477,6 +491,119 @@ body {
   border-radius: var(--radius-sm);
   padding: var(--space-1) var(--space-2);
   pointer-events: none;
+}
+
+.explorer-toggle-tab {
+  position: fixed;
+  top: 50%;
+  left: 0;
+  transform: translateY(-50%);
+  z-index: 5;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-left: none;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  padding: var(--space-2) var(--space-1);
+  cursor: pointer;
+}
+
+.explorer-panel {
+  position: relative;
+  flex: 0 0 var(--explorer-width);
+  width: var(--explorer-width);
+  height: 100%;
+  overflow-y: auto;
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-border-subtle);
+}
+
+.explorer-tree {
+  padding: var(--space-2) 0;
+}
+
+.explorer-resize-handle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 4px;
+  cursor: col-resize;
+}
+
+.explorer-node-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.explorer-node-row:hover {
+  background: var(--color-surface-elevated);
+}
+
+.explorer-node-chevron {
+  display: inline-block;
+  width: 1em;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.explorer-node-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.explorer-node-rename-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  color: inherit;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-1);
+}
+
+.explorer-context-menu {
+  position: fixed;
+  z-index: 20;
+  min-width: 160px;
+  margin: 0;
+  padding: var(--space-1);
+  list-style: none;
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-panel);
+}
+
+.explorer-context-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  cursor: pointer;
+}
+
+.explorer-context-menu button:hover {
+  background: var(--color-selection-bg);
+}
+
+.explorer-context-menu-separator {
+  height: 1px;
+  margin: var(--space-1) 0;
+  background: var(--color-border-subtle);
 }
 
 .workspace-error {

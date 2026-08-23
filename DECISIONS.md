@@ -701,3 +701,70 @@ disparar o mesmo `openSearchPanel`/atalho já expostos aqui.
 `tabsStore.openTab` fora de clique direto na `TabBar`. `#26`/`#27` (export), quando implementadas,
 devem registrar seus próprios itens em `app_menu.rs` (submenu Arquivo) em vez de reabrir essa
 decisão.
+
+## #25 — Explorador de arquivos lateral
+
+- **`list_dir` (flat, `#6`) permanece intocado** — só usado hoje por `tabsStore.newTab` pra checar
+  colisão de nome. Novo command dedicado `list_dir_entries(path) -> Vec<DirEntry{name, isDir}>`
+  (camelCase via `#[serde(rename_all = "camelCase")]`, primeiro uso desse atributo no projeto)
+  alimenta o explorador, buscado **lazy por pasta expandida** — não uma árvore recursiva completa
+  numa chamada. Filtra dotfiles/dotdirs (esconde `.scrible/` de graça, sem checagem de nome
+  hardcoded) e arquivos sem extensão `.md`; ordena pastas antes de arquivos, depois alfabético
+  case-insensitive — tudo no Rust, o frontend só renderiza o que recebe.
+- **Novo `create_dir`/`delete_dir`** em `fs_ops.rs`, mesmo padrão single-purpose de `rename_file`/
+  `delete_file`. `rename_file` (já genérico via `fs::rename`) não precisou mudar — funciona pra
+  pastas também.
+- **Novo `tree_watcher.rs`, watcher recursivo dedicado e separado de `watcher.rs`**: observa a raiz
+  do workspace inteira (`RecursiveMode::Recursive`), emitindo `"workspace-tree-changed"` sem
+  payload — o frontend decide o que re-buscar (raiz + pastas com `expandedDirs`). Não reaproveita
+  `watcher::wait_for_settled_event` (drena o canal sem preservar path dos eventos, incompatível com
+  o filtro que o explorador precisa) — novo `wait_for_settled_relevant_event` local, que também
+  ignora rajadas inteiras dentro de `.scrible/` (evita refresh espúrio a cada autosave de
+  `settings.json`/snapshot de histórico). Sem supressão de eco por mtime (diferente do watcher de
+  `#7`/`#10`): aqui um refresh redundante da árvore após a própria escrita do scrible é inofensivo,
+  não haveria risco de banner de conflito indevido.
+- **`tabsStore.newTab` generalizado** para aceitar diretório alvo opcional (default
+  `workspaceRoot`) — o explorador cria arquivos em qualquer pasta clicada reaproveitando o mesmo
+  padrão `untitled-N.md`, sem lógica duplicada.
+- **Novo `tabsStore.syncPathsAfterRename(oldPath, newPath)`**: corrige o `path` de qualquer aba
+  cujo path seja exatamente `oldPath` (arquivo renomeado) ou comece com `oldPath + "/"` (aba
+  dentro de uma pasta renomeada) — prefix match, sem chamar `rename_file` de novo (só sincroniza
+  estado já refletido em disco pelo `explorerStore.renameEntry`).
+- **`closeTab` ganha `opts?: { skipFlush?: boolean }`**: excluir o arquivo de uma aba aberta via
+  explorador fecha a aba sem tentar salvar antes — salvar recriaria o arquivo que acabou de ser
+  apagado. `explorerStore.deleteEntry` fecha todas as abas afetadas (path exato ou prefixo, mesmo
+  critério do rename) com `skipFlush: true` antes de chamar `delete_file`/`delete_dir`.
+- **Menu de contexto é um dropdown HTML customizado** (`ExplorerContextMenu.tsx`), não nativo —
+  mesmo idioma de fechar já usado em `HistoryPanel`/`ThemeToggle` (`mousedown` fora + `Escape`).
+  Primeiro precedente de menu de contexto (clique direito) no projeto; itens "Renomear"/"Excluir"
+  só aparecem quando o clique foi num item real da árvore (não em área vazia).
+- **Confirmação de exclusão via `tauri-plugin-dialog` `ask()`** (dependência já existente desde
+  `#24`) — sem modal customizado novo.
+- **Layout**: `app-shell` virou `flex-direction: row` com o explorador como primeiro item; o
+  conteúdo antigo (TabBar + SplitLayout + chrome flutuante) foi envolvido em `.app-shell-content`
+  (`position: relative`). **Achado**: os 4 botões flutuantes existentes (tema, histórico, preview,
+  indicador de salvamento) e o `ConflictBanner` eram `position: fixed` relativos ao viewport
+  inteiro — com o explorador ocupando a borda esquerda, `ThemeToggle`/`PreviewToggleButton`
+  ficariam sobrepostos por ele. Todos os cinco viraram `position: absolute` dentro de
+  `.app-shell-content`, sem mudar nenhum valor de `top`/`left`/`right`/`bottom` — o novo containing
+  block já resolve o deslocamento sem cálculo extra.
+- **Toggle do explorador**: aba fina fixa na borda esquerda (`ExplorerToggleTab.tsx`, `position:
+  fixed`, independente do layout flex) — os 4 cantos já estavam ocupados, sem espaço pra mais um
+  botão flutuante. Atalho `Cmd+Shift+E` é **só o item nativo do menu** (`app_menu.rs`, submenu
+  Visualizar) — sem `useExplorerShortcuts.ts`/listener JS paralelo: o achado já registrado em
+  `#24` (accelerator nativo intercepta o evento antes da `WKWebView`) tornaria um listener JS pro
+  mesmo atalho morto por definição.
+- **Redimensionamento da largura**: handle simples e independente (mousedown/mousemove/mouseup,
+  mutação direta de `--explorer-width` throttled por `requestAnimationFrame`, commit só no
+  mouseup) — não reaproveita `SplitLayout`, que é específico do ratio de 2 painéis. Persistido em
+  `appSettings.ts` (`explorer: { visible, width }`), mesmo padrão de merge dedicado de `layout`.
+- **Estado expandido/colapsado das pastas não é persistido** — vive só em `explorerStore`
+  (zustand), reseta a cada boot. Cache de listagens por pasta (`entriesByDir`) também é só em
+  memória, migrado por prefixo em rename e limpo por prefixo em delete de uma pasta.
+- Sem teste automatizado pro posicionamento visual do menu de contexto (mesma postura de
+  `#22`/`#23`/`#24`); toda a lógica pura (fs_ops novo, watcher novo, stores, prefix-matching de
+  rename/delete) tem cobertura automatizada.
+
+**Afeta:** `#26`/`#27` (export) devem registrar seus próprios itens em `app_menu.rs` sem reabrir a
+decisão de `#24`. Qualquer issue futura que precise de outro botão flutuante deve usar
+`.app-shell-content` como containing block (não o viewport) — os 4 cantos já estão ocupados.

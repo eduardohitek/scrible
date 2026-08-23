@@ -120,6 +120,51 @@ pub fn list_dir(path: &Path) -> Result<Vec<String>, FsError> {
     Ok(names)
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DirEntry {
+    pub name: String,
+    pub is_dir: bool,
+}
+
+/// Lista uma pasta para o explorador (#25): pastas sempre aparecem (exceto
+/// dotdirs), arquivos só se tiverem extensão `.md` — esconde `.scrible/` e
+/// qualquer outro dotfile/dotdir de graça, sem checagem de nome hardcoded.
+/// Ordena pastas antes de arquivos, depois alfabético case-insensitive.
+pub fn list_dir_entries(path: &Path) -> Result<Vec<DirEntry>, FsError> {
+    let entries = fs::read_dir(path).map_err(|err| FsError::from_io(err, path))?;
+    let mut result = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(|err| FsError::from_io(err, path))?;
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if name.starts_with('.') {
+            continue;
+        }
+        let is_dir = entry
+            .file_type()
+            .map_err(|err| FsError::from_io(err, path))?
+            .is_dir();
+        if !is_dir && !name.to_lowercase().ends_with(".md") {
+            continue;
+        }
+        result.push(DirEntry { name, is_dir });
+    }
+    result.sort_by(|a, b| match (a.is_dir, b.is_dir) {
+        (true, false) => std::cmp::Ordering::Less,
+        (false, true) => std::cmp::Ordering::Greater,
+        _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+    });
+    Ok(result)
+}
+
+pub fn create_dir(path: &Path) -> Result<(), FsError> {
+    fs::create_dir(path).map_err(|err| FsError::from_io(err, path))
+}
+
+pub fn delete_dir(path: &Path) -> Result<(), FsError> {
+    fs::remove_dir_all(path).map_err(|err| FsError::from_io(err, path))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -287,5 +332,72 @@ mod tests {
         let result = list_dir(&path);
 
         assert!(matches!(result, Err(FsError::NotFound { .. })));
+    }
+
+    #[test]
+    fn list_dir_entries_hides_dotfiles_and_non_markdown() {
+        let tmp = tempfile::tempdir().unwrap();
+        fs::write(tmp.path().join("nota.md"), "").unwrap();
+        fs::write(tmp.path().join("imagem.png"), "").unwrap();
+        fs::write(tmp.path().join(".ocultosecreto.md"), "").unwrap();
+        fs::create_dir(tmp.path().join(".scrible")).unwrap();
+        fs::create_dir(tmp.path().join("subpasta")).unwrap();
+
+        let entries = list_dir_entries(tmp.path()).unwrap();
+
+        assert_eq!(
+            entries,
+            vec![
+                DirEntry { name: "subpasta".into(), is_dir: true },
+                DirEntry { name: "nota.md".into(), is_dir: false },
+            ]
+        );
+    }
+
+    #[test]
+    fn list_dir_entries_sorts_dirs_before_files_then_alphabetically_case_insensitive() {
+        let tmp = tempfile::tempdir().unwrap();
+        fs::write(tmp.path().join("banana.md"), "").unwrap();
+        fs::write(tmp.path().join("Abacaxi.md"), "").unwrap();
+        fs::create_dir(tmp.path().join("zebra")).unwrap();
+        fs::create_dir(tmp.path().join("Antilope")).unwrap();
+
+        let entries = list_dir_entries(tmp.path()).unwrap();
+        let names: Vec<&str> = entries.iter().map(|e| e.name.as_str()).collect();
+
+        assert_eq!(names, vec!["Antilope", "zebra", "Abacaxi.md", "banana.md"]);
+    }
+
+    #[test]
+    fn create_dir_creates_new_directory() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("nova-pasta");
+
+        create_dir(&path).unwrap();
+
+        assert!(path.is_dir());
+    }
+
+    #[test]
+    fn create_dir_fails_if_already_exists() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("pasta");
+        fs::create_dir(&path).unwrap();
+
+        let result = create_dir(&path);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn delete_dir_removes_directory_and_contents() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("pasta");
+        fs::create_dir(&path).unwrap();
+        fs::write(path.join("arquivo.md"), "conteúdo").unwrap();
+
+        delete_dir(&path).unwrap();
+
+        assert!(!path.exists());
     }
 }

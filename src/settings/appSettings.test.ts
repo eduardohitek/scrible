@@ -32,10 +32,18 @@ describe("appSettings", () => {
 
     const settings = await loadAppSettings();
 
-    expect(settings).toEqual({ theme: "system", layout: { splitRatio: 0.5, previewVisible: true } });
+    expect(settings).toEqual({
+      theme: "system",
+      layout: { splitRatio: 0.5, previewVisible: true },
+      explorer: { visible: true, width: 240 },
+    });
     expect(mockedInvoke).toHaveBeenCalledWith("save_file", {
       path: "/ws/.scrible/settings.json",
-      content: JSON.stringify({ theme: "system", layout: { splitRatio: 0.5, previewVisible: true } }),
+      content: JSON.stringify({
+        theme: "system",
+        layout: { splitRatio: 0.5, previewVisible: true },
+        explorer: { visible: true, width: 240 },
+      }),
       expectedMtime: null,
     });
   });
@@ -63,7 +71,12 @@ describe("appSettings", () => {
     const { loadAppSettings, patchAppSettings } = await freshModule();
     mockedInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === "workspace_status") return { root: "/ws", hidden: "/ws/.scrible" };
-      if (cmd === "read_file") return JSON.stringify({ theme: "dark", layout: { splitRatio: 0.5, previewVisible: true } });
+      if (cmd === "read_file")
+        return JSON.stringify({
+          theme: "dark",
+          layout: { splitRatio: 0.5, previewVisible: true },
+          explorer: { visible: true, width: 240 },
+        });
       if (cmd === "save_file") return 2000;
       throw new Error(`unexpected invoke: ${cmd}`);
     });
@@ -73,7 +86,11 @@ describe("appSettings", () => {
 
     expect(mockedInvoke).toHaveBeenCalledWith("save_file", {
       path: "/ws/.scrible/settings.json",
-      content: JSON.stringify({ theme: "dark", layout: { splitRatio: 0.7, previewVisible: true } }),
+      content: JSON.stringify({
+        theme: "dark",
+        layout: { splitRatio: 0.7, previewVisible: true },
+        explorer: { visible: true, width: 240 },
+      }),
       expectedMtime: null,
     });
 
@@ -81,7 +98,39 @@ describe("appSettings", () => {
 
     expect(mockedInvoke).toHaveBeenLastCalledWith("save_file", {
       path: "/ws/.scrible/settings.json",
-      content: JSON.stringify({ theme: "light", layout: { splitRatio: 0.7, previewVisible: true } }),
+      content: JSON.stringify({
+        theme: "light",
+        layout: { splitRatio: 0.7, previewVisible: true },
+        explorer: { visible: true, width: 240 },
+      }),
+      expectedMtime: null,
+    });
+  });
+
+  it("patchAppSettings preserva layout/theme ao atualizar só a chave explorer", async () => {
+    const { loadAppSettings, patchAppSettings } = await freshModule();
+    mockedInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "workspace_status") return { root: "/ws", hidden: "/ws/.scrible" };
+      if (cmd === "read_file")
+        return JSON.stringify({
+          theme: "dark",
+          layout: { splitRatio: 0.5, previewVisible: true },
+          explorer: { visible: true, width: 240 },
+        });
+      if (cmd === "save_file") return 2000;
+      throw new Error(`unexpected invoke: ${cmd}`);
+    });
+    await loadAppSettings();
+
+    await patchAppSettings({ explorer: { visible: false, width: 240 } });
+
+    expect(mockedInvoke).toHaveBeenLastCalledWith("save_file", {
+      path: "/ws/.scrible/settings.json",
+      content: JSON.stringify({
+        theme: "dark",
+        layout: { splitRatio: 0.5, previewVisible: true },
+        explorer: { visible: false, width: 240 },
+      }),
       expectedMtime: null,
     });
   });
@@ -96,7 +145,11 @@ describe("appSettings", () => {
 
     const settings = await loadAppSettings();
 
-    expect(settings).toEqual({ theme: "system", layout: { splitRatio: 0.5, previewVisible: true } });
+    expect(settings).toEqual({
+      theme: "system",
+      layout: { splitRatio: 0.5, previewVisible: true },
+      explorer: { visible: true, width: 240 },
+    });
     expect(mockedInvoke).not.toHaveBeenCalledWith("save_file", expect.anything());
   });
 });
