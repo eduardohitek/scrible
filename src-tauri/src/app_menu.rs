@@ -24,12 +24,15 @@ pub fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
         .accelerator("CmdOrCtrl+W")
         .build(app)?;
     let rename_tab = MenuItemBuilder::with_id("rename_tab", "Renomear").build(app)?;
+    let export_html = MenuItemBuilder::with_id("export_html", "Exportar para HTML…").build(app)?;
     let file_menu = SubmenuBuilder::new(app, "Arquivo")
         .item(&new_tab)
         .item(&open_file)
         .separator()
         .item(&close_tab)
         .item(&rename_tab)
+        .separator()
+        .item(&export_html)
         .build()?;
 
     let find = MenuItemBuilder::with_id("find", "Buscar")

@@ -102,6 +102,14 @@ pub fn save_file(
     mtime_millis(&meta)
 }
 
+/// Escrita simples, sem verificação de mtime nem escrita atômica via temp+rename
+/// — ao contrário de `save_file`, este path é escolhido pelo usuário num
+/// diálogo de export (#26), tipicamente fora do workspace, e não participa do
+/// fluxo de autosave/conflito/histórico (sem `LastSaveMtime`, sem snapshot).
+pub fn write_export_file(path: &Path, content: &str) -> Result<(), FsError> {
+    fs::write(path, content).map_err(|err| FsError::from_io(err, path))
+}
+
 pub fn rename_file(from: &Path, to: &Path) -> Result<(), FsError> {
     fs::rename(from, to).map_err(|err| FsError::from_io(err, from))
 }

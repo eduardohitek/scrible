@@ -85,6 +85,11 @@ fn restore_snapshot(
 }
 
 #[tauri::command]
+fn write_export_file(path: String, content: String) -> Result<(), FsError> {
+    fs_ops::write_export_file(&PathBuf::from(path), &content)
+}
+
+#[tauri::command]
 fn rename_file(from: String, to: String) -> Result<(), FsError> {
     fs_ops::rename_file(&PathBuf::from(from), &PathBuf::from(to))
 }
@@ -165,6 +170,7 @@ pub fn run() {
             workspace_status,
             read_file,
             save_file,
+            write_export_file,
             rename_file,
             delete_file,
             list_dir,

@@ -34,5 +34,9 @@ export default defineConfig(async () => ({
     environment: "jsdom",
     globals: true,
     setupFiles: ["./src/test-setup.ts"],
+    // Sem isso, o Vitest troca todo import de `.css` (inclusive `?raw`) por um
+    // módulo vazio por padrão — quebra o export HTML (#26), que embute o CSS
+    // real de tokens.css/PreviewPane.css via `?raw` no HTML gerado.
+    css: true,
   },
 }));
