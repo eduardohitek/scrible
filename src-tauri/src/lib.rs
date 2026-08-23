@@ -1,6 +1,7 @@
 mod app_menu;
 mod fs_ops;
 mod history;
+mod tree_watcher;
 mod watcher;
 mod workspace;
 
@@ -99,6 +100,21 @@ fn list_dir(path: String) -> Result<Vec<String>, FsError> {
 }
 
 #[tauri::command]
+fn list_dir_entries(path: String) -> Result<Vec<fs_ops::DirEntry>, FsError> {
+    fs_ops::list_dir_entries(&PathBuf::from(path))
+}
+
+#[tauri::command]
+fn create_dir(path: String) -> Result<(), FsError> {
+    fs_ops::create_dir(&PathBuf::from(path))
+}
+
+#[tauri::command]
+fn delete_dir(path: String) -> Result<(), FsError> {
+    fs_ops::delete_dir(&PathBuf::from(path))
+}
+
+#[tauri::command]
 fn quit_app(app: AppHandle) {
     app.exit(0);
 }
@@ -124,6 +140,7 @@ pub fn run() {
             if let Ok(paths) = &result {
                 let target = paths.root.join("untitled.md");
                 watcher::start_watching(app.handle().clone(), target, last_save_mtime.clone());
+                tree_watcher::start_watching(app.handle().clone(), paths.root.clone(), paths.hidden.clone());
             }
 
             app.manage(WorkspaceState(result));
@@ -151,6 +168,9 @@ pub fn run() {
             rename_file,
             delete_file,
             list_dir,
+            list_dir_entries,
+            create_dir,
+            delete_dir,
             quit_app,
             list_snapshots,
             restore_snapshot,

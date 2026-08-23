@@ -49,6 +49,9 @@ pub fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
     let toggle_preview = MenuItemBuilder::with_id("toggle_preview", "Alternar preview")
         .accelerator("CmdOrCtrl+Shift+P")
         .build(app)?;
+    let toggle_explorer = MenuItemBuilder::with_id("toggle_explorer", "Alternar explorador")
+        .accelerator("CmdOrCtrl+Shift+E")
+        .build(app)?;
     let theme_system = MenuItemBuilder::with_id("theme_system", "Sistema").build(app)?;
     let theme_light = MenuItemBuilder::with_id("theme_light", "Claro").build(app)?;
     let theme_dark = MenuItemBuilder::with_id("theme_dark", "Escuro").build(app)?;
@@ -59,6 +62,7 @@ pub fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
         .build()?;
     let view_menu = SubmenuBuilder::new(app, "Visualizar")
         .item(&toggle_preview)
+        .item(&toggle_explorer)
         .separator()
         .item(&theme_menu)
         .build()?;

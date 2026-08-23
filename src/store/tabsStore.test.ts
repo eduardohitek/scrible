@@ -83,6 +83,78 @@ describe("tabsStore", () => {
     expect(useTabsStore.getState().tabs[0].path).toBe("/root/untitled.md");
   });
 
+  it("newTab com targetDir cria untitled-N.md na pasta alvo, não na raiz", async () => {
+    mockedInvoke.mockResolvedValueOnce(["untitled.md"]); // list_dir da pasta alvo
+    mockedInvoke.mockResolvedValueOnce(""); // read_file
+
+    await useTabsStore.getState().newTab("/root/subpasta");
+
+    expect(mockedInvoke).toHaveBeenNthCalledWith(1, "list_dir", { path: "/root/subpasta" });
+    expect(useTabsStore.getState().tabs[0].path).toBe("/root/subpasta/untitled-1.md");
+  });
+
+  it("closeTab com skipFlush não salva o documento antes de fechar", async () => {
+    useTabsStore.setState({
+      tabs: [
+        { id: "tab-1", path: "/root/a.md", title: "a.md" },
+        { id: "tab-2", path: "/root/b.md", title: "b.md" },
+      ],
+      activeTabId: "tab-2",
+    });
+    useDocumentStore.setState({
+      documents: {
+        "tab-1": docEntry({ path: "/root/a.md", dirty: true }),
+        "tab-2": docEntry({ path: "/root/b.md" }),
+      },
+    });
+
+    await useTabsStore.getState().closeTab("tab-1", { skipFlush: true });
+
+    expect(mockedInvoke).not.toHaveBeenCalled();
+    expect(useTabsStore.getState().tabs).toHaveLength(1);
+    expect(useDocumentStore.getState().documents["tab-1"]).toBeUndefined();
+  });
+
+  it("syncPathsAfterRename atualiza a aba cujo path bate exatamente (arquivo renomeado)", () => {
+    useTabsStore.setState({
+      tabs: [{ id: "tab-1", path: "/root/a.md", title: "a.md" }],
+      activeTabId: "tab-1",
+    });
+    useDocumentStore.setState({ documents: { "tab-1": docEntry({ path: "/root/a.md" }) } });
+
+    useTabsStore.getState().syncPathsAfterRename("/root/a.md", "/root/notas.md");
+
+    const state = useTabsStore.getState();
+    expect(state.tabs[0].path).toBe("/root/notas.md");
+    expect(state.tabs[0].title).toBe("notas.md");
+    expect(useDocumentStore.getState().documents["tab-1"].path).toBe("/root/notas.md");
+  });
+
+  it("syncPathsAfterRename corrige abas dentro de uma pasta renomeada (prefix match)", () => {
+    useTabsStore.setState({
+      tabs: [
+        { id: "tab-1", path: "/root/notas/a.md", title: "a.md" },
+        { id: "tab-2", path: "/root/notas/sub/b.md", title: "b.md" },
+        { id: "tab-3", path: "/root/outra-pasta/c.md", title: "c.md" },
+      ],
+      activeTabId: "tab-1",
+    });
+    useDocumentStore.setState({
+      documents: {
+        "tab-1": docEntry({ path: "/root/notas/a.md" }),
+        "tab-2": docEntry({ path: "/root/notas/sub/b.md" }),
+        "tab-3": docEntry({ path: "/root/outra-pasta/c.md" }),
+      },
+    });
+
+    useTabsStore.getState().syncPathsAfterRename("/root/notas", "/root/anotacoes");
+
+    const state = useTabsStore.getState();
+    expect(state.tabs[0].path).toBe("/root/anotacoes/a.md");
+    expect(state.tabs[1].path).toBe("/root/anotacoes/sub/b.md");
+    expect(state.tabs[2].path).toBe("/root/outra-pasta/c.md"); // não afetada
+  });
+
   it("closeTab nunca deixa a lista de abas vazia — abre uma nova automaticamente", async () => {
     useTabsStore.setState({
       tabs: [{ id: "tab-1", path: "/root/a.md", title: "a.md" }],

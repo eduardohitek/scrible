@@ -62,7 +62,11 @@ describe("themeStore", () => {
 
     expect(mockedInvoke).toHaveBeenCalledWith("save_file", {
       path: "/ws/.scrible/settings.json",
-      content: JSON.stringify({ theme: "system", layout: { splitRatio: 0.5, previewVisible: true } }),
+      content: JSON.stringify({
+        theme: "system",
+        layout: { splitRatio: 0.5, previewVisible: true },
+        explorer: { visible: true, width: 240 },
+      }),
       expectedMtime: null,
     });
     const state = useThemeStore.getState();
@@ -100,7 +104,11 @@ describe("themeStore", () => {
 
     expect(mockedInvoke).toHaveBeenLastCalledWith("save_file", {
       path: "/ws/.scrible/settings.json",
-      content: JSON.stringify({ theme: "dark", layout: { splitRatio: 0.6, previewVisible: false } }),
+      content: JSON.stringify({
+        theme: "dark",
+        layout: { splitRatio: 0.6, previewVisible: false },
+        explorer: { visible: true, width: 240 },
+      }),
       expectedMtime: null,
     });
     expect(useThemeStore.getState().resolved).toBe("dark");

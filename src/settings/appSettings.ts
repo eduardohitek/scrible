@@ -8,6 +8,10 @@ export interface AppSettings {
     splitRatio: number;
     previewVisible: boolean;
   };
+  explorer: {
+    visible: boolean;
+    width: number;
+  };
 }
 
 interface WorkspacePaths {
@@ -24,6 +28,7 @@ type FsError = FsErrorNotFound | { kind: "PermissionDenied" | "Io" | "ExternalCh
 export const DEFAULT_SETTINGS: AppSettings = {
   theme: "system",
   layout: { splitRatio: 0.5, previewVisible: true },
+  explorer: { visible: true, width: 240 },
 };
 
 // Módulo de infraestrutura (não uma store zustand) usado por themeStore.ts e
@@ -55,7 +60,15 @@ function normalize(parsed: Partial<AppSettings> | null | undefined): AppSettings
     typeof parsed?.layout?.previewVisible === "boolean"
       ? parsed.layout.previewVisible
       : DEFAULT_SETTINGS.layout.previewVisible;
-  return { theme, layout: { splitRatio, previewVisible } };
+  const explorerVisible =
+    typeof parsed?.explorer?.visible === "boolean" ? parsed.explorer.visible : DEFAULT_SETTINGS.explorer.visible;
+  const explorerWidth =
+    typeof parsed?.explorer?.width === "number" ? parsed.explorer.width : DEFAULT_SETTINGS.explorer.width;
+  return {
+    theme,
+    layout: { splitRatio, previewVisible },
+    explorer: { visible: explorerVisible, width: explorerWidth },
+  };
 }
 
 async function writeSettings(settings: AppSettings): Promise<void> {
@@ -75,7 +88,11 @@ async function doLoad(): Promise<AppSettings> {
     cache = normalize(JSON.parse(raw) as Partial<AppSettings>);
   } catch (err) {
     const fsError = err as FsError;
-    cache = { theme: DEFAULT_SETTINGS.theme, layout: { ...DEFAULT_SETTINGS.layout } };
+    cache = {
+      theme: DEFAULT_SETTINGS.theme,
+      layout: { ...DEFAULT_SETTINGS.layout },
+      explorer: { ...DEFAULT_SETTINGS.explorer },
+    };
     if (fsError.kind === "NotFound") {
       await writeSettings(cache);
     } else {
@@ -97,6 +114,7 @@ export async function patchAppSettings(patch: Partial<AppSettings>): Promise<App
     ...cache!,
     ...patch,
     layout: { ...cache!.layout, ...patch.layout },
+    explorer: { ...cache!.explorer, ...patch.explorer },
   };
   const snapshot = cache;
   writeQueue = writeQueue.then(() => writeSettings(snapshot));

@@ -12,6 +12,9 @@ import { PreviewToggleButton } from "./layout/PreviewToggleButton";
 import { useLayoutStore } from "./layout/layoutStore";
 import { useDocumentStore, DEFAULT_DOCUMENT } from "./store/documentStore";
 import { useTabsStore } from "./store/tabsStore";
+import { useExplorerStore } from "./explorer/explorerStore";
+import { ExplorerPanel } from "./explorer/ExplorerPanel";
+import { ExplorerToggleTab } from "./explorer/ExplorerToggleTab";
 import { useThemeStore, type ThemePreference } from "./theme/themeStore";
 import "./theme/tokens.css";
 import "./App.css";
@@ -54,6 +57,7 @@ function App() {
       .then(async ({ root }) => {
         useTabsStore.getState().setWorkspaceRoot(root);
         await useTabsStore.getState().openTab(`${root}/untitled.md`, { fallbackContent: DEFAULT_DOCUMENT });
+        await useExplorerStore.getState().init(root);
       })
       .catch((err: WorkspaceError) => {
         setWorkspaceError(err);
@@ -93,6 +97,11 @@ function App() {
       if (!tab) return;
       useDocumentStore.getState().handleExternalChange(tab.id, event.payload.content, event.payload.mtime);
     });
+    // Watcher recursivo dedicado ao explorador (#25, tree_watcher.rs) — evento
+    // sem payload, o frontend decide o que re-buscar (raiz + pastas expandidas).
+    const unlistenTreeChange = listen("workspace-tree-changed", () => {
+      void useExplorerStore.getState().refreshVisible();
+    });
     // Itens do menu nativo (#24) que não são `Predefined*` chegam aqui como
     // string simples via `app.emit("menu", id)` (Rust). "quit" não passa por
     // este evento — é tratado inteiramente em Rust (`window.close()` reaproveita
@@ -118,6 +127,9 @@ function App() {
         case "toggle_preview":
           void useLayoutStore.getState().togglePreview();
           break;
+        case "toggle_explorer":
+          useExplorerStore.getState().toggle();
+          break;
         case "theme_system":
         case "theme_light":
         case "theme_dark":
@@ -130,6 +142,7 @@ function App() {
       void unlistenFocus.then((fn) => fn());
       void unlistenClose.then((fn) => fn());
       void unlistenExternalChange.then((fn) => fn());
+      void unlistenTreeChange.then((fn) => fn());
       void unlistenMenu.then((fn) => fn());
     };
   }, [flushAll]);
@@ -144,13 +157,17 @@ function App() {
 
   return (
     <div className="app-shell">
-      <TabBar />
-      <SplitLayout ref={splitLayoutRef} tabId={activeTabId} source={activeDoc?.content ?? ""} />
-      <ThemeToggle />
-      <HistoryPanel />
-      <PreviewToggleButton />
-      {activeDoc?.status === "conflict" && <ConflictBanner />}
-      {activeDoc?.status === "saving" && <div className="save-indicator">Salvando…</div>}
+      <ExplorerToggleTab />
+      <ExplorerPanel />
+      <div className="app-shell-content">
+        <TabBar />
+        <SplitLayout ref={splitLayoutRef} tabId={activeTabId} source={activeDoc?.content ?? ""} />
+        <ThemeToggle />
+        <HistoryPanel />
+        <PreviewToggleButton />
+        {activeDoc?.status === "conflict" && <ConflictBanner />}
+        {activeDoc?.status === "saving" && <div className="save-indicator">Salvando…</div>}
+      </div>
     </div>
   );
 }

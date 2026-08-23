@@ -26,11 +26,20 @@ interface TabsState {
    * aba correspondente ao path escolhido. No-op se o usuário cancelar. */
   openFileDialog: () => Promise<void>;
   /** Cria uma aba nova apontando para `untitled-N.md` (primeiro nome livre
-   * checado contra o conteúdo real do workspace, não só as abas abertas). */
-  newTab: () => Promise<void>;
+   * checado contra o conteúdo real do diretório alvo, não só as abas
+   * abertas). `targetDir` default é a raiz do workspace — o explorador (#25)
+   * passa a pasta clicada para criar arquivos fora da raiz. */
+  newTab: (targetDir?: string) => Promise<void>;
   /** Salva, remove a aba e ativa a vizinha. Nunca deixa a lista de abas
-   * vazia — fechar a última abre automaticamente uma nova. */
-  closeTab: (tabId: string) => Promise<void>;
+   * vazia — fechar a última abre automaticamente uma nova. `skipFlush` pula
+   * o save antes de fechar — usado pelo explorador (#25) ao excluir o
+   * arquivo da aba: salvar recriaria o arquivo que acabou de ser apagado. */
+  closeTab: (tabId: string, opts?: { skipFlush?: boolean }) => Promise<void>;
+  /** Corrige o `path` de qualquer aba afetada por um rename feito fora da
+   * `TabBar` (explorador, #25): `oldPath` exato (arquivo renomeado) ou
+   * prefixo `oldPath + "/"` (aba dentro de uma pasta renomeada). Não chama
+   * `rename_file` — só sincroniza o estado já refletido em disco. */
+  syncPathsAfterRename: (oldPath: string, newPath: string) => void;
   setActiveTab: (tabId: string) => void;
   reorderTabs: (fromIndex: number, toIndex: number) => void;
   /** Renomeia o arquivo em disco (via `rename_file`) e só então atualiza a
@@ -93,11 +102,12 @@ export const useTabsStore = create<TabsState>((set, get) => ({
     if (typeof path === "string") await get().openTab(path);
   },
 
-  newTab: async () => {
+  newTab: async (targetDir) => {
     const { workspaceRoot } = get();
-    if (workspaceRoot === null) return;
+    const dir = targetDir ?? workspaceRoot;
+    if (dir === null) return;
 
-    const existingNames = new Set(await invoke<string[]>("list_dir", { path: workspaceRoot }));
+    const existingNames = new Set(await invoke<string[]>("list_dir", { path: dir }));
 
     let candidate = "untitled.md";
     let n = 1;
@@ -106,11 +116,11 @@ export const useTabsStore = create<TabsState>((set, get) => ({
       n += 1;
     }
 
-    await get().openTab(`${workspaceRoot}/${candidate}`);
+    await get().openTab(`${dir}/${candidate}`);
   },
 
-  closeTab: async (tabId) => {
-    await useDocumentStore.getState().flush(tabId);
+  closeTab: async (tabId, opts) => {
+    if (!opts?.skipFlush) await useDocumentStore.getState().flush(tabId);
 
     const { tabs, activeTabId } = get();
     const index = tabs.findIndex((tab) => tab.id === tabId);
@@ -166,6 +176,24 @@ export const useTabsStore = create<TabsState>((set, get) => ({
     useDocumentStore.getState().renameDocument(tabId, newPath);
     set((state) => ({
       tabs: state.tabs.map((t) => (t.id === tabId ? { ...t, path: newPath, title: normalizedTitle } : t)),
+    }));
+  },
+
+  syncPathsAfterRename: (oldPath, newPath) => {
+    set((state) => ({
+      tabs: state.tabs.map((tab) => {
+        if (tab.path === oldPath) {
+          const newTabPath = newPath;
+          useDocumentStore.getState().renameDocument(tab.id, newTabPath);
+          return { ...tab, path: newTabPath, title: basename(newTabPath) };
+        }
+        if (tab.path.startsWith(`${oldPath}/`)) {
+          const newTabPath = newPath + tab.path.slice(oldPath.length);
+          useDocumentStore.getState().renameDocument(tab.id, newTabPath);
+          return { ...tab, path: newTabPath };
+        }
+        return tab;
+      }),
     }));
   },
 
