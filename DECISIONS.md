@@ -819,3 +819,72 @@ decisão de `#24`. Qualquer issue futura que precise de outro botão flutuante d
 **Afeta:** `#27` (exportar PDF) deve reaproveitar `renderStaticBodyHtml`/`buildStandaloneHtml` como
 fonte de HTML de entrada em vez de reimplementar o pipeline, e herda a mesma decisão de congelar no
 tema resolvido no momento do export.
+
+## #27 — Exportar para PDF
+
+- **Abordagem original da sabatina (iframe oculto + `window.print()`) não funciona**: verificação
+  manual mostrou que clicar "Exportar para PDF" não fazia nada. Causa raiz confirmada por pesquisa:
+  o WKWebView usado pelo Tauri/wry no macOS não implementa `window.print()` — não há
+  `WKUIDelegate` de impressão instalado, limitação conhecida e documentada upstream
+  (github.com/tauri-apps/wry#707, "Add ability to print webview to pdf silently"). Chamar
+  `print()* de dentro de qualquer WKWebView do Tauri (hidden ou não) é um no-op silencioso.
+- **Solução adotada: `WKWebView.createPDF()` nativo** (macOS 11+, a mesma API por trás de "Exportar
+  como PDF" no Safari), via bindings `objc2`/`objc2-web-kit`/`block2` — primeiras dependências
+  Rust específicas de macOS do projeto (`[target.'cfg(target_os = "macos")'.dependencies]` em
+  `Cargo.toml`; `src-tauri/src/pdf_export.rs` inteiro sob `#[cfg(target_os = "macos")]`, comando
+  `export_pdf` idem, tanto na definição quanto no registro em `generate_handler!`). Evita depender
+  do painel de impressão do SO e evita duplicar o pipeline de renderização de markdown/mermaid em
+  outro motor (ex: `tauri-plugin-printer-wkhtml-bin`, que embala um binário `wkhtmltopdf`
+  separado — descartado por isso).
+- **Janela oculta dedicada**: `render_html_to_pdf` cria uma `WebviewWindow` nova (`visible(false)`,
+  label `pdf-export-<contador atômico>`) só para o export, carrega o HTML via
+  `WKWebView.loadHTMLString_baseURL` (acessando o WKWebView real através de
+  `window.with_webview` + `webview.inner().cast()`, padrão documentado pelo próprio Tauri) — não
+  compete com a aba que o usuário está editando. Destruída com **`.destroy()`, não `.close()`**:
+  `.close()` emite `WindowEvent::CloseRequested`, que o handler global em `lib.rs` intercepta com
+  `prevent_close()` (pensado para o handshake de flush do autosave da janela principal) — nunca
+  chegaria a destruir essa janela temporária.
+- **Achado crítico de threading, encontrado só na verificação manual** (não em teste automatizado —
+  exige o WKWebView real): os comandos deste app executam na **mesma thread do loop de eventos
+  nativo** (main thread) — `with_webview` despacha inline nela quando já está nela
+  (`tauri-runtime-wry`: `send_user_message` roda o handler direto se `current_thread_id ==
+  main_thread_id`, ou enfileira via proxy caso contrário). O completion handler do `createPDF` é
+  entregue pelo WebKit através da fila principal (GCD/`dispatch_async` na main queue), que só drena
+  quando o loop de eventos nativo consegue rodar de novo. A primeira implementação usava
+  `std::sync::mpsc::recv_timeout`/`std::thread::sleep` (bloqueio síncrono) nessa mesma thread —
+  travava o loop de eventos por completo, **inclusive impedindo o próprio callback do createPDF de
+  ser entregue**: confirmado via `eprintln!` que o callback só chegava a rodar *depois* do timeout
+  de 30s, exatamente quando a função finalmente devolvia o controle. Sintoma no app: clicar
+  "Exportar para PDF" travava o app inteiro, exigindo forçar encerramento. Fix: comando `export_pdf`
+  virou `async fn`, `render_html_to_pdf` usa `tokio::time::sleep(...).await` e
+  `tokio::sync::oneshot` + `tokio::time::timeout(...).await` no lugar dos equivalentes síncronos —
+  `.await` cede o controle de volta pro loop de eventos nativo nos pontos de espera, permitindo o
+  callback do WebKit ser entregue normalmente. `tokio` entrou como dependência direta (features
+  `sync`, `time`) só para essas duas primitivas — o resto do projeto usa `tauri::async_runtime`
+  transitivamente sem precisar disso.
+- **Tema sempre claro no PDF** (`renderStaticBodyHtml`/`buildStandaloneHtml` chamados com `"light"`
+  fixo), independente do tema atual da UI — critério de aceite literal da issue ("para economizar
+  tinta/leitura impressa"), desviando conscientemente da decisão de `#26` de congelar no tema
+  resolvido da tela. Decidido via sabatina.
+- **CSS de impressão dedicado** (`src/export/print.css`, importado via `?raw` mesmo padrão de
+  `tokens.css`/`PreviewPane.css`): `@page { margin: 2cm }`, `break-inside: avoid` em blocos de
+  código/mermaid/tabela/citação, `print-color-adjust: exact` (preserva cores de preenchimento do
+  mermaid, que navegadores por padrão suprimem em impressão). `buildStandaloneHtml` ganhou um
+  parâmetro `extraCss` opcional (default `""`) para injetar isso só no fluxo de PDF, sem afetar o
+  export de HTML (`#26`).
+- **Diálogo de salvar**: mesmo padrão de `#26` (`save()` do `tauri-plugin-dialog`, filtro `.pdf`,
+  `defaultPath` derivado do path da aba) — o comando `export_pdf` recebe `html` + `path` e faz
+  `fs::write` direto (sem escrita atômica, mesma decisão de `write_export_file` em `#26`: não
+  compete com autosave/watcher em paths de export).
+- **Sem teste automatizado para a geração real do PDF** (o `WKWebView.createPDF()` em si não é
+  exercitável em jsdom/vitest nem em `cargo test`) — mesma postura já registrada em
+  `#12`/`#22`/`#23`/`#24` para integrações nativas sem precedente de teste no repo. Testes cobrem só
+  o que é puro/determinístico do lado JS: `buildStandaloneHtml` com `extraCss`, diálogo de salvar
+  (abre/cancela), tema sempre claro no payload do comando.
+
+**Afeta:** qualquer issue futura que precise chamar outra API do WKWebView a partir do Rust
+(`objc2-web-kit`) tem aqui o padrão de acesso (`with_webview` + `webview.inner().cast()`) e o
+alerta de threading (nunca bloquear sincronamente dentro de um comando — usar `.await`). `#32`
+(builds Windows/Linux) precisa decidir uma alternativa não-macOS para `export_pdf` — hoje ele só
+existe sob `#[cfg(target_os = "macos")]`, então o item de menu "Exportar para PDF…" existiria sem
+handler funcional em outras plataformas se `app_menu.rs` não for revisitado junto.

@@ -1,0 +1,21 @@
+/* CSS de impressão dedicado ao export de PDF (#27). Só é incluído no HTML
+   passado pro iframe de impressão (buildStandaloneHtml com extraCss) — nunca
+   no export de HTML standalone (#26) nem no preview ao vivo. */
+@media print {
+  @page {
+    margin: 2cm;
+  }
+
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  pre,
+  .mermaid-diagram,
+  .mermaid-error,
+  table,
+  blockquote {
+    break-inside: avoid;
+  }
+}
