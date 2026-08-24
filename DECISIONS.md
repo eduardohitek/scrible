@@ -888,3 +888,79 @@ alerta de threading (nunca bloquear sincronamente dentro de um comando — usar 
 (builds Windows/Linux) precisa decidir uma alternativa não-macOS para `export_pdf` — hoje ele só
 existe sob `#[cfg(target_os = "macos")]`, então o item de menu "Exportar para PDF…" existiria sem
 handler funcional em outras plataformas se `app_menu.rs` não for revisitado junto.
+
+## #60 — Toolbar e status bar
+
+- **Diagnóstico**: o chrome da UI vivia em 5 elementos `position: absolute`/`fixed` nos 4 cantos +
+  borda esquerda de `.app-shell-content` (tema, histórico, preview, `.save-indicator`, aba `▸` do
+  explorador), cobrindo texto do editor/preview e sem espaço para crescer — a própria `#25` já
+  registrava isso em `Afeta:`. Consolidados numa barra única no topo (abas + toolbar) e uma status
+  bar no rodapé, decisão via sabatina.
+- **`lucide-react` como exceção justificada** à postura "sem dependência nova para escopo pequeno"
+  (manual debounce/throttle/FNV-1a/DnD nativo de issues anteriores): 6+ ícones de traço consistente
+  a 16px não é escopo pequeno o bastante pra valer a pena escrever à mão, e a lib faz tree-shaking
+  natural do que é importado (só os ícones usados entram no bundle via ESM).
+- **Novo `src/commands/registry.ts`**: fonte única de verdade das ações do app (`AppCommand { id,
+  label, shortcut?, run, isActive? }`), substituindo o `switch` de 36 linhas que existia no listener
+  do evento nativo `"menu"` em `App.tsx` desde `#24`. O listener virou uma linha
+  (`runCommand(event.payload)`); a Toolbar consome os mesmos comandos pelos mesmos ids. `id`
+  desconhecido é no-op silencioso — mesma tolerância que o `switch` anterior tinha pra ids fora do
+  `case`. Ponte imperativa (`EditorBridge`/`setEditorBridge`) cobre a única ação que só existe
+  dentro da árvore React (`SplitLayoutHandle.openSearch()`); `App.tsx` a instala num `useEffect` e
+  **anula no cleanup**, mesma regra já registrada na `#21` para efeitos que criam/destroem recurso
+  imperativo fora do React.
+- **Achado que molda a issue B (paleta de comandos)**: `⌘K` já é `insertLink`
+  (`markdownCommands.ts:238`, `#13`) — não está livre pra virar o atalho da paleta. Combinado com o
+  achado da `#24` (no macOS um `NSMenuItem` com accelerator intercepta a tecla **antes** da
+  WKWebView), registrar a paleta em `⌘K` mataria o atalho de link do editor. A issue B usa `⌘P`.
+- **Extração mínima, sem design system completo** (decisão via sabatina, rejeitando componentes
+  `Button`/`Popover`/`Modal`): novo `src/ui/useClickOutside.ts` substitui 3 cópias manuais do "fecha
+  ao clicar fora" (`ThemeToggle.tsx`, `HistoryPanel.tsx`, `ExplorerContextMenu.tsx` — esta última já
+  tratava `Escape`, as outras duas não; o hook consolida o superset das três). Classes `.icon-button`
+  e `.popover-surface` em `App.css` substituem os 3 blocos CSS byte-idênticos
+  (`.theme-toggle`/`.history-toggle`/`.preview-toggle`) e as 3 superfícies de popover quase-idênticas
+  (`.theme-menu`/`.history-panel`/`.explorer-context-menu`). `.popover-menu-item` é uma classe própria
+  (não o seletor genérico `button`) para não vazar estilo pro botão "Restaurar" de
+  `.history-item`, que convive no mesmo popover.
+- **Tema: ícone reflete a preferência, não botão de ciclo** — preserva o espírito da `#23` ("mostra
+  o estado atual sem exigir interação") com um quarto da largura: o ícone muda (`Monitor`/`Sun`/
+  `Moon`) e o clique abre o mesmo dropdown de 3 opções de sempre.
+- **Exportar: um ícone só com dropdown HTML/PDF**, não dois — `export_pdf` é `macos`-only (`#27`),
+  um segundo ícone ficaria morto no Windows/Linux (`#32`).
+- **Tooltip CSS próprio** (`[data-tooltip]::after`, `App.css`), não o `title` nativo — o delay do
+  WKWebView (~1,5s) o torna inútil como ferramenta de descoberta de atalho, que era o problema que
+  motivou a issue (atalhos só apareciam abrindo o menu nativo).
+- **`ExplorerToggleTab.tsx` removido** — reverte conscientemente a decisão da `#25` (a aba `▸` só
+  existia "porque os 4 cantos já têm botões flutuantes, sem espaço livre pra mais um"; a própria
+  entrada previa essa reversão). O ícone de explorador na toolbar cobre 100% da função, com
+  `aria-pressed` e tooltip mostrando `⇧⌘E`.
+- **Status bar**: tri-estado de salvamento (`Salvando…`/`Não salvo`/`Salvo`, derivado de
+  `DocumentEntry.status`/`.dirty` já existentes — nenhuma lógica nova) + contagem de palavras e
+  caracteres (`useMemo` puro sobre `activeDoc.content`). Ficaram fora, por decisão da sabatina:
+  linha/coluna do cursor (exigiria um `updateListener` novo do CodeMirror publicando a seleção pra
+  fora) e caminho relativo do arquivo.
+- **Indicador de não-salvo na aba**: `TabBar.tsx` ganhou um subcomponente `TabItem` que assina
+  `dirty` por aba individualmente (mesma técnica de assinatura por item que `ExplorerNode` já usa em
+  `ExplorerPanel.tsx`, `#25`) — evita re-render da barra inteira ao digitar. O ponto e o `×` ficam
+  os dois no DOM o tempo todo (`.tab-close[data-dirty]` + CSS `display:none` alternado por estado/
+  `:hover`), não um swap condicional via React — troca de estado não remonta o botão nem perde
+  `:hover`.
+- **Largura de leitura no preview** (`--reading-width: 70ch`, aplicada aos *filhos* de
+  `.preview-pane`, não ao container — que é ao mesmo tempo o alvo de scroll e do `innerHTML`
+  reescrito pelo efeito do mermaid, `#18`/`#23`). `display: grid` no container foi cogitado e
+  descartado: grid items não fazem margin-collapse entre si, dobraria o espaçamento vertical entre
+  parágrafos. Efeito colateral aceito: como `PreviewPane.css` é inlinada via `?raw` no export
+  (`#26`/`#27`), a largura de leitura passa a valer também no HTML e no PDF exportados.
+- **`ConflictBanner` saiu de `position: absolute` para o fluxo normal** — antes cobria as primeiras
+  linhas do editor/preview quando aparecia; agora empurra o conteúdo.
+- Testes: `ThemeToggle.test.tsx`/`HistoryPanel.test.tsx` (pré-existentes) passaram a consultar por
+  `getByRole("button", { name: … })`/`aria-label` em vez de texto visível, já que os gatilhos viraram
+  ícone-only. `PreviewToggleButton.test.tsx` foi apagado junto com o componente; a cobertura migrou
+  pra `Toolbar.test.tsx` + `registry.test.ts`. Novos: `registry.test.ts`, `useClickOutside.test.ts`,
+  `Toolbar.test.tsx`, `StatusBar.test.tsx`.
+
+**Afeta:** `#29` (tela de preferências — ainda não existe; seria o lar natural do tema, da largura
+de leitura e do intervalo de autosave, hoje espalhados). `#32` (builds Windows/Linux) ganha metade
+do caminho pronto: a toolbar/registro de comandos é a "barra de comandos própria" que a issue já
+previa como alternativa ao menu de sistema ausente fora do macOS. Issue B (paleta de comandos `⌘P`
++ modo foco, a abrir) consome `src/commands/registry.ts` sem retrabalho.

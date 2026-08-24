@@ -2,30 +2,22 @@ import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
-import { HistoryPanel } from "./history/HistoryPanel";
 import { ConflictBanner } from "./conflict/ConflictBanner";
-import { ThemeToggle } from "./theme/ThemeToggle";
 import { TabBar } from "./tabs/TabBar";
 import { useTabShortcuts } from "./tabs/useTabShortcuts";
 import { SplitLayout, type SplitLayoutHandle } from "./layout/SplitLayout";
-import { PreviewToggleButton } from "./layout/PreviewToggleButton";
 import { useLayoutStore } from "./layout/layoutStore";
 import { useDocumentStore, DEFAULT_DOCUMENT } from "./store/documentStore";
 import { useTabsStore } from "./store/tabsStore";
 import { useExplorerStore } from "./explorer/explorerStore";
 import { ExplorerPanel } from "./explorer/ExplorerPanel";
-import { ExplorerToggleTab } from "./explorer/ExplorerToggleTab";
-import { useThemeStore, type ThemePreference } from "./theme/themeStore";
-import { exportActiveTabAsHtml, exportActiveTabAsPdf } from "./export/exportHtml";
+import { useThemeStore } from "./theme/themeStore";
+import { runCommand, setEditorBridge } from "./commands/registry";
+import { Toolbar } from "./ui/Toolbar";
+import { StatusBar } from "./ui/StatusBar";
 import "./theme/tokens.css";
 import "./App.css";
 import "./preview/PreviewPane.css";
-
-const THEME_MENU_PREFERENCE: Record<string, ThemePreference> = {
-  theme_system: "system",
-  theme_light: "light",
-  theme_dark: "dark",
-};
 
 interface ExternalChangePayload {
   mtime: number;
@@ -79,6 +71,11 @@ function App() {
   }, [resolvedTheme]);
 
   useEffect(() => {
+    setEditorBridge({ openSearch: () => splitLayoutRef.current?.openSearch() });
+    return () => setEditorBridge(null);
+  }, []);
+
+  useEffect(() => {
     const unlistenFocus = getCurrentWindow().onFocusChanged(({ payload: focused }) => {
       if (!focused) void flushAll();
     });
@@ -109,41 +106,7 @@ function App() {
     // este evento — é tratado inteiramente em Rust (`window.close()` reaproveita
     // o handshake de flush já cablado em `app-close-requested`, ver acima).
     const unlistenMenu = listen<string>("menu", (event) => {
-      const { activeTabId, newTab, closeTab, openFileDialog, startRenaming } = useTabsStore.getState();
-      switch (event.payload) {
-        case "new_tab":
-          void newTab();
-          break;
-        case "open_file":
-          void openFileDialog();
-          break;
-        case "close_tab":
-          if (activeTabId) void closeTab(activeTabId);
-          break;
-        case "rename_tab":
-          if (activeTabId) startRenaming(activeTabId);
-          break;
-        case "find":
-          splitLayoutRef.current?.openSearch();
-          break;
-        case "toggle_preview":
-          void useLayoutStore.getState().togglePreview();
-          break;
-        case "toggle_explorer":
-          useExplorerStore.getState().toggle();
-          break;
-        case "export_html":
-          void exportActiveTabAsHtml();
-          break;
-        case "export_pdf":
-          void exportActiveTabAsPdf();
-          break;
-        case "theme_system":
-        case "theme_light":
-        case "theme_dark":
-          void useThemeStore.getState().setPreference(THEME_MENU_PREFERENCE[event.payload]);
-          break;
-      }
+      runCommand(event.payload);
     });
 
     return () => {
@@ -165,16 +128,15 @@ function App() {
 
   return (
     <div className="app-shell">
-      <ExplorerToggleTab />
       <ExplorerPanel />
       <div className="app-shell-content">
-        <TabBar />
-        <SplitLayout ref={splitLayoutRef} tabId={activeTabId} source={activeDoc?.content ?? ""} />
-        <ThemeToggle />
-        <HistoryPanel />
-        <PreviewToggleButton />
+        <header className="app-header">
+          <TabBar />
+          <Toolbar />
+        </header>
         {activeDoc?.status === "conflict" && <ConflictBanner />}
-        {activeDoc?.status === "saving" && <div className="save-indicator">Salvando…</div>}
+        <SplitLayout ref={splitLayoutRef} tabId={activeTabId} source={activeDoc?.content ?? ""} />
+        <StatusBar />
       </div>
     </div>
   );

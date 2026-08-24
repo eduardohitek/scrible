@@ -40,6 +40,10 @@
   --color-warning-text: light-dark(#664d03, #ffe69c);
   --color-warning-border: light-dark(#ffe69c, #664d03);
 
+  /* Cores: tooltip da toolbar (#60) */
+  --color-tooltip-bg: light-dark(#333333, #eeeeee);
+  --color-tooltip-text: light-dark(#ffffff, #1e1e1e);
+
   /* Tipografia */
   --font-reading: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
@@ -57,7 +61,10 @@
 
   /* Layout */
   --tab-bar-height: 2.25rem;
+  --status-bar-height: 1.5rem;
   --pane-min-width: 240px;
+  --reading-width: 70ch;
+  --icon-size: 16px;
 
   /* Espaçamento */
   --space-1: 0.25rem;

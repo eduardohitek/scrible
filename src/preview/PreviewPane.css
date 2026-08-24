@@ -8,6 +8,16 @@
   line-height: var(--line-height-base);
 }
 
+/* Largura de leitura (#60): aplicada aos filhos, não ao `.preview-pane` —
+   ele é ao mesmo tempo o container de scroll e o alvo do `innerHTML`
+   (mermaid reescreve o DOM em runtime). `display: grid` no container foi
+   cogitado e descartado: grid items não fazem margin-collapse entre si, o
+   que dobraria o espaçamento vertical entre parágrafos. */
+.preview-pane > * {
+  max-width: var(--reading-width);
+  margin-inline: auto;
+}
+
 .mermaid-diagram {
   display: flex;
   justify-content: center;
