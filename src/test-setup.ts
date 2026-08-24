@@ -30,3 +30,14 @@ type SvgMeasurable = SVGElement & {
   }) as DOMRect;
 
 (SVGElement.prototype as SvgMeasurable).getComputedTextLength = () => 50;
+
+// jsdom implementa `Element.prototype.getClientRects`/`getBoundingClientRect`
+// (retornam retângulos vazios, sem lançar), mas não implementa
+// `Range.prototype.getClientRects` — usado pelo próprio CodeMirror
+// (`@codemirror/view`) para medir a posição de texto na tela (linhas,
+// tooltips de busca/autocomplete). Sem o stub, qualquer teste que deixe uma
+// `EditorView` real rodar um ciclo de medição (`requestMeasure`) sob jsdom
+// lança `getClientRects is not a function` de dentro de um `requestAnimationFrame`
+// — mesma categoria de lacuna de API de layout do jsdom já registrada para
+// SVG na `#18`, agora para `Range` (`#15`).
+(Range.prototype as Range & { getClientRects(): DOMRectList }).getClientRects = () => [] as unknown as DOMRectList;

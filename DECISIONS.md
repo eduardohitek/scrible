@@ -964,3 +964,61 @@ de leitura e do intervalo de autosave, hoje espalhados). `#32` (builds Windows/L
 do caminho pronto: a toolbar/registro de comandos é a "barra de comandos própria" que a issue já
 previa como alternativa ao menu de sistema ausente fora do macOS. Issue B (paleta de comandos `⌘P`
 + modo foco, a abrir) consome `src/commands/registry.ts` sem retrabalho.
+
+## #15 — Autocomplete grupo D: linguagens em fences e snippets mermaid
+
+- **Novo `src/editor/fenceCompletions.ts`**: dois níveis de `CompletionSource`.
+  `fenceLanguageSource` dispara ao digitar ` ``` ` no início de uma linha e sugere ~24 linguagens
+  (lista de cobertura ampla — a string é puramente textual, `#12` já decidiu que não há syntax
+  highlighting por linguagem no editor); `mermaidTypeSource` só dispara dentro de um bloco
+  ` ```mermaid ` cujo corpo ainda não tem nenhuma linha não-vazia entre a abertura do fence e o
+  cursor, e sugere os 7 tipos de diagrama do AC. Aceitar uma linguagem insere o fence **completo**
+  (abertura + corpo + fechamento), não só a palavra — deixar o fence aberto quebraria o preview e a
+  própria checagem de "dentro de bloco de código" (o lezer-markdown estende um fence não fechado
+  até o fim do documento).
+- **`from` do 1º nível fica depois das três crases** (`word.from + 3`), diferente do `from` do menu
+  `/` da `#14` (que precisava incluir o `/` e por isso usava `filter: false` com filtragem manual).
+  Aqui o texto entre `from` e o cursor já é exatamente o prefixo da linguagem digitado, então o
+  matcher fuzzy **default** do CM6 funciona sem ajuda — confirmado por teste que a fonte em si
+  devolve a lista completa sem filtrar (a filtragem é responsabilidade do pipeline, não da fonte).
+- **Supressão do ` ``` ` de fechamento**: `fenceLanguageSource` não dispara quando o início da linha
+  atual já está dentro de um `FencedCode`/`CodeBlock` que começou numa linha anterior (`node.from <
+  lineStart`) — senão sugeriria linguagem também ao fechar um bloco existente.
+- **Encadeamento explícito via `startCompletion`**: o CM6 não reabre o menu de completion sozinho
+  depois de aceitar uma opção (a auto-ativação por digitação só reage a `userEvent: "input.type"`;
+  inserir uma completion usa `"input.complete"`, que não ativa nada). Novo helper
+  `withChainedCompletion(completion)` embrulha o `apply` de uma completion para, depois de inserir
+  (string ou snippet), chamar `startCompletion(view)` explicitamente. Usado pelo item `mermaid` do
+  1º nível (que insere ` ```mermaid `+corpo vazio e abre o 2º nível) e pelos dois itens do menu `/`
+  que a `#14` deixou incompletos de propósito ("Bloco de código" e "Diagrama mermaid") — fechando
+  a dívida registrada lá: agora eles inserem só a abertura do fence e encadeiam nos mesmos menus.
+- **Achado de implementação**: o `apply`-como-string do wrapper precisa despachar via
+  `view.dispatch(view.state.update({changes, selection}))`, não `view.dispatch({changes,
+  selection})` direto — a segunda forma (um `TransactionSpec` cru) funciona com uma `EditorView`
+  real (que converte internamente), mas quebra o padrão de teste headless herdado da `#14`
+  (`option.apply({state, dispatch} as never, ...)`), cujo `dispatch` fake espera receber uma
+  `Transaction` já pronta (`tr.state`), não um spec cru. Reproduzido por teste antes do fix
+  (`nextState` virava `undefined`).
+- **Esqueletos mermaid são texto puro, sem tabstops** — `MERMAID_SKELETONS`, cursor no fim do corpo
+  inserido (comportamento default do CM6 para `apply` string). Diagramas de 4-6 rótulos tornariam a
+  navegação por Tab cansativa, e strings puras são validáveis direto por `mermaid.parse()`.
+- **Achado de ambiente de teste, mesma categoria da `#18`**: jsdom implementa
+  `Element.prototype.getClientRects`/`getBoundingClientRect` (retornam retângulos vazios, sem
+  lançar), mas **não implementa `Range.prototype.getClientRects`** — usado internamente pelo
+  `@codemirror/view` (`textRange(...).getClientRects()`) para medir texto na tela. Qualquer teste
+  que deixe uma `EditorView` real completar um ciclo de medição sob jsdom (ex: aguardar o debounce
+  assíncrono do autocomplete) lança essa exceção de dentro de um `requestAnimationFrame` interno.
+  Stub adicionado em `src/test-setup.ts` (mesmo arquivo/padrão da `#18`), retornando lista vazia.
+- **Cobertura de teste em três camadas** (`src/editor/fenceCompletions.test.ts`): fontes headless
+  (padrão `CompletionContext` à mão da `#14`); um teste com `EditorView` real provando o
+  encadeamento ` ``` ` → `mermaid` → tipo via `currentCompletions(view.state)` (o único jeito de
+  provar que `startCompletion` de fato reabre o menu) e a filtragem real via digitação simulada
+  (`userEvent: "input.type"`); e `mermaid.parse()` sobre os 7 esqueletos, transformando o critério
+  de aceite "renderiza sem erro" em teste automatizado em vez de só verificação manual.
+
+**Afeta:** qualquer issue futura de editor que adicione uma quarta fonte de completion precisa
+entrar no mesmo `override: [...]` de `src/editor/slashMenu.ts` (renomeado para exportar
+`editorCompletion`) — uma segunda extensão `autocompletion()` substituiria esta configuração em vez
+de somar. O stub de `Range.prototype.getClientRects` em `test-setup.ts` fica disponível para
+qualquer teste futuro que precise de uma `EditorView`/tooltip real sob jsdom (busca, paleta de
+comandos).

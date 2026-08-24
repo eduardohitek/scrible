@@ -5,7 +5,7 @@ import { searchKeymap } from "@codemirror/search";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { markdownDecorations } from "./markdownDecorations";
 import { markdownEditingKeymap } from "./markdownCommands";
-import { slashMenu } from "./slashMenu";
+import { editorCompletion } from "./slashMenu";
 import { editorTheme } from "./editorTheme";
 import { searchExtensions } from "./searchExtensions";
 
@@ -21,7 +21,7 @@ function buildExtensions(onChange: (value: string) => void) {
     markdown({ base: markdownLanguage }),
     markdownDecorations(),
     markdownEditingKeymap,
-    slashMenu,
+    editorCompletion,
     searchExtensions,
     editorTheme,
     EditorView.updateListener.of((update) => {
