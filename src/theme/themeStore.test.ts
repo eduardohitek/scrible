@@ -66,6 +66,7 @@ describe("themeStore", () => {
         theme: "system",
         layout: { splitRatio: 0.5, previewVisible: true },
         explorer: { visible: true, width: 240 },
+        zoom: 1,
       }),
       expectedMtime: null,
     });
@@ -108,6 +109,7 @@ describe("themeStore", () => {
         theme: "dark",
         layout: { splitRatio: 0.6, previewVisible: false },
         explorer: { visible: true, width: 240 },
+        zoom: 1,
       }),
       expectedMtime: null,
     });

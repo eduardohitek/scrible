@@ -36,6 +36,7 @@ describe("appSettings", () => {
       theme: "system",
       layout: { splitRatio: 0.5, previewVisible: true },
       explorer: { visible: true, width: 240 },
+      zoom: 1,
     });
     expect(mockedInvoke).toHaveBeenCalledWith("save_file", {
       path: "/ws/.scrible/settings.json",
@@ -43,6 +44,7 @@ describe("appSettings", () => {
         theme: "system",
         layout: { splitRatio: 0.5, previewVisible: true },
         explorer: { visible: true, width: 240 },
+        zoom: 1,
       }),
       expectedMtime: null,
     });
@@ -90,6 +92,7 @@ describe("appSettings", () => {
         theme: "dark",
         layout: { splitRatio: 0.7, previewVisible: true },
         explorer: { visible: true, width: 240 },
+        zoom: 1,
       }),
       expectedMtime: null,
     });
@@ -102,6 +105,7 @@ describe("appSettings", () => {
         theme: "light",
         layout: { splitRatio: 0.7, previewVisible: true },
         explorer: { visible: true, width: 240 },
+        zoom: 1,
       }),
       expectedMtime: null,
     });
@@ -130,6 +134,7 @@ describe("appSettings", () => {
         theme: "dark",
         layout: { splitRatio: 0.5, previewVisible: true },
         explorer: { visible: false, width: 240 },
+        zoom: 1,
       }),
       expectedMtime: null,
     });
@@ -149,7 +154,46 @@ describe("appSettings", () => {
       theme: "system",
       layout: { splitRatio: 0.5, previewVisible: true },
       explorer: { visible: true, width: 240 },
+      zoom: 1,
     });
     expect(mockedInvoke).not.toHaveBeenCalledWith("save_file", expect.anything());
+  });
+
+  it("zoom persistido é lido de volta", async () => {
+    const { loadAppSettings } = await freshModule();
+    mockedInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "workspace_status") return { root: "/ws", hidden: "/ws/.scrible" };
+      if (cmd === "read_file")
+        return JSON.stringify({
+          theme: "system",
+          layout: { splitRatio: 0.5, previewVisible: true },
+          explorer: { visible: true, width: 240 },
+          zoom: 1.25,
+        });
+      throw new Error(`unexpected invoke: ${cmd}`);
+    });
+
+    const settings = await loadAppSettings();
+
+    expect(settings.zoom).toBe(1.25);
+  });
+
+  it("zoom inválido em settings.json cai no degrau mais próximo (snapZoom)", async () => {
+    const { loadAppSettings } = await freshModule();
+    mockedInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "workspace_status") return { root: "/ws", hidden: "/ws/.scrible" };
+      if (cmd === "read_file")
+        return JSON.stringify({
+          theme: "system",
+          layout: { splitRatio: 0.5, previewVisible: true },
+          explorer: { visible: true, width: 240 },
+          zoom: 3,
+        });
+      throw new Error(`unexpected invoke: ${cmd}`);
+    });
+
+    const settings = await loadAppSettings();
+
+    expect(settings.zoom).toBe(2);
   });
 });

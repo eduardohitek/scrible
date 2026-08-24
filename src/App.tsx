@@ -12,6 +12,8 @@ import { useTabsStore } from "./store/tabsStore";
 import { useExplorerStore } from "./explorer/explorerStore";
 import { ExplorerPanel } from "./explorer/ExplorerPanel";
 import { useThemeStore } from "./theme/themeStore";
+import { useZoomStore } from "./zoom/zoomStore";
+import { useZoomShortcuts } from "./zoom/useZoomShortcuts";
 import { runCommand, setEditorBridge } from "./commands/registry";
 import { Toolbar } from "./ui/Toolbar";
 import { StatusBar } from "./ui/StatusBar";
@@ -42,9 +44,11 @@ function App() {
   const initTheme = useThemeStore((state) => state.init);
   const resolvedTheme = useThemeStore((state) => state.resolved);
   const initLayout = useLayoutStore((state) => state.init);
+  const initZoom = useZoomStore((state) => state.init);
   const splitLayoutRef = useRef<SplitLayoutHandle>(null);
 
   useTabShortcuts();
+  useZoomShortcuts();
 
   useEffect(() => {
     invoke<WorkspacePaths>("workspace_status")
@@ -65,6 +69,10 @@ function App() {
   useEffect(() => {
     void initLayout();
   }, [initLayout]);
+
+  useEffect(() => {
+    void initZoom();
+  }, [initZoom]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = resolvedTheme;

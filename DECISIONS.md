@@ -1067,3 +1067,45 @@ entrar no mesmo `override: [...]` de `src/editor/slashMenu.ts` (renomeado para e
 de somar. O stub de `Range.prototype.getClientRects` em `test-setup.ts` fica disponível para
 qualquer teste futuro que precise de uma `EditorView`/tooltip real sob jsdom (busca, paleta de
 comandos).
+
+## #66 — Zoom da interface (⌘= / ⌘- / ⌘0)
+
+- **Zoom nativo da webview, não CSS**: `getCurrentWebview().setZoom(fator)`
+  (`@tauri-apps/api/webview`, permissão `core:webview:allow-set-webview-zoom` adicionada a
+  `capabilities/default.json`) escala a página inteira — texto, ícones `size={16}` hardcoded
+  (`Toolbar.tsx`), bordas, paddings — como um único ponto de controle. Escalar via CSS foi
+  descartado: `--font-size-base` é px absoluto e `--font-size-xs`/`sm` são `rem` presos ao root
+  (não ao base), então nenhum dos dois escalaria com uma alteração local; os ícones exigiriam
+  refatoração à parte. Verificado que o export PDF (`#27`) não é afetado — `pdf_export.rs` cria uma
+  `WebviewWindowBuilder` oculta dedicada, não reusa a webview principal, e a capability é escopada a
+  `windows: ["main"]`.
+- **Atalhos partidos entre menu nativo e JS, nunca os dois pra mesma tecla** (regra da `#24`: um
+  `NSMenuItem` com accelerator intercepta a tecla antes da webview). `⌘=`/`⌘-`/`⌘0` são itens do
+  submenu Visualizar (`app_menu.rs`, ids `zoom_in`/`zoom_out`/`zoom_reset`, roteados pelo listener
+  `"menu"` já existente em `App.tsx` sem nenhum wiring novo). `⌘⇧+`/`⌘⇧_` (variantes de navegador que
+  não têm equivalente de menu — um mesmo `NSMenuItem` só carrega um accelerator) viraram
+  `useZoomShortcuts.ts`, espelhando `useTabShortcuts.ts` (`#24`) — e o teste desse hook cobre
+  explicitamente que `⌘=`/`⌘-` **não** disparam nada ali, como regressão da regra.
+- **Escada de degraus, não escala contínua** (`src/zoom/zoomLevels.ts`): mesmos 11 valores que
+  Safari/Chrome/VS Code usam (50% a 200%, mais finos perto de 100%). `nextZoom`/`prevZoom` saturam
+  nas pontas (sem wrap); `snapZoom` encaixa qualquer valor solto (inválido ou fora da escada, ex.
+  `settings.json` editado à mão) no degrau mais próximo — é o mesmo guard usado tanto na leitura de
+  `appSettings.ts` quanto internamente pra achar o índice atual antes de avançar/recuar.
+- **Persistido em `settings.json`** como campo `zoom: number` de topo em `AppSettings` — não
+  aninhado, então `patchAppSettings`'s `{...patch}` já cobre sem precisar de merge dedicado (ao
+  contrário de `layout`/`explorer`, que são objetos). `zoomStore.ts` segue o mesmo formato de
+  `layoutStore.ts` (`#19`): `set` local imediato + `patchAppSettings` com `try/catch` que só loga se
+  a escrita falhar, sem travar o zoom em si.
+- **Indicador na status bar só quando ≠ 100%** (`{Math.round(zoom*100)}%`) — mesmo espírito do save
+  state (`#60`): sempre útil, nunca ruidoso. Novo `<span className="status-bar-right">` agrupa
+  zoom + save state num único item flex, pra `justify-content: space-between` da `.status-bar` não
+  reacomodar os 3 possíveis filhos quando o indicador de zoom aparece/some.
+- Sem teste automatizado para `app_menu.rs` — mesma postura já registrada na `#24` pra integração
+  nativa sem precedente de teste no repo; verificação manual via `mise run dev`, incluindo o
+  comportamento do CodeMirror (re-medição de caractere após zoom) e do scroll sync (`#20`) em zoom
+  ≠ 100%, nenhum dos dois testável sob jsdom.
+
+**Afeta:** `#29` (tela de preferências, ainda não existe) ganharia o zoom como mais um item a
+migrar pra lá, junto de tema e largura de leitura — mesmo padrão já antecipado pela `#60`. `#32`
+(Windows/Linux) perde o menu nativo do macOS: sem ele, `⌘=`/`⌘-`/`⌘0` precisariam virar listener JS
+também, e `useZoomShortcuts.ts` vira o dono de todas as variantes, não só das com Shift.

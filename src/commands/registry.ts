@@ -2,6 +2,7 @@ import { useLayoutStore } from "../layout/layoutStore";
 import { useExplorerStore } from "../explorer/explorerStore";
 import { useThemeStore, type ThemePreference } from "../theme/themeStore";
 import { useTabsStore } from "../store/tabsStore";
+import { useZoomStore } from "../zoom/zoomStore";
 import { exportActiveTabAsHtml, exportActiveTabAsPdf } from "../export/exportHtml";
 
 /** Ponte imperativa para ações que só existem dentro da árvore React (hoje,
@@ -87,6 +88,24 @@ export const commands: readonly AppCommand[] = [
     shortcut: "⇧⌘E",
     run: () => useExplorerStore.getState().toggle(),
     isActive: () => useExplorerStore.getState().visible,
+  },
+  {
+    id: "zoom_in",
+    label: "Aumentar",
+    shortcut: "⌘=",
+    run: () => useZoomStore.getState().zoomIn(),
+  },
+  {
+    id: "zoom_out",
+    label: "Diminuir",
+    shortcut: "⌘-",
+    run: () => useZoomStore.getState().zoomOut(),
+  },
+  {
+    id: "zoom_reset",
+    label: "Tamanho original",
+    shortcut: "⌘0",
+    run: () => useZoomStore.getState().resetZoom(),
   },
   {
     id: "export_html",

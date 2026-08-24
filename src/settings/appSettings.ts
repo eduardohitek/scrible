@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { DEFAULT_ZOOM, snapZoom } from "../zoom/zoomLevels";
 
 export type ThemePreference = "system" | "light" | "dark";
 
@@ -12,6 +13,7 @@ export interface AppSettings {
     visible: boolean;
     width: number;
   };
+  zoom: number;
 }
 
 interface WorkspacePaths {
@@ -29,6 +31,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   theme: "system",
   layout: { splitRatio: 0.5, previewVisible: true },
   explorer: { visible: true, width: 240 },
+  zoom: DEFAULT_ZOOM,
 };
 
 // Módulo de infraestrutura (não uma store zustand) usado por themeStore.ts e
@@ -64,10 +67,12 @@ function normalize(parsed: Partial<AppSettings> | null | undefined): AppSettings
     typeof parsed?.explorer?.visible === "boolean" ? parsed.explorer.visible : DEFAULT_SETTINGS.explorer.visible;
   const explorerWidth =
     typeof parsed?.explorer?.width === "number" ? parsed.explorer.width : DEFAULT_SETTINGS.explorer.width;
+  const zoom = snapZoom(parsed?.zoom);
   return {
     theme,
     layout: { splitRatio, previewVisible },
     explorer: { visible: explorerVisible, width: explorerWidth },
+    zoom,
   };
 }
 
@@ -92,6 +97,7 @@ async function doLoad(): Promise<AppSettings> {
       theme: DEFAULT_SETTINGS.theme,
       layout: { ...DEFAULT_SETTINGS.layout },
       explorer: { ...DEFAULT_SETTINGS.explorer },
+      zoom: DEFAULT_SETTINGS.zoom,
     };
     if (fsError.kind === "NotFound") {
       await writeSettings(cache);

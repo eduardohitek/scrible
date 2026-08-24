@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { StatusBar } from "./StatusBar";
 import { useTabsStore } from "../store/tabsStore";
 import { useDocumentStore } from "../store/documentStore";
+import { useZoomStore } from "../zoom/zoomStore";
 
 function setActiveDoc(content: string, status: "idle" | "saving", dirty: boolean) {
   useTabsStore.setState({ activeTabId: "tab-1" });
@@ -24,6 +25,7 @@ describe("StatusBar", () => {
   beforeEach(() => {
     useTabsStore.setState({ activeTabId: null });
     useDocumentStore.setState({ documents: {} });
+    useZoomStore.setState({ zoom: 1 });
   });
 
   it("conta palavras e caracteres do documento ativo", () => {
@@ -72,6 +74,23 @@ describe("StatusBar", () => {
     render(<StatusBar />);
 
     expect(screen.getByText("Salvo")).not.toBeNull();
+  });
+
+  it("não mostra o zoom quando está em 100%", () => {
+    setActiveDoc("texto", "idle", false);
+
+    render(<StatusBar />);
+
+    expect(screen.queryByText("100%")).toBeNull();
+  });
+
+  it("mostra o zoom arredondado quando ≠ 100%", () => {
+    setActiveDoc("texto", "idle", false);
+    useZoomStore.setState({ zoom: 1.25 });
+
+    render(<StatusBar />);
+
+    expect(screen.getByText("125%")).not.toBeNull();
   });
 
   it("não quebra sem aba ativa (nenhum estado de salvamento exibido)", () => {
