@@ -105,10 +105,20 @@ describe("inserção dos snippets", () => {
     expect(next.selection.main.to).toBe(10);
   });
 
-  it("Diagrama mermaid insere um esqueleto de flowchart válido", () => {
+  it("Bloco de código insere só a abertura do fence, cursor logo depois", () => {
+    const next = applyCompletion("/", 1, "Bloco de código");
+
+    expect(next.doc.toString()).toBe("```");
+    expect(next.selection.main.from).toBe(3);
+    expect(next.selection.main.to).toBe(3);
+  });
+
+  it("Diagrama mermaid insere o fence mermaid vazio, cursor no corpo", () => {
     const next = applyCompletion("/", 1, "Diagrama mermaid");
 
-    expect(next.doc.toString()).toBe("```mermaid\nflowchart TD\n    A[Início] --> B[Fim]\n```");
+    expect(next.doc.toString()).toBe("```mermaid\n\n```");
+    expect(next.selection.main.from).toBe(11);
+    expect(next.selection.main.to).toBe(11);
   });
 
   it("Linha horizontal insere --- com o cursor ao final, sem tabstop", () => {

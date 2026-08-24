@@ -6,8 +6,12 @@ import {
   snippetCompletion,
 } from "@codemirror/autocomplete";
 import type { Extension } from "@codemirror/state";
-import { syntaxTree } from "@codemirror/language";
-import type { SyntaxNode } from "@lezer/common";
+import {
+  fenceLanguageSource,
+  isInsideCodeBlock,
+  mermaidTypeSource,
+  withChainedCompletion,
+} from "./fenceCompletions";
 
 /**
  * Autocomplete grupo B (#14): menu de comandos acionado por `/` no início de
@@ -15,15 +19,18 @@ import type { SyntaxNode } from "@lezer/common";
  * cuidam do posicionamento do cursor e da navegação via Tab entre campos
  * (comportamento embutido do `snippet()` do `@codemirror/autocomplete`, sem
  * precisar de keymap próprio).
+ *
+ * "Bloco de código" e "Diagrama mermaid" encadeiam no autocomplete de fence
+ * do grupo D (`#15`, `fenceCompletions.ts`): inserem só a abertura do fence e
+ * chamam `startCompletion` para abrir, respectivamente, a lista de
+ * linguagens e a lista de tipos de diagrama mermaid.
  */
 const SLASH_COMMANDS: readonly Completion[] = [
   snippetCompletion("| ${Coluna 1} | ${Coluna 2} |\n| --- | --- |\n| ${dado 1} | ${dado 2} |", {
     label: "Tabela",
   }),
-  snippetCompletion("```\n${código}\n```", { label: "Bloco de código" }),
-  snippetCompletion("```mermaid\nflowchart TD\n    ${A[Início]} --> ${B[Fim]}\n```", {
-    label: "Diagrama mermaid",
-  }),
+  withChainedCompletion({ label: "Bloco de código", apply: "```" }),
+  withChainedCompletion(snippetCompletion("```mermaid\n${}\n```", { label: "Diagrama mermaid" })),
   snippetCompletion("- [ ] ${tarefa}", { label: "Lista de tarefas" }),
   snippetCompletion("> ${citação}", { label: "Citação" }),
   snippetCompletion("[${texto}](${url})", { label: "Link" }),
@@ -33,17 +40,6 @@ const SLASH_COMMANDS: readonly Completion[] = [
   snippetCompletion("### ${título}", { label: "Cabeçalho 3" }),
   snippetCompletion("---", { label: "Linha horizontal" }),
 ];
-
-const CODE_BLOCK_NODES = new Set(["FencedCode", "CodeBlock"]);
-
-function isInsideCodeBlock(context: CompletionContext, pos: number): boolean {
-  let node: SyntaxNode | null = syntaxTree(context.state).resolveInner(pos, -1);
-  while (node) {
-    if (CODE_BLOCK_NODES.has(node.name)) return true;
-    node = node.parent;
-  }
-  return false;
-}
 
 /** Fonte de completions do menu `/`: só dispara no início de uma linha
  * (ignorando espaços) e nunca dentro de um bloco de código com fence — evita
@@ -73,4 +69,11 @@ export function slashCommandSource(context: CompletionContext): CompletionResult
   return { from: word.from, options, filter: false };
 }
 
-export const slashMenu: Extension = autocompletion({ override: [slashCommandSource], icons: false });
+/** Extensão única de autocomplete do editor: registra as três fontes (menu
+ * `/`, linguagem de fence, tipo de diagrama mermaid) no mesmo `override` —
+ * `autocompletion()` não soma entre instâncias, uma segunda extensão
+ * substituiria esta configuração em vez de complementá-la. */
+export const editorCompletion: Extension = autocompletion({
+  override: [slashCommandSource, fenceLanguageSource, mermaidTypeSource],
+  icons: false,
+});
