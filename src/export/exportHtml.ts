@@ -8,6 +8,7 @@ import { useDocumentStore } from "../store/documentStore";
 import { useThemeStore } from "../theme/themeStore";
 import tokensCss from "../theme/tokens.css?raw";
 import previewCss from "../preview/PreviewPane.css?raw";
+import printCss from "./print.css?raw";
 
 // Boilerplate mínimo de plataforma (não é "conteúdo" do preview, por isso não
 // vive em PreviewPane.css): força color-scheme pro tema congelado no momento
@@ -81,7 +82,12 @@ export async function renderStaticBodyHtml(source: string, theme: "light" | "dar
 /** Monta o documento HTML standalone completo: CSS embutido (tokens reais +
  * estilos de conteúdo do preview, via import `?raw`), sem nenhuma
  * dependência externa (fontes, scripts, requisições de rede). */
-export function buildStandaloneHtml(bodyHtml: string, theme: "light" | "dark", title: string): string {
+export function buildStandaloneHtml(
+  bodyHtml: string,
+  theme: "light" | "dark",
+  title: string,
+  extraCss = "",
+): string {
   return `<!doctype html>
 <html data-theme="${theme}">
 <head>
@@ -91,6 +97,7 @@ export function buildStandaloneHtml(bodyHtml: string, theme: "light" | "dark", t
 ${PLATFORM_CSS}
 ${tokensCss}
 ${previewCss}
+${extraCss}
 </style>
 </head>
 <body><div class="preview-pane">${bodyHtml}</div></body>
@@ -125,4 +132,32 @@ export async function exportActiveTabAsHtml(): Promise<void> {
   const bodyHtml = await renderStaticBodyHtml(entry?.content ?? "", resolvedTheme);
   const html = buildStandaloneHtml(bodyHtml, resolvedTheme, tab.title);
   await invoke("write_export_file", { path, content: html });
+}
+
+/** Exporta a aba ativa como PDF (#27), via `WKWebView.createPDF()` nativo no
+ * lado Rust (comando `export_pdf`, macOS-only) — `window.print()` não faz
+ * nada no WKWebView do Tauri/wry, limitação confirmada na verificação manual
+ * e documentada upstream (github.com/tauri-apps/wry#707). Ao contrário do
+ * export de HTML, o tema é sempre claro — critério de aceite literal da
+ * issue, para poupar tinta na leitura impressa —, desviando conscientemente
+ * da decisão de #26 de congelar no tema resolvido da tela. No-op se não
+ * houver aba ativa ou o usuário cancelar o diálogo de salvar. */
+export async function exportActiveTabAsPdf(): Promise<void> {
+  const { activeTabId, tabs } = useTabsStore.getState();
+  const tab = tabs.find((t) => t.id === activeTabId);
+  if (!tab) return;
+
+  const defaultName = tab.title.replace(/\.md$/, ".pdf");
+  const path = await save({
+    title: "Exportar para PDF",
+    defaultPath: `${dirname(tab.path)}/${defaultName}`,
+    filters: [{ name: "PDF", extensions: ["pdf"] }],
+  });
+  if (typeof path !== "string") return;
+
+  const entry = useDocumentStore.getState().documents[tab.id];
+
+  const bodyHtml = await renderStaticBodyHtml(entry?.content ?? "", "light");
+  const html = buildStandaloneHtml(bodyHtml, "light", tab.title, printCss);
+  await invoke("export_pdf", { html, path });
 }
