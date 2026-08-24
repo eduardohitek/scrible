@@ -26,6 +26,7 @@
     "@types/dompurify": "^3.0.5",
     "@types/markdown-it": "^14.1.2",
     "dompurify": "^3.4.13",
+    "lucide-react": "^1.33.0",
     "markdown-it": "^15.0.0",
     "markdown-it-footnote": "^4.0.0",
     "markdown-it-task-lists": "^2.1.1",

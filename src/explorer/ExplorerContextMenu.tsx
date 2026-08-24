@@ -1,4 +1,5 @@
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
+import { useClickOutside } from "../ui/useClickOutside";
 
 export interface ExplorerContextMenuTarget {
   x: number;
@@ -21,22 +22,7 @@ interface ExplorerContextMenuProps {
 export function ExplorerContextMenu({ target, onClose, onNewFile, onNewFolder, onRename, onDelete }: ExplorerContextMenuProps) {
   const containerRef = useRef<HTMLUListElement>(null);
 
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        onClose();
-      }
-    }
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [onClose]);
+  useClickOutside(containerRef, onClose, true);
 
   function runAndClose(action: () => void) {
     action();
@@ -44,14 +30,18 @@ export function ExplorerContextMenu({ target, onClose, onNewFile, onNewFolder, o
   }
 
   return (
-    <ul className="explorer-context-menu" ref={containerRef} style={{ top: target.y, left: target.x }}>
+    <ul
+      className="popover-surface explorer-context-menu"
+      ref={containerRef}
+      style={{ top: target.y, left: target.x }}
+    >
       <li>
-        <button type="button" onClick={() => runAndClose(onNewFile)}>
+        <button type="button" className="popover-menu-item" onClick={() => runAndClose(onNewFile)}>
           Novo arquivo
         </button>
       </li>
       <li>
-        <button type="button" onClick={() => runAndClose(onNewFolder)}>
+        <button type="button" className="popover-menu-item" onClick={() => runAndClose(onNewFolder)}>
           Nova pasta
         </button>
       </li>
@@ -59,12 +49,12 @@ export function ExplorerContextMenu({ target, onClose, onNewFile, onNewFolder, o
         <>
           <li className="explorer-context-menu-separator" role="separator" />
           <li>
-            <button type="button" onClick={() => runAndClose(onRename)}>
+            <button type="button" className="popover-menu-item" onClick={() => runAndClose(onRename)}>
               Renomear
             </button>
           </li>
           <li>
-            <button type="button" onClick={() => runAndClose(onDelete)}>
+            <button type="button" className="popover-menu-item" onClick={() => runAndClose(onDelete)}>
               Excluir
             </button>
           </li>

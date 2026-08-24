@@ -24,15 +24,15 @@ describe("ThemeToggle", () => {
     });
   });
 
-  it("mostra a preferência atual no botão", () => {
+  it("mostra a preferência atual no aria-label do botão", () => {
     render(<ThemeToggle />);
-    expect(screen.getByText("Sistema")).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Tema — Sistema" })).not.toBeNull();
   });
 
   it("abre o menu e marca a opção ativa com aria-current", () => {
     render(<ThemeToggle />);
 
-    fireEvent.click(screen.getByText("Sistema"));
+    fireEvent.click(screen.getByRole("button", { name: "Tema — Sistema" }));
 
     const options = screen.getAllByRole("button", { name: /Sistema|Claro|Escuro/ });
     const activeOption = options.find((el) => el.getAttribute("aria-current") === "true");
@@ -42,7 +42,7 @@ describe("ThemeToggle", () => {
   it("selecionar uma opção chama setPreference e fecha o menu", () => {
     render(<ThemeToggle />);
 
-    fireEvent.click(screen.getByText("Sistema"));
+    fireEvent.click(screen.getByRole("button", { name: "Tema — Sistema" }));
     fireEvent.click(screen.getByText("Escuro"));
 
     expect(useThemeStore.getState().preference).toBe("dark");
@@ -53,7 +53,7 @@ describe("ThemeToggle", () => {
   it("fecha o menu ao clicar fora dele", () => {
     render(<ThemeToggle />);
 
-    fireEvent.click(screen.getByText("Sistema"));
+    fireEvent.click(screen.getByRole("button", { name: "Tema — Sistema" }));
     expect(screen.getByText("Escuro")).not.toBeNull();
 
     fireEvent.mouseDown(document.body);

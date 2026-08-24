@@ -40,7 +40,7 @@ describe("HistoryPanel", () => {
 
     render(<HistoryPanel />);
 
-    fireEvent.click(screen.getByText("Histórico"));
+    fireEvent.click(screen.getByRole("button", { name: "Histórico" }));
 
     await waitFor(() => {
       expect(mockedInvoke).toHaveBeenCalledWith("list_snapshots", { path: "/tmp/doc.md" });
@@ -57,7 +57,7 @@ describe("HistoryPanel", () => {
 
     render(<HistoryPanel />);
 
-    fireEvent.click(screen.getByText("Histórico"));
+    fireEvent.click(screen.getByRole("button", { name: "Histórico" }));
     await waitFor(() => screen.getByText("Restaurar"));
     fireEvent.click(screen.getByText("Restaurar"));
 
@@ -78,7 +78,7 @@ describe("HistoryPanel", () => {
 
     render(<HistoryPanel />);
 
-    fireEvent.click(screen.getByText("Histórico"));
+    fireEvent.click(screen.getByRole("button", { name: "Histórico" }));
     await waitFor(() => screen.getByText("Restaurar"));
 
     fireEvent.mouseDown(document.body);
@@ -91,7 +91,7 @@ describe("HistoryPanel", () => {
 
     render(<HistoryPanel />);
 
-    fireEvent.click(screen.getByText("Histórico"));
+    fireEvent.click(screen.getByRole("button", { name: "Histórico" }));
     const restoreButton = await waitFor(() => screen.getByText("Restaurar"));
 
     fireEvent.mouseDown(restoreButton.closest(".history-item")!);

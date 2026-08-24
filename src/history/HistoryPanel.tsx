@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { History } from "lucide-react";
 import { useDocumentStore } from "../store/documentStore";
 import { useTabsStore } from "../store/tabsStore";
+import { useClickOutside } from "../ui/useClickOutside";
 
 interface SnapshotInfo {
   timestamp: number;
@@ -36,18 +38,7 @@ export function HistoryPanel() {
   const path = useDocumentStore((state) => (activeTabId ? (state.documents[activeTabId]?.path ?? null) : null));
   const applyExternalContent = useDocumentStore((state) => state.applyExternalContent);
 
-  useEffect(() => {
-    if (!open) return;
-
-    function handleClickOutside(event: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    }
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [open]);
+  useClickOutside(containerRef, () => setOpen(false), open);
 
   async function handleToggle() {
     if (!open && path) {
@@ -66,11 +57,18 @@ export function HistoryPanel() {
 
   return (
     <div className="history-panel-container" ref={containerRef}>
-      <button type="button" className="history-toggle" onClick={() => void handleToggle()}>
-        Histórico
+      <button
+        type="button"
+        className="icon-button"
+        aria-label="Histórico"
+        aria-pressed={open}
+        data-tooltip="Histórico"
+        onClick={() => void handleToggle()}
+      >
+        <History size={16} aria-hidden="true" />
       </button>
       {open && (
-        <div className="history-panel">
+        <div className="popover-surface history-panel">
           {snapshots.length === 0 ? (
             <p className="history-empty">Nenhum snapshot ainda.</p>
           ) : (

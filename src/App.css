@@ -35,11 +35,10 @@ body {
   width: 100vw;
 }
 
-/* Coluna original (TabBar + SplitLayout + chrome flutuante) — vira um item
-   flex ao lado do explorador (#25). `position: relative` faz dela o
-   containing block dos elementos flutuantes abaixo (antes ancorados no
-   viewport inteiro via `position: fixed`), pra não ficarem sobrepostos pelo
-   explorador quando ele está visível. */
+/* Coluna original (TabBar + SplitLayout) — vira um item flex ao lado do
+   explorador (#25). `position: relative` segue existindo como containing
+   block dos popovers da toolbar (tema, histórico, exportar — #60), que
+   agora se ancoram no próprio botão em vez dos 4 cantos da viewport. */
 .app-shell-content {
   display: flex;
   flex-direction: column;
@@ -55,14 +54,39 @@ body {
   min-height: 0;
 }
 
-.tab-bar {
+/* Barra do topo (#60): abas + toolbar na mesma linha, substituindo os 5
+   elementos que antes flutuavam nos 4 cantos + borda esquerda de
+   `.app-shell-content`. */
+.app-header {
   display: flex;
   align-items: stretch;
   flex: 0 0 auto;
   height: var(--tab-bar-height);
-  overflow-x: auto;
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.tab-bar {
+  display: flex;
+  align-items: stretch;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex: 0 0 auto;
+  padding: 0 var(--space-2);
+}
+
+.toolbar-separator {
+  align-self: stretch;
+  width: 1px;
+  margin: var(--space-2) var(--space-1);
+  background: var(--color-border-subtle);
 }
 
 .tab {
@@ -100,6 +124,10 @@ body {
 }
 
 .tab-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.1em;
   font-size: var(--font-size-sm);
   line-height: 1;
   color: inherit;
@@ -113,6 +141,37 @@ body {
 
 .tab-close:hover {
   opacity: 1;
+}
+
+/* Indicador de não-salvo (#60): os dois glifos ficam no DOM o tempo todo,
+   um `display:none` por vez decide qual aparece — evita remontar o botão
+   (e perder o :hover) ao trocar de estado. */
+.tab-dirty-dot {
+  display: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.tab-close[data-dirty="true"] {
+  opacity: 1;
+}
+
+.tab-close[data-dirty="true"] .tab-close-icon {
+  display: none;
+}
+
+.tab-close[data-dirty="true"] .tab-dirty-dot {
+  display: inline-block;
+}
+
+.tab-close[data-dirty="true"]:hover .tab-close-icon {
+  display: inline;
+}
+
+.tab-close[data-dirty="true"]:hover .tab-dirty-dot {
+  display: none;
 }
 
 .tab-new {
@@ -252,33 +311,70 @@ body {
    matter) vivem em src/preview/PreviewPane.css (#26) — extraídos daqui pra
    serem reaproveitados literalmente (import `?raw`) pelo export HTML. */
 
-.history-panel-container {
-  position: absolute;
-  top: calc(var(--tab-bar-height) + var(--space-3));
-  right: var(--space-4);
-}
-
-.theme-toggle-container {
-  position: absolute;
-  top: calc(var(--tab-bar-height) + var(--space-3));
-  left: var(--space-4);
-}
-
-.theme-toggle {
-  font-size: var(--font-size-xs);
-  color: var(--color-text);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
+/* Botão de ícone (#60): base compartilhada por todos os controles da
+   toolbar — substitui os 3 blocos byte-idênticos `.theme-toggle` /
+   `.history-toggle` / `.preview-toggle` que existiam antes do redesenho. */
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(var(--icon-size) + 2 * var(--space-2));
+  height: calc(var(--icon-size) + 2 * var(--space-2));
+  color: var(--color-text-secondary);
+  background: none;
+  border: none;
   border-radius: var(--radius-sm);
-  padding: var(--space-1) var(--space-2);
   cursor: pointer;
 }
 
-.theme-menu {
+.icon-button:hover {
+  color: var(--color-text);
+  background: var(--color-surface-elevated);
+}
+
+.icon-button[aria-pressed="true"] {
+  color: var(--color-text);
+  background: var(--color-selection-bg);
+}
+
+/* Tooltip próprio (#60): o `title` nativo do WKWebView demora ~1,5s pra
+   aparecer e ignora os tokens de tema — inútil como ferramenta de
+   descoberta de atalho. `data-tooltip` carrega o texto completo
+   ("Ação — atalho"). */
+[data-tooltip] {
+  position: relative;
+}
+
+[data-tooltip]::after {
+  content: attr(data-tooltip);
   position: absolute;
   top: calc(100% + var(--space-2));
-  left: 0;
-  min-width: 120px;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: var(--font-size-xs);
+  color: var(--color-tooltip-text);
+  background: var(--color-tooltip-bg);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.1s ease 0.4s;
+  z-index: 30;
+}
+
+[data-tooltip]:hover::after {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Superfície compartilhada de popover (#60): substitui as 3 versões
+   quase-idênticas de `.theme-menu` / `.history-panel` / (a antiga)
+   `.explorer-context-menu`. Cada consumidor combina esta classe com a sua
+   própria (ex.: `popover-surface theme-menu`) pra herdar só a casca visual
+   e manter seu posicionamento específico. */
+.popover-surface {
   background: var(--color-surface-elevated);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -288,11 +384,14 @@ body {
   margin: 0;
 }
 
-.theme-menu button {
+/* Item de menu dentro de um popover — não usa o seletor genérico `button`
+   pra não vazar pro botão "Restaurar" de `.history-item`, que é um botão
+   comum dentro do mesmo popover. */
+.popover-menu-item {
   display: block;
   width: 100%;
   text-align: left;
-  font-size: var(--font-size-xs);
+  font-size: var(--font-size-sm);
   color: var(--color-text);
   background: none;
   border: none;
@@ -301,31 +400,40 @@ body {
   cursor: pointer;
 }
 
-.theme-menu button[aria-current="true"] {
+.popover-menu-item:hover,
+.popover-menu-item[aria-current="true"] {
   background: var(--color-selection-bg);
 }
 
-.history-toggle {
-  font-size: var(--font-size-xs);
-  color: var(--color-text);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  padding: var(--space-1) var(--space-2);
-  cursor: pointer;
+.theme-toggle-container,
+.history-panel-container,
+.export-menu-container {
+  position: relative;
+  display: flex;
+  align-items: center;
 }
 
-.history-panel {
+.theme-menu,
+.history-panel,
+.export-menu {
   position: absolute;
   top: calc(100% + var(--space-2));
   right: 0;
+  z-index: 15;
+}
+
+.theme-menu {
+  min-width: 120px;
+}
+
+.export-menu {
+  min-width: 180px;
+}
+
+.history-panel {
   width: 240px;
   max-height: 320px;
   overflow-y: auto;
-  background: var(--color-surface-elevated);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-panel);
   padding: var(--space-2);
 }
 
@@ -360,22 +468,20 @@ body {
   cursor: pointer;
 }
 
+/* Entra no fluxo normal (#60) — antes ficava `position: absolute` cobrindo
+   as primeiras linhas do editor/preview; agora empurra o conteúdo. */
 .conflict-banner {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: var(--space-4);
   flex-wrap: wrap;
+  flex: 0 0 auto;
   font-size: var(--font-size-sm);
   padding: var(--space-2) var(--space-4);
   background: var(--color-warning-bg);
   color: var(--color-warning-text);
   border-bottom: 1px solid var(--color-warning-border);
-  z-index: 10;
 }
 
 .conflict-banner-actions {
@@ -393,48 +499,19 @@ body {
   padding: var(--space-1) var(--space-2);
 }
 
-.preview-toggle-container {
-  position: absolute;
-  bottom: var(--space-3);
-  left: var(--space-4);
-}
-
-.preview-toggle {
-  font-size: var(--font-size-xs);
-  color: var(--color-text);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  padding: var(--space-1) var(--space-2);
-  cursor: pointer;
-}
-
-.save-indicator {
-  position: absolute;
-  bottom: var(--space-3);
-  right: var(--space-4);
+/* Barra de status (#60): substitui o `.save-indicator` intermitente por uma
+   faixa sempre presente no rodapé de `.app-shell-content`. */
+.status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 0 0 auto;
+  height: var(--status-bar-height);
+  padding: 0 var(--space-4);
   font-size: var(--font-size-xs);
   color: var(--color-text-secondary);
   background: var(--color-surface);
-  border-radius: var(--radius-sm);
-  padding: var(--space-1) var(--space-2);
-  pointer-events: none;
-}
-
-.explorer-toggle-tab {
-  position: fixed;
-  top: 50%;
-  left: 0;
-  transform: translateY(-50%);
-  z-index: 5;
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-left: none;
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-  padding: var(--space-2) var(--space-1);
-  cursor: pointer;
+  border-top: 1px solid var(--color-border-subtle);
 }
 
 .explorer-panel {
@@ -498,34 +575,13 @@ body {
   padding: 0 var(--space-1);
 }
 
+/* Casca visual vem de `.popover-surface` (combinada no JSX) — aqui só o
+   posicionamento, que é diferente dos outros popovers: ancorado nas
+   coordenadas do clique, não num botão. */
 .explorer-context-menu {
   position: fixed;
   z-index: 20;
   min-width: 160px;
-  margin: 0;
-  padding: var(--space-1);
-  list-style: none;
-  background: var(--color-surface-elevated);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-panel);
-}
-
-.explorer-context-menu button {
-  display: block;
-  width: 100%;
-  text-align: left;
-  font-size: var(--font-size-sm);
-  color: var(--color-text);
-  background: none;
-  border: none;
-  border-radius: var(--radius-sm);
-  padding: var(--space-1) var(--space-2);
-  cursor: pointer;
-}
-
-.explorer-context-menu button:hover {
-  background: var(--color-selection-bg);
 }
 
 .explorer-context-menu-separator {

@@ -1,5 +1,90 @@
 import { useState, type DragEvent, type KeyboardEvent } from "react";
-import { useTabsStore } from "../store/tabsStore";
+import { useTabsStore, type Tab } from "../store/tabsStore";
+import { useDocumentStore } from "../store/documentStore";
+
+interface TabItemProps {
+  tab: Tab;
+  index: number;
+  isActive: boolean;
+  isEditing: boolean;
+  onDragStart: (index: number) => void;
+  onDragOver: (event: DragEvent<HTMLDivElement>) => void;
+  onDrop: (index: number) => void;
+  onSelect: (tabId: string) => void;
+  onStartRenaming: (tabId: string) => void;
+  onCommitRenaming: (tabId: string, value: string) => void;
+  onCancelRenaming: () => void;
+  onClose: (tabId: string) => void;
+}
+
+/** Componente por aba — assina `dirty` individualmente (mesma técnica de
+ * assinatura por item que `ExplorerNode` já usa em `ExplorerPanel.tsx`), pra
+ * digitar numa aba não re-renderizar a barra inteira. */
+function TabItem({
+  tab,
+  index,
+  isActive,
+  isEditing,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onSelect,
+  onStartRenaming,
+  onCommitRenaming,
+  onCancelRenaming,
+  onClose,
+}: TabItemProps) {
+  const dirty = useDocumentStore((state) => state.documents[tab.id]?.dirty ?? false);
+
+  function handleEditingKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "Enter") {
+      onCommitRenaming(tab.id, event.currentTarget.value);
+    } else if (event.key === "Escape") {
+      onCancelRenaming();
+    }
+  }
+
+  return (
+    <div
+      className={isActive ? "tab tab-active" : "tab"}
+      draggable
+      onDragStart={() => onDragStart(index)}
+      onDragOver={onDragOver}
+      onDrop={() => onDrop(index)}
+      onClick={() => onSelect(tab.id)}
+    >
+      {isEditing ? (
+        <input
+          className="tab-title-input"
+          autoFocus
+          defaultValue={tab.title}
+          onBlur={(event) => onCommitRenaming(tab.id, event.currentTarget.value)}
+          onKeyDown={handleEditingKeyDown}
+          onClick={(event) => event.stopPropagation()}
+        />
+      ) : (
+        <span className="tab-title" onDoubleClick={() => onStartRenaming(tab.id)}>
+          {tab.title}
+        </span>
+      )}
+      <button
+        type="button"
+        className="tab-close"
+        aria-label={`Fechar ${tab.title}`}
+        data-dirty={dirty}
+        onClick={(event) => {
+          event.stopPropagation();
+          onClose(tab.id);
+        }}
+      >
+        <span className="tab-close-icon" aria-hidden="true">
+          ×
+        </span>
+        <span className="tab-dirty-dot" aria-hidden="true" />
+      </button>
+    </div>
+  );
+}
 
 export function TabBar() {
   const tabs = useTabsStore((state) => state.tabs);
@@ -27,58 +112,24 @@ export function TabBar() {
     setDraggedIndex(null);
   }
 
-  function handleEditingKeyDown(event: KeyboardEvent<HTMLInputElement>, tabId: string) {
-    if (event.key === "Enter") {
-      void commitRenaming(tabId, event.currentTarget.value);
-    } else if (event.key === "Escape") {
-      cancelRenaming();
-    }
-  }
-
   return (
     <div className="tab-bar">
       {tabs.map((tab, index) => (
-        <div
+        <TabItem
           key={tab.id}
-          className={tab.id === activeTabId ? "tab tab-active" : "tab"}
-          draggable
-          onDragStart={() => setDraggedIndex(index)}
+          tab={tab}
+          index={index}
+          isActive={tab.id === activeTabId}
+          isEditing={editingTabId === tab.id}
+          onDragStart={setDraggedIndex}
           onDragOver={handleDragOver}
-          onDrop={() => handleDrop(index)}
-          onClick={() => setActiveTab(tab.id)}
-        >
-          {editingTabId === tab.id ? (
-            // Não-controlado (defaultValue, não value) — evita precisar de um
-            // `useState` de rascunho inicializado via efeito só pra cobrir o
-            // gatilho externo do menu nativo (#24, `startRenaming` chamado de
-            // fora desta árvore). Remonta com o título atual sempre que o
-            // input aparece, porque a alternância span/input já monta uma
-            // instância nova a cada vez.
-            <input
-              className="tab-title-input"
-              autoFocus
-              defaultValue={tab.title}
-              onBlur={(event) => void commitRenaming(tab.id, event.currentTarget.value)}
-              onKeyDown={(event) => handleEditingKeyDown(event, tab.id)}
-              onClick={(event) => event.stopPropagation()}
-            />
-          ) : (
-            <span className="tab-title" onDoubleClick={() => startRenaming(tab.id)}>
-              {tab.title}
-            </span>
-          )}
-          <button
-            type="button"
-            className="tab-close"
-            aria-label={`Fechar ${tab.title}`}
-            onClick={(event) => {
-              event.stopPropagation();
-              void closeTab(tab.id);
-            }}
-          >
-            ×
-          </button>
-        </div>
+          onDrop={handleDrop}
+          onSelect={setActiveTab}
+          onStartRenaming={startRenaming}
+          onCommitRenaming={(tabId, value) => void commitRenaming(tabId, value)}
+          onCancelRenaming={cancelRenaming}
+          onClose={(tabId) => void closeTab(tabId)}
+        />
       ))}
       <button type="button" className="tab-new" aria-label="Nova aba" onClick={() => void newTab()}>
         +
