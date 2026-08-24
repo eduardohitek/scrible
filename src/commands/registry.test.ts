@@ -4,6 +4,7 @@ import { useLayoutStore } from "../layout/layoutStore";
 import { useExplorerStore } from "../explorer/explorerStore";
 import { useThemeStore } from "../theme/themeStore";
 import { useTabsStore } from "../store/tabsStore";
+import { useZoomStore } from "../zoom/zoomStore";
 import { exportActiveTabAsHtml, exportActiveTabAsPdf } from "../export/exportHtml";
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -43,6 +44,22 @@ describe("commands registry", () => {
     runCommand("toggle_explorer");
 
     expect(toggle).toHaveBeenCalledOnce();
+  });
+
+  it("zoom_in/zoom_out/zoom_reset chamam as actions correspondentes de zoomStore", () => {
+    const zoomIn = vi.fn().mockResolvedValue(undefined);
+    const zoomOut = vi.fn().mockResolvedValue(undefined);
+    const resetZoom = vi.fn().mockResolvedValue(undefined);
+    useZoomStore.setState({ zoomIn, zoomOut, resetZoom });
+
+    runCommand("zoom_in");
+    expect(zoomIn).toHaveBeenCalledOnce();
+
+    runCommand("zoom_out");
+    expect(zoomOut).toHaveBeenCalledOnce();
+
+    runCommand("zoom_reset");
+    expect(resetZoom).toHaveBeenCalledOnce();
   });
 
   it("export_html e export_pdf chamam as funções de export", () => {

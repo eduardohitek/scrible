@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useTabsStore } from "../store/tabsStore";
 import { useDocumentStore } from "../store/documentStore";
+import { useZoomStore } from "../zoom/zoomStore";
 
 function countWordsAndChars(content: string): { words: number; chars: number } {
   const trimmed = content.trim();
@@ -14,6 +15,7 @@ function countWordsAndChars(content: string): { words: number; chars: number } {
 export function StatusBar() {
   const activeTabId = useTabsStore((state) => state.activeTabId);
   const activeDoc = useDocumentStore((state) => (activeTabId ? state.documents[activeTabId] : undefined));
+  const zoom = useZoomStore((state) => state.zoom);
 
   const { words, chars } = useMemo(() => countWordsAndChars(activeDoc?.content ?? ""), [activeDoc?.content]);
 
@@ -30,7 +32,10 @@ export function StatusBar() {
       <span className="status-bar-counts">
         {words} {words === 1 ? "palavra" : "palavras"} · {chars} {chars === 1 ? "caractere" : "caracteres"}
       </span>
-      {saveState && <span className="status-bar-save-state">{saveState}</span>}
+      <span className="status-bar-right">
+        {zoom !== 1 && <span className="status-bar-zoom">{Math.round(zoom * 100)}%</span>}
+        {saveState && <span className="status-bar-save-state">{saveState}</span>}
+      </span>
     </div>
   );
 }

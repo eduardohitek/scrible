@@ -57,6 +57,15 @@ pub fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
     let toggle_explorer = MenuItemBuilder::with_id("toggle_explorer", "Alternar explorador")
         .accelerator("CmdOrCtrl+Shift+E")
         .build(app)?;
+    let zoom_in = MenuItemBuilder::with_id("zoom_in", "Aumentar")
+        .accelerator("CmdOrCtrl+=")
+        .build(app)?;
+    let zoom_out = MenuItemBuilder::with_id("zoom_out", "Diminuir")
+        .accelerator("CmdOrCtrl+-")
+        .build(app)?;
+    let zoom_reset = MenuItemBuilder::with_id("zoom_reset", "Tamanho original")
+        .accelerator("CmdOrCtrl+0")
+        .build(app)?;
     let theme_system = MenuItemBuilder::with_id("theme_system", "Sistema").build(app)?;
     let theme_light = MenuItemBuilder::with_id("theme_light", "Claro").build(app)?;
     let theme_dark = MenuItemBuilder::with_id("theme_dark", "Escuro").build(app)?;
@@ -68,6 +77,10 @@ pub fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
     let view_menu = SubmenuBuilder::new(app, "Visualizar")
         .item(&toggle_preview)
         .item(&toggle_explorer)
+        .separator()
+        .item(&zoom_in)
+        .item(&zoom_out)
+        .item(&zoom_reset)
         .separator()
         .item(&theme_menu)
         .build()?;
