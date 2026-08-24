@@ -25,3 +25,11 @@ run = "npx tsc --noEmit"
 [tasks.test]
 description = "Roda os testes do frontend (Vitest) e do backend (cargo test)"
 run = ["npx vitest run", "cargo test --manifest-path src-tauri/Cargo.toml"]
+
+[tasks.release]
+description = "Prepara o bump de versão numa branch chore/release-vX.Y.Z (não faz push)"
+run = "./scripts/prepare-release.sh"
+
+[tasks.tag]
+description = "Cria e envia a tag da versão atual a partir da main — dispara a release"
+run = "./scripts/tag-release.sh"

@@ -31,3 +31,6 @@ src-tauri/target
 
 # Serena (config local do assistente de IA, não é parte do projeto)
 .serena/
+
+# Claude Code — configuração local pessoal, não versionada
+.claude/settings.local.json

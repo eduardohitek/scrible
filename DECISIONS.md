@@ -965,6 +965,51 @@ do caminho pronto: a toolbar/registro de comandos é a "barra de comandos própr
 previa como alternativa ao menu de sistema ausente fora do macOS. Issue B (paleta de comandos `⌘P`
 + modo foco, a abrir) consome `src/commands/registry.ts` sem retrabalho.
 
+## #63 — Release de .dmg para macOS
+
+- **Retomada da `#4`**: `.github/workflows/release.yml` já existia (disparo em tag `v*.*.*`, build +
+  publicação via `softprops/action-gh-release`), mas nunca tinha sido exercitado — sem tags nem
+  releases no repositório até aqui. Corrigidos os problemas que só apareceriam na primeira execução
+  real: faltava `permissions: contents: write` (o `GITHUB_TOKEN` de um workflow disparado por tag não
+  tem permissão de escrita por padrão nesse repo) e o padrão de tag virou `v*` (aceita sufixo de
+  pre-release, ex. `v0.1.0-rc.1`).
+- **Apenas Apple Silicon (arm64)**, decisão via sabatina — mantém `runs-on: macos-latest` (que já é
+  arm64) e o path de bundle padrão do Tauri (`target/release/bundle/dmg/`). Build universal ficaria
+  em `target/universal-apple-darwin/release/bundle/`, mudando o path do workflow, e dobraria o tempo
+  de build (compila o Rust duas vezes) — adiado para quando `#32` trouxer a matriz de plataformas.
+- **`package.json` como fonte única de versão**: `tauri.conf.json` passou de `"version": "0.1.0"`
+  para `"version": "../package.json"` — suportado nativamente pelo Tauri v2 (o campo aceita um
+  caminho para um JSON com `version`, resolvido a partir do CWD do CLI, que é `src-tauri/`). Antes,
+  a versão estava triplicada (`package.json`, `tauri.conf.json`, `Cargo.toml`) sem nada garantindo
+  que a tag da release correspondesse ao que ia dentro do bundle. `Cargo.toml` mantém um `version`
+  próprio só por convenção do Cargo — não influencia mais o `CFBundleShortVersionString` do app.
+- **Assinatura ad-hoc** (`bundle.macOS.signingIdentity: "-"` em `tauri.conf.json`) — não exige conta
+  de desenvolvedor Apple. Sem selo nenhum, o Gatekeeper tende a mostrar "o app está danificado e
+  deve ser movido para o Lixo" (exige `xattr -cr` no terminal pra contornar); com ad-hoc, mostra o
+  aviso recuperável de "desenvolvedor não verificado" (Ajustes do Sistema → Privacidade e Segurança
+  → Abrir Mesmo Assim). Assinatura com identidade real + notarização ficam para a `#28`.
+- **Checksum publicado**: o job gera `SHA256SUMS.txt` (`shasum -a 256 *.dmg`) e publica junto do
+  `.dmg` — único jeito de alguém verificar a integridade de um binário que ninguém assina.
+- **`prerelease` automático por convenção de tag** (`contains(github.ref_name, '-')`): uma tag com
+  sufixo (`v0.1.0-rc.1`) marca a release como pre-release no GitHub, sem ocupar o rótulo "latest";
+  `vX.Y.Z` sem sufixo é release de verdade. Primeira tag publicada foi `v0.1.0-rc.1`, pra exercitar o
+  pipeline antes da `v0.1.0` (que aguarda a `#9` fechar).
+- **Gate do workflow é só tag × versão** (`scripts/check-version.sh`, chamado tanto pelo workflow
+  quanto localmente) — não repete lint/typecheck/test porque a tag sempre parte de um commit da
+  `main`, que já passou pelo CI completo em `ci.yml`. Falha em segundos se a tag não bater com
+  `package.json`, antes de gastar o build.
+- **Bump de versão nunca commita direto na `main`** (regra global do `CLAUDE.md`): `scripts/
+  prepare-release.sh` (task `mise run release <versão>`) cria a branch `chore/release-vX.Y.Z`, roda
+  `npm version` e sincroniza `Cargo.toml`/`Cargo.lock`, mas para no commit local — push, PR e merge
+  são manuais. Só depois do merge, `scripts/tag-release.sh` (`mise run tag`) cria e envia a tag a
+  partir da `main` atualizada, o que dispara o workflow.
+
+**Afeta:** `#28` (assinar/notarizar) substitui `signingIdentity: "-"` por uma identidade real e
+acrescenta o passo de notarização no mesmo `release.yml` — a estrutura de tag → build → publicação
+já fica pronta, só troca o miolo da assinatura. `#32` (builds Windows/Linux) precisa de matriz de
+runners e o path `target/release/bundle/dmg/` deixa de ser suficiente sozinho — cada plataforma tem
+seu formato de instalável e path próprio.
+
 ## #15 — Autocomplete grupo D: linguagens em fences e snippets mermaid
 
 - **Novo `src/editor/fenceCompletions.ts`**: dois níveis de `CompletionSource`.

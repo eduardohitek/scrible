@@ -20,6 +20,14 @@ O backlog vive nas issues do GitHub (`eduardohitek/scrible`), organizado nos mil
 6. Ao concluir uma issue cujas decisões possam afetar issues futuras, **atualizar `DECISIONS.md`** antes de considerar o trabalho fechado.
 7. Atualizações de `CLAUDE.md` ou `DECISIONS.md` entram **na branch da alteração que as motivou** — não criar uma branch nem um PR separado só para isso, mesmo quando a atualização for retroativa (cobrindo uma issue anterior).
 
+## Release
+
+A versão do projeto vive só em `package.json` (`tauri.conf.json` lê de lá). O bump nunca commita direto na `main`:
+
+1. Na `main` atualizada: `mise run release <versão>` — cria `chore/release-vX.Y.Z`, atualiza `package.json`/`Cargo.toml` e para no commit local.
+2. Push, abrir PR, revisar o diff, merge.
+3. Na `main` atualizada de novo: `mise run tag` — cria e envia a tag `vX.Y.Z`, que dispara `.github/workflows/release.yml` (build + publicação do `.dmg` assinado ad-hoc + checksum na página de releases).
+
 ## Decisões de arquitetura
 
 Ver `DECISIONS.md` para o log completo, por issue, do que foi decidido e quais issues futuras cada decisão afeta.

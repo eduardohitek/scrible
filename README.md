@@ -1,8 +1,27 @@
 # scrible
 
 [![CI](https://github.com/eduardohitek/scrible/actions/workflows/ci.yml/badge.svg)](https://github.com/eduardohitek/scrible/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/eduardohitek/scrible?include_prereleases)](https://github.com/eduardohitek/scrible/releases)
 
 Editor de markdown com interface limpa, preview em tempo real (incluindo diagramas [mermaid](https://mermaid.js.org/)) e autosave — feito inicialmente para macOS, com portabilidade planejada para Windows e Linux.
+
+## Download e instalação
+
+Builds prontos ficam na [página de releases](https://github.com/eduardohitek/scrible/releases) — baixe o `.dmg` mais recente.
+
+> **Apple Silicon (arm64) apenas**, por enquanto — builds para Intel/Windows/Linux estão no backlog ([#32](https://github.com/eduardohitek/scrible/issues/32)).
+
+O `.dmg` é assinado apenas com **assinatura ad-hoc** (sem conta de desenvolvedor Apple — assinatura e notarização de verdade estão em [#28](https://github.com/eduardohitek/scrible/issues/28)). Ao abrir o app pela primeira vez, o macOS vai avisar que não foi possível verificar o desenvolvedor:
+
+1. Abra o `.dmg` e arraste o `scrible.app` para `Applications`.
+2. Tente abrir o app — o macOS vai bloquear.
+3. Vá em **Ajustes do Sistema → Privacidade e Segurança**, role até a mensagem sobre o scrible e clique em **Abrir Mesmo Assim**.
+
+Cada release traz um `SHA256SUMS.txt` para conferir a integridade do download:
+
+```sh
+shasum -a 256 -c SHA256SUMS.txt
+```
 
 ## Stack
 
@@ -38,6 +57,8 @@ Rode `mise tasks` para a lista completa. As principais:
 | `mise run lint` | ESLint no frontend + `cargo clippy` no backend |
 | `mise run typecheck` | Verifica os tipos do TypeScript |
 | `mise run test` | Testes do frontend (Vitest) e do backend (`cargo test`) |
+| `mise run release <versão>` | Prepara o bump de versão numa branch `chore/release-vX.Y.Z` |
+| `mise run tag` | Cria e envia a tag da versão atual, disparando a release |
 
 ## Onde os arquivos ficam
 

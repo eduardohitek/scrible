@@ -3,7 +3,10 @@ name: Release
 on:
   push:
     tags:
-      - "v*.*.*"
+      - "v*"
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -16,20 +19,44 @@ jobs:
         with:
           cache: true
 
+      - name: Conferir tag × versão do package.json
+        run: ./scripts/check-version.sh "$GITHUB_REF_NAME"
+
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-npm-${{ hashFiles('package-lock.json') }}
+
       - name: Instalar dependências
         run: mise run setup
 
-      - name: Build (.app / .dmg)
+      - name: Build (.app / .dmg, assinatura ad-hoc)
         run: mise run build
+
+      - name: Gerar checksum
+        working-directory: src-tauri/target/release/bundle/dmg
+        run: shasum -a 256 *.dmg > SHA256SUMS.txt
 
       - name: Publicar release
         uses: softprops/action-gh-release@v2
         with:
-          files: src-tauri/target/release/bundle/dmg/*.dmg
+          files: |
+            src-tauri/target/release/bundle/dmg/*.dmg
+            src-tauri/target/release/bundle/dmg/SHA256SUMS.txt
           generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
           body: |
-            ⚠️ Este build não é assinado nem notarizado pela Apple. Ao abrir pela primeira
-            vez, o macOS vai bloquear com "não foi possível verificar o desenvolvedor" —
-            libere em Ajustes do Sistema → Privacidade e Segurança → Abrir Mesmo Assim.
+            Build para **macOS Apple Silicon (arm64)** apenas.
+
+            ⚠️ Este `.dmg` não é assinado nem notarizado pela Apple (assinatura ad-hoc,
+            sem conta de desenvolvedor). Ao abrir pela primeira vez, o macOS vai avisar
+            que não foi possível verificar o desenvolvedor — libere em
+            **Ajustes do Sistema → Privacidade e Segurança → Abrir Mesmo Assim**.
+
+            Para conferir a integridade do download:
+            ```sh
+            shasum -a 256 -c SHA256SUMS.txt
+            ```
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
