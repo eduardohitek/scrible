@@ -40,7 +40,7 @@ git switch -c "$release_branch"
 npm version "$version" --no-git-tag-version --allow-same-version >/dev/null
 
 # Sincroniza a versão do Cargo.toml (não é a fonte, mas mantém os metadados coerentes)
-sed -i '' '/^\[package\]/,/^\[/{s/^version = ".*"/version = "'"$version"'"/}' src-tauri/Cargo.toml
+sed -i '' '/^\[package\]/,/^\[/s/^version = ".*"/version = "'"$version"'"/' src-tauri/Cargo.toml
 cargo metadata --manifest-path src-tauri/Cargo.toml --format-version 1 >/dev/null
 
 git add package.json package-lock.json src-tauri/Cargo.toml src-tauri/Cargo.lock
