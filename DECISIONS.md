@@ -1131,13 +1131,24 @@ também, e `useZoomShortcuts.ts` vira o dono de todas as variantes, não só das
   Fontes: [Triggering a workflow](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow),
   [GITHUB_TOKEN](https://docs.github.com/en/actions/concepts/security/github_token).
 - **Solução sem PAT novo**: novo `.github/workflows/auto-tag.yml`, gatilho `pull_request: closed`
-  filtrado por `merged == true && head.ref` começando com `chore/release-` (o mesmo padrão de nome
+  filtrado por `merged == true && head.ref` começando com `chore/release-v` (o mesmo padrão de nome
   que `prepare-release.sh` já cria — sinal intencional, sem exigir label nova no GitHub). O job cria
   e envia a tag (registro histórico normal, idempotente — pula se a tag já existir, útil pra reruns
   ou pra quando alguém já tagueou na mão) e **dispara explicitamente**
   `gh workflow run release.yml --ref vX.Y.Z`, furando a proteção via a exceção do
   `workflow_dispatch`. `release.yml` só ganhou esse trigger a mais — o job de build/publicação
   existente da `#63` não mudou uma linha.
+- **Achado por dogfooding, corrigido antes do merge**: o prefixo original do filtro era só
+  `chore/release-` (sem o "v") — e a própria branch deste trabalho,
+  `chore/release-skill-and-auto-tag`, batia nele. Mergear este PR teria disparado
+  `auto-tag.yml` de verdade (a tag `v0.1.0` já existente seria pulada pela idempotência, mas o
+  `gh workflow run release.yml --ref v0.1.0` ainda assim rodaria, republicando uma release que já
+  existe). Corrigido de duas formas: o prefixo virou `chore/release-v` (mais específico, casa só com
+  o padrão real de `prepare-release.sh`), e o job ganhou uma segunda guarda independente do nome da
+  branch — compara `package.json` no commit de merge (`HEAD`) contra o pai que era a ponta da `main`
+  antes do merge (`HEAD^1`, com `git show HEAD^1:package.json`) e só segue adiante se a versão
+  realmente mudou. As duas guardas juntas cobrem tanto "nome de branch coincidente" quanto "branch
+  certa, mas sem bump de verdade".
 - **`runs-on: ubuntu-latest`** no job de tag (não `macos-latest`) — só lê `package.json`, cria/envia
   a tag e chama a API de workflow via `gh`, nenhuma dependência de Rust/Xcode. O job de build em
   `release.yml` continua `macos-latest`.
