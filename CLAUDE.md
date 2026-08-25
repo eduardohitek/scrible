@@ -24,9 +24,11 @@ O backlog vive nas issues do GitHub (`eduardohitek/scrible`), organizado nos mil
 
 A versão do projeto vive só em `package.json` (`tauri.conf.json` lê de lá). O bump nunca commita direto na `main`:
 
-1. Na `main` atualizada: `mise run release <versão>` — cria `chore/release-vX.Y.Z`, atualiza `package.json`/`Cargo.toml` e para no commit local.
-2. Push, abrir PR, revisar o diff, merge.
-3. Na `main` atualizada de novo: `mise run tag` — cria e envia a tag `vX.Y.Z`, que dispara `.github/workflows/release.yml` (build + publicação do `.dmg` assinado ad-hoc + checksum na página de releases).
+1. Na `main` atualizada, rode a skill `/release` — analisa os merges desde a última tag, sugere a versão, roda o gate local (lint/typecheck/test), executa o bump (`mise run release`) e abre o PR.
+2. Revisar o diff, merge.
+3. Pronto — `.github/workflows/auto-tag.yml` detecta o merge (branch `chore/release-*`), cria a tag `vX.Y.Z` e dispara `.github/workflows/release.yml` (build + publicação do `.dmg` assinado ad-hoc + checksum na página de releases) sozinho, via `workflow_dispatch`. Nenhum comando manual depois do merge.
+
+Fallback se a automação do passo 3 falhar: `mise run tag` na `main` atualizada cria e envia a tag manualmente, disparando `release.yml` do jeito de sempre (`push: tags`).
 
 ## Decisões de arquitetura
 
