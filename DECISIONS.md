@@ -951,6 +951,14 @@ handler funcional em outras plataformas se `app_menu.rs` não for revisitado jun
   descartado: grid items não fazem margin-collapse entre si, dobraria o espaçamento vertical entre
   parágrafos. Efeito colateral aceito: como `PreviewPane.css` é inlinada via `?raw` no export
   (`#26`/`#27`), a largura de leitura passa a valer também no HTML e no PDF exportados.
+  **Correção posterior:** como `ch` resolve contra a fonte de cada elemento, `max-width: 70ch` dava
+  larguras diferentes por tipo de bloco (h1/h2/h3 maiores que o painel, colados à esquerda; `pre` e
+  tabelas mais estreitos que o texto). O token passou a `calc(var(--font-size-base) * 38)` (≈70
+  caracteres, em px, igual para todo bloco). `@property` foi cogitado (resolver `70ch` uma vez no
+  `.preview-pane`) e descartado: só existe no WebKit a partir do Safari 16.4, e o app ainda suporta
+  macOS mais antigo — lá o bug voltaria. Qualquer largura nova pensada para valer para todos os
+  blocos do preview não deve usar `ch`/`em`. `pre`, `blockquote` e `.mermaid-error` passaram a
+  `box-sizing: border-box` para a caixa alinhar com as bordas do texto.
 - **`ConflictBanner` saiu de `position: absolute` para o fluxo normal** — antes cobria as primeiras
   linhas do editor/preview quando aparecia; agora empurra o conteúdo.
 - Testes: `ThemeToggle.test.tsx`/`HistoryPanel.test.tsx` (pré-existentes) passaram a consultar por
