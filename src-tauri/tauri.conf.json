@@ -38,7 +38,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "SUBSTITUIR_PELA_CHAVE_PUBLICA_DO_UPDATER",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IERDNUQ3RkE4NUM2NjQzRApSV1E5Wk1hRit0ZkZEZS9ZczdwdTEyQ1JocWp3QU5YODBHRzFCRGJhMEFSNFBNOGR5YzFPYXlUbwo=",
       "endpoints": [
         "https://github.com/eduardohitek/scrible/releases/latest/download/latest.json"
       ]
