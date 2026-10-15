@@ -3,7 +3,21 @@
  * matter) — extraído de App.css (#26) para ser reaproveitado literalmente
  * (via import `?raw`) pelo export HTML standalone, sem duplicar regras.
  */
+/* `--reading-width` é em `ch`, que resolve contra a fonte de *cada* elemento
+   que o usa. Registrada como `<length>`, esta propriedade é resolvida uma vez
+   (no `.preview-pane`, com a fonte base) e herdada já em px pelos filhos —
+   sem isso, h1/h2/h3 (fonte maior) ganhavam uma largura máxima maior que o
+   painel e ficavam colados à esquerda, enquanto parágrafos ficavam
+   centralizados em 70ch, e `pre`/tabelas (fonte menor) ficavam mais
+   estreitos que o texto. */
+@property --preview-content-width {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 100vw;
+}
+
 .preview-pane {
+  --preview-content-width: var(--reading-width);
   padding: var(--space-5) var(--space-6) var(--space-6);
   line-height: var(--line-height-base);
   font-size: var(--font-size-base);
@@ -16,7 +30,7 @@
    cogitado e descartado: grid items não fazem margin-collapse entre si, o
    que dobraria o espaçamento vertical entre parágrafos. */
 .preview-pane > * {
-  max-width: var(--reading-width);
+  max-width: var(--preview-content-width);
   margin-inline: auto;
 }
 
@@ -111,6 +125,7 @@
 }
 
 .preview-pane pre {
+  box-sizing: border-box;
   font-family: var(--font-mono);
   font-size: 0.875em;
   line-height: 1.6;
@@ -131,6 +146,7 @@
 }
 
 .preview-pane blockquote {
+  box-sizing: border-box;
   color: var(--color-markdown-quote);
   border-left: 3px solid var(--color-accent);
   background: var(--color-accent-soft);
@@ -170,6 +186,7 @@
 }
 
 .mermaid-error {
+  box-sizing: border-box;
   color: var(--color-danger-text);
   background: var(--color-danger-bg);
   border: 1px solid var(--color-danger-border);

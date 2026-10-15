@@ -951,6 +951,13 @@ handler funcional em outras plataformas se `app_menu.rs` não for revisitado jun
   descartado: grid items não fazem margin-collapse entre si, dobraria o espaçamento vertical entre
   parágrafos. Efeito colateral aceito: como `PreviewPane.css` é inlinada via `?raw` no export
   (`#26`/`#27`), a largura de leitura passa a valer também no HTML e no PDF exportados.
+  **Correção posterior:** como `ch` resolve contra a fonte de cada elemento, `max-width: 70ch` dava
+  larguras diferentes por tipo de bloco (h1/h2/h3 maiores que o painel, colados à esquerda; `pre` e
+  tabelas mais estreitos que o texto). Os filhos agora usam `--preview-content-width`, registrada
+  via `@property` como `<length>` e declarada no `.preview-pane` — resolve uma vez com a fonte base e
+  é herdada em px. Qualquer largura nova em `ch`/`em` pensada para valer para todos os blocos do
+  preview deve seguir o mesmo padrão. `pre`, `blockquote` e `.mermaid-error` passaram a
+  `box-sizing: border-box` para a caixa alinhar com as bordas do texto.
 - **`ConflictBanner` saiu de `position: absolute` para o fluxo normal** — antes cobria as primeiras
   linhas do editor/preview quando aparecia; agora empurra o conteúdo.
 - Testes: `ThemeToggle.test.tsx`/`HistoryPanel.test.tsx` (pré-existentes) passaram a consultar por
