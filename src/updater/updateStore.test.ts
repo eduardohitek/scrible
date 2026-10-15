@@ -10,8 +10,9 @@ vi.mock("../settings/appSettings", async (importOriginal) => {
   return { ...actual, loadAppSettings: vi.fn(), patchAppSettings: vi.fn() };
 });
 const flushAll = vi.fn();
+let documents: Record<string, { dirty: boolean; status: string }> = {};
 vi.mock("../store/documentStore", () => ({
-  useDocumentStore: { getState: () => ({ flushAll }) },
+  useDocumentStore: { getState: () => ({ flushAll, documents }) },
 }));
 
 const mockedCheck = vi.mocked(check);
@@ -46,6 +47,7 @@ describe("updateStore", () => {
     mockedLoad.mockReset();
     mockedPatch.mockReset();
     flushAll.mockReset();
+    documents = { a: { dirty: false, status: "idle" } };
     mockedLoad.mockResolvedValue({ ...DEFAULT_SETTINGS });
   });
 
@@ -128,7 +130,7 @@ describe("updateStore", () => {
 
     await store.getState().install();
 
-    expect(order).toEqual(["flush", "install", "relaunch"]);
+    expect(order).toEqual(["flush", "install", "flush", "relaunch"]);
   });
 
   it("instalar: falha vira erro no aviso, sem reiniciar", async () => {
@@ -167,5 +169,56 @@ describe("updateStore", () => {
 
     expect(store.getState().status).toBe("hidden");
     expect(mockedPatch).toHaveBeenCalledWith({ skippedVersion: "0.3.0" });
+  });
+
+  it("instalar: save que falhou antes do download aborta sem instalar", async () => {
+    const update = fakeUpdate("0.3.0");
+    flushAll.mockImplementation(async () => {
+      documents = { a: { dirty: true, status: "error" } };
+    });
+    mockedCheck.mockResolvedValue(update);
+    const store = await freshStore();
+    await store.getState().checkManually();
+
+    await store.getState().install();
+
+    expect(store.getState().status).toBe("error");
+    expect(update.downloadAndInstall).not.toHaveBeenCalled();
+    expect(mockedRelaunch).not.toHaveBeenCalled();
+  });
+
+  it("instalar: edição não salva durante o download impede o reinício", async () => {
+    const update = fakeUpdate("0.3.0");
+    update.downloadAndInstall.mockImplementation(async () => {
+      // Digitou durante o download e o save final cai em conflito.
+      documents = { a: { dirty: true, status: "conflict" } };
+    });
+    mockedCheck.mockResolvedValue(update);
+    const store = await freshStore();
+    await store.getState().checkManually();
+
+    await store.getState().install();
+
+    expect(flushAll).toHaveBeenCalledTimes(2);
+    expect(store.getState().status).toBe("error");
+    expect(mockedRelaunch).not.toHaveBeenCalled();
+  });
+
+  it("abertura: resultado atrasado não reabre um aviso já fechado", async () => {
+    let resolveStartup: (u: FakeUpdate) => void = () => {};
+    const late = fakeUpdate("0.3.0");
+    mockedCheck
+      .mockImplementationOnce(() => new Promise((resolve) => (resolveStartup = resolve)))
+      .mockResolvedValueOnce(fakeUpdate("0.3.0"));
+    const store = await freshStore();
+
+    const startup = store.getState().checkOnStartup();
+    await store.getState().checkManually();
+    store.getState().dismiss();
+    resolveStartup(late);
+    await startup;
+
+    expect(store.getState().status).toBe("hidden");
+    expect(late.close).toHaveBeenCalled();
   });
 });

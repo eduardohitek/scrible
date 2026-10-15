@@ -26,11 +26,25 @@ interface UpdateState {
 // `Update` segura um resource no lado Rust — fica fora do estado zustand (não
 // é serializável) e é fechado sempre que o aviso some sem instalar.
 let pending: Update | null = null;
+// Incrementado por toda ação que torna obsoleta uma checagem da abertura
+// ainda em voo (checagem manual, fechar o aviso): o resultado atrasado é
+// descartado em vez de reabrir um aviso que o usuário já viu.
+let generation = 0;
 
 function releasePending(): void {
   const update = pending;
   pending = null;
   void update?.close().catch(() => {});
+}
+
+/** `flushAll()` não rejeita quando um save falha (`performSave` grava
+ * `error`/`conflict` na entrada) — por isso o resultado é conferido
+ * documento a documento antes de qualquer reinício. */
+async function saveEverything(): Promise<boolean> {
+  await useDocumentStore.getState().flushAll();
+  return Object.values(useDocumentStore.getState().documents).every(
+    (doc) => !doc.dirty && doc.status !== "error" && doc.status !== "conflict",
+  );
 }
 
 function errorMessage(err: unknown): string {
@@ -45,12 +59,13 @@ export const useUpdateStore = create<UpdateState>((set, get) => ({
   error: null,
 
   checkOnStartup: async () => {
+    const startedAt = generation;
     try {
       const update = await check();
       if (!update) return;
       const { skippedVersion } = await loadAppSettings();
-      // Checagem manual em curso ou já resolvida enquanto esta rodava: ela vence.
-      if (update.version === skippedVersion || get().status !== "hidden") {
+      // Checagem manual ou aviso fechado enquanto esta rodava: eles vencem.
+      if (update.version === skippedVersion || startedAt !== generation || get().status !== "hidden") {
         void update.close().catch(() => {});
         return;
       }
@@ -65,6 +80,7 @@ export const useUpdateStore = create<UpdateState>((set, get) => ({
   checkManually: async () => {
     const { status } = get();
     if (status === "checking" || status === "downloading") return;
+    generation++;
     releasePending();
     set({ status: "checking", version: null, error: null });
     try {
@@ -85,13 +101,26 @@ export const useUpdateStore = create<UpdateState>((set, get) => ({
     if (!update || get().status !== "available") return;
     set({ status: "downloading", downloaded: 0, total: null, error: null });
     try {
-      // Mesmo flush do Cmd+Q (DECISIONS.md #7/#24): nenhuma edição dentro do
-      // debounce de 800ms se perde quando o app reiniciar.
-      await useDocumentStore.getState().flushAll();
+      // Mesmo flush do Cmd+Q (DECISIONS.md #7/#24). Antes de baixar: um save
+      // que falhou aborta tudo, nada foi instalado ainda.
+      if (!(await saveEverything())) {
+        set({ status: "error", error: "há abas que não puderam ser salvas. Resolva e tente de novo." });
+        return;
+      }
       await update.downloadAndInstall((event) => {
         if (event.event === "Started") set({ total: event.data.contentLength ?? null });
         else if (event.event === "Progress") set({ downloaded: get().downloaded + event.data.chunkLength });
       });
+      // O editor continua aberto durante o download: salva de novo o que foi
+      // digitado nesse meio-tempo. `relaunch()` não passa pelo handshake de
+      // fechamento, então este é o último flush.
+      if (!(await saveEverything())) {
+        set({
+          status: "error",
+          error: "a atualização foi instalada, mas há abas não salvas. Ela vale quando você reabrir o scrible.",
+        });
+        return;
+      }
       await relaunch();
     } catch (err) {
       set({ status: "error", error: errorMessage(err) });
@@ -100,6 +129,7 @@ export const useUpdateStore = create<UpdateState>((set, get) => ({
 
   dismiss: () => {
     if (get().status === "downloading") return;
+    generation++;
     releasePending();
     set({ status: "hidden", version: null, error: null });
   },
