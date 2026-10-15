@@ -1,0 +1,68 @@
+name: Auto-tag release
+
+# Fecha o ciclo de release iniciado pela skill /release (.claude/skills/release):
+# detecta o merge do PR de bump (branch chore/release-vX.Y.Z), cria a tag
+# vX.Y.Z e dispara o build/publicação de release.yml — sem exigir nenhum
+# comando manual depois do merge. Ver DECISIONS.md para o porquê do
+# workflow_dispatch explícito em vez de confiar no push da tag disparando
+# release.yml sozinho.
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  tag:
+    # startsWith(..., 'chore/release-v') — com o "v", não só "chore/release-":
+    # um chore comum cujo nome comece com "chore/release-" (ex: este mesmo PR,
+    # chore/release-skill-and-auto-tag) não deve disparar isto. A guarda de
+    # versão no passo seguinte é a segunda camada de proteção.
+    if: >
+      github.event.pull_request.merged == true &&
+      startsWith(github.event.pull_request.head.ref, 'chore/release-v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Ler versão do package.json (antes e depois do merge)
+        id: version
+        run: |
+          version_after=$(node -p "require('./package.json').version")
+          git show HEAD^1:package.json > /tmp/package-before.json
+          version_before=$(node -p "require('/tmp/package-before.json').version")
+          echo "version=$version_after" >> "$GITHUB_OUTPUT"
+          if [ "$version_after" = "$version_before" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Criar e enviar tag (idempotente — pula se já existir)
+        if: steps.version.outputs.changed == 'true'
+        run: |
+          tag="v${{ steps.version.outputs.version }}"
+          if git ls-remote --tags origin "refs/tags/$tag" | grep -q "refs/tags/$tag"; then
+            echo "Tag $tag já existe, pulando criação."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git tag -a "$tag" -m "Release $tag"
+            git push origin "$tag"
+          fi
+
+      - name: Disparar build/publicação (release.yml via workflow_dispatch)
+        if: steps.version.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run release.yml --ref "v${{ steps.version.outputs.version }}"
+
+      - name: Nenhuma mudança de versão — nada a fazer
+        if: steps.version.outputs.changed != 'true'
+        run: echo "package.json não mudou de versão neste merge (branch chore/release-v* sem bump real) — pulando tag e build."
