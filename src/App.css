@@ -661,6 +661,53 @@ button {
   border-color: var(--color-warning-text);
 }
 
+/* Aviso de atualização: mesmo layout do `.conflict-banner`, mas em accent
+   suave — é informação, não alerta. */
+.update-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  flex: 0 0 auto;
+  font-size: var(--font-size-sm);
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-accent-soft);
+  color: var(--color-text);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.update-banner-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.update-banner-actions button {
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-elevated);
+  color: var(--color-text);
+  padding: var(--space-1) var(--space-3);
+  box-shadow: var(--shadow-sm);
+}
+
+.update-banner-actions button:hover {
+  border-color: var(--color-accent);
+}
+
+.update-banner-link {
+  font: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--color-accent);
+  text-decoration: underline;
+}
+
 /* Barra de status (#60): substitui o `.save-indicator` intermitente por uma
    faixa sempre presente no rodapé de `.app-shell-content`. */
 .status-bar {

@@ -39,6 +39,7 @@ describe("zoomStore", () => {
           layout: { splitRatio: 0.5, previewVisible: true },
           explorer: { visible: true, width: 240 },
           zoom: 1.25,
+          skippedVersion: null,
         });
       throw new Error(`unexpected invoke: ${cmd}`);
     });
@@ -73,6 +74,7 @@ describe("zoomStore", () => {
           layout: { splitRatio: 0.5, previewVisible: true },
           explorer: { visible: true, width: 240 },
           zoom: 1,
+          skippedVersion: null,
         });
       if (cmd === "save_file") return 2000;
       throw new Error(`unexpected invoke: ${cmd}`);
@@ -90,6 +92,7 @@ describe("zoomStore", () => {
         layout: { splitRatio: 0.5, previewVisible: true },
         explorer: { visible: true, width: 240 },
         zoom: 1.1,
+        skippedVersion: null,
       }),
       expectedMtime: null,
     });
@@ -104,6 +107,7 @@ describe("zoomStore", () => {
           layout: { splitRatio: 0.5, previewVisible: true },
           explorer: { visible: true, width: 240 },
           zoom: 1,
+          skippedVersion: null,
         });
       if (cmd === "save_file") return 2000;
       throw new Error(`unexpected invoke: ${cmd}`);
@@ -125,6 +129,7 @@ describe("zoomStore", () => {
           layout: { splitRatio: 0.5, previewVisible: true },
           explorer: { visible: true, width: 240 },
           zoom: 1.5,
+          skippedVersion: null,
         });
       if (cmd === "save_file") return 2000;
       throw new Error(`unexpected invoke: ${cmd}`);
@@ -147,6 +152,7 @@ describe("zoomStore", () => {
           layout: { splitRatio: 0.5, previewVisible: true },
           explorer: { visible: true, width: 240 },
           zoom: 2,
+          skippedVersion: null,
         });
       throw new Error(`unexpected invoke: ${cmd}`);
     });

@@ -14,6 +14,9 @@ export interface AppSettings {
     width: number;
   };
   zoom: number;
+  /** Versão que o usuário mandou pular no aviso de atualização — a checagem
+   * da abertura deixa de oferecê-la; a do menu oferece mesmo assim. */
+  skippedVersion: string | null;
 }
 
 interface WorkspacePaths {
@@ -32,6 +35,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   layout: { splitRatio: 0.5, previewVisible: true },
   explorer: { visible: true, width: 240 },
   zoom: DEFAULT_ZOOM,
+  skippedVersion: null,
 };
 
 // Módulo de infraestrutura (não uma store zustand) usado por themeStore.ts e
@@ -68,11 +72,14 @@ function normalize(parsed: Partial<AppSettings> | null | undefined): AppSettings
   const explorerWidth =
     typeof parsed?.explorer?.width === "number" ? parsed.explorer.width : DEFAULT_SETTINGS.explorer.width;
   const zoom = snapZoom(parsed?.zoom);
+  const skippedVersion =
+    typeof parsed?.skippedVersion === "string" ? parsed.skippedVersion : DEFAULT_SETTINGS.skippedVersion;
   return {
     theme,
     layout: { splitRatio, previewVisible },
     explorer: { visible: explorerVisible, width: explorerWidth },
     zoom,
+    skippedVersion,
   };
 }
 
@@ -98,6 +105,7 @@ async function doLoad(): Promise<AppSettings> {
       layout: { ...DEFAULT_SETTINGS.layout },
       explorer: { ...DEFAULT_SETTINGS.explorer },
       zoom: DEFAULT_SETTINGS.zoom,
+      skippedVersion: DEFAULT_SETTINGS.skippedVersion,
     };
     if (fsError.kind === "NotFound") {
       await writeSettings(cache);

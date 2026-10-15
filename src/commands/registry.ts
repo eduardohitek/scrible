@@ -3,6 +3,7 @@ import { useExplorerStore } from "../explorer/explorerStore";
 import { useThemeStore, type ThemePreference } from "../theme/themeStore";
 import { useTabsStore } from "../store/tabsStore";
 import { useZoomStore } from "../zoom/zoomStore";
+import { useUpdateStore } from "../updater/updateStore";
 import { exportActiveTabAsHtml, exportActiveTabAsPdf } from "../export/exportHtml";
 
 /** Ponte imperativa para ações que só existem dentro da árvore React (hoje,
@@ -116,6 +117,11 @@ export const commands: readonly AppCommand[] = [
     id: "export_pdf",
     label: "Exportar para PDF…",
     run: () => exportActiveTabAsPdf(),
+  },
+  {
+    id: "check_updates",
+    label: "Procurar atualizações…",
+    run: () => useUpdateStore.getState().checkManually(),
   },
   {
     id: "theme_system",

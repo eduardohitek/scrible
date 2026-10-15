@@ -2,7 +2,7 @@ use tauri::menu::{Menu, MenuBuilder, MenuItemBuilder, PredefinedMenuItem, Submen
 use tauri::{AppHandle, Wry};
 
 /// Monta o menu nativo do macOS (#24): Arquivo/Editar/Visualizar/Janela, mais um submenu de app
-/// ("scrible") com só o item Sair. Itens customizados (não-`Predefined*`) disparam eventos JS via
+/// ("scrible") com "Procurar atualizações…" e Sair. Itens customizados (não-`Predefined*`) disparam eventos JS via
 /// `on_menu_event`, registrado por quem chamar esta função — aqui só a estrutura é montada.
 ///
 /// O submenu de app é o **primeiro** passado ao `MenuBuilder`: no macOS, o primeiro submenu de um
@@ -12,7 +12,12 @@ pub fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
     let quit = MenuItemBuilder::with_id("quit", "Sair")
         .accelerator("CmdOrCtrl+Q")
         .build(app)?;
-    let app_menu = SubmenuBuilder::new(app, "scrible").item(&quit).build()?;
+    let check_updates = MenuItemBuilder::with_id("check_updates", "Procurar atualizações…").build(app)?;
+    let app_menu = SubmenuBuilder::new(app, "scrible")
+        .item(&check_updates)
+        .separator()
+        .item(&quit)
+        .build()?;
 
     let new_tab = MenuItemBuilder::with_id("new_tab", "Novo")
         .accelerator("CmdOrCtrl+T")
