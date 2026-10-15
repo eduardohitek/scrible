@@ -4,6 +4,11 @@ on:
   push:
     tags:
       - "v*"
+  # Disparado por auto-tag.yml depois do merge do PR de release: o
+  # GITHUB_TOKEN padrão não consegue disparar outro workflow via `push` de
+  # tag (proteção anti-recursão do GitHub Actions), mas workflow_dispatch é
+  # uma exceção explícita a essa regra — ver DECISIONS.md.
+  workflow_dispatch:
 
 permissions:
   contents: write

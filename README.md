@@ -57,8 +57,8 @@ Rode `mise tasks` para a lista completa. As principais:
 | `mise run lint` | ESLint no frontend + `cargo clippy` no backend |
 | `mise run typecheck` | Verifica os tipos do TypeScript |
 | `mise run test` | Testes do frontend (Vitest) e do backend (`cargo test`) |
-| `mise run release <versão>` | Prepara o bump de versão numa branch `chore/release-vX.Y.Z` |
-| `mise run tag` | Cria e envia a tag da versão atual, disparando a release |
+| `mise run release <versão>` | Prepara o bump de versão numa branch `chore/release-vX.Y.Z` (chamado pela skill `/release`, ver `CLAUDE.md`) |
+| `mise run tag` | Fallback manual: cria e envia a tag da versão atual, disparando a release. No fluxo normal isso já acontece sozinho depois do merge do PR de release |
 
 ## Onde os arquivos ficam
 
