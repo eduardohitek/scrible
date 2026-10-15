@@ -72,7 +72,11 @@
   --tab-bar-height: 2.625rem;
   --status-bar-height: 1.75rem;
   --pane-min-width: 240px;
-  --reading-width: 70ch;
+  /* ~70 caracteres da fonte de leitura. Não usar `ch`/`em` aqui: resolvem
+     contra a fonte de cada elemento que consome o token, e títulos (maiores)
+     ou código (menor) ganhariam larguras diferentes do texto. Derivado de
+     `--font-size-base` (px), vira o mesmo comprimento em todo bloco. */
+  --reading-width: calc(var(--font-size-base) * 38);
   --icon-size: 16px;
 
   /* Espaçamento */
