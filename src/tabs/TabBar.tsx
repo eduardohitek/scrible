@@ -1,4 +1,5 @@
 import { useState, type DragEvent, type KeyboardEvent } from "react";
+import { Plus, X } from "lucide-react";
 import { useTabsStore, type Tab } from "../store/tabsStore";
 import { useDocumentStore } from "../store/documentStore";
 
@@ -77,9 +78,7 @@ function TabItem({
           onClose(tab.id);
         }}
       >
-        <span className="tab-close-icon" aria-hidden="true">
-          ×
-        </span>
+        <X className="tab-close-icon" size={14} aria-hidden="true" />
         <span className="tab-dirty-dot" aria-hidden="true" />
       </button>
     </div>
@@ -132,7 +131,7 @@ export function TabBar() {
         />
       ))}
       <button type="button" className="tab-new" aria-label="Nova aba" onClick={() => void newTab()}>
-        +
+        <Plus size={16} aria-hidden="true" />
       </button>
     </div>
   );

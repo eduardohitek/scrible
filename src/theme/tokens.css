@@ -7,50 +7,59 @@
  * aqui, para manter este arquivo só com custom properties, sem seletores
  * além de `:root`. light-dark() compõe com esse color-scheme mais específico
  * sem nenhum retrabalho nos tokens.
+ *
+ * Refresh visual: neutros levemente quentes, chrome (barra do topo, sidebar,
+ * status bar) um tom abaixo da área de escrita, accent índigo único.
  */
 :root {
   /* Cores: superfícies e texto */
-  --color-bg: light-dark(#ffffff, #1e1e1e);
-  --color-surface: light-dark(#f5f5f5, #2a2a2a);
-  --color-surface-elevated: light-dark(#ffffff, #222222);
-  --color-text: light-dark(#333333, #cccccc);
-  --color-text-secondary: light-dark(#666666, #999999);
-  --color-border: light-dark(#dddddd, #444444);
-  --color-border-subtle: light-dark(#e0e0e0, #333333);
+  --color-bg: light-dark(#ffffff, #1b1b1e);
+  --color-surface: light-dark(#f6f6f4, #151517);
+  --color-surface-elevated: light-dark(#ffffff, #26262a);
+  --color-surface-hover: light-dark(rgba(20, 20, 30, 0.05), rgba(255, 255, 255, 0.06));
+  --color-text: light-dark(#1f2024, #e4e4e7);
+  --color-text-secondary: light-dark(#6b6c72, #9b9ba4);
+  --color-border: light-dark(#e2e2de, #34343a);
+  --color-border-subtle: light-dark(#ebebe7, #26262b);
 
-  /* Cores: accent (reaproveita o azul já usado em .cm-md-link desde #12) */
-  --color-accent: light-dark(#0969da, #58a6ff);
-  --color-selection-bg: light-dark(#cce4ff, #1c3a5e);
+  /* Cores: accent (índigo; links, cursor, seleção, estados ativos) */
+  --color-accent: light-dark(#4f5bd5, #8b95ff);
+  --color-accent-soft: light-dark(rgba(79, 91, 213, 0.1), rgba(139, 149, 255, 0.14));
+  --color-selection-bg: light-dark(#dfe2fb, #2f3366);
+  --color-focus-ring: light-dark(rgba(79, 91, 213, 0.45), rgba(139, 149, 255, 0.55));
 
   /* Cores: busca (#16) — highlight de ocorrências no editor */
-  --color-search-match-bg: light-dark(#ffe066, #6b5c00);
-  --color-search-match-selected-bg: light-dark(#ff9f43, #a35400);
+  --color-search-match-bg: light-dark(#ffe58a, #5c4d00);
+  --color-search-match-selected-bg: light-dark(#ffb35c, #94500a);
 
   /* Cores: semânticas de markdown */
-  --color-markdown-heading: var(--color-text);
-  --color-markdown-code-bg: light-dark(#f0f0f0, #2a2a2a);
+  --color-markdown-heading: light-dark(#141518, #f2f2f4);
+  --color-markdown-code-bg: light-dark(#f3f3f0, #26262b);
+  --color-markdown-code-text: light-dark(#b0365a, #f08fb0);
   --color-markdown-link: var(--color-accent);
-  --color-markdown-quote: light-dark(#6a737d, #8b949e);
+  --color-markdown-quote: light-dark(#6b6c72, #9b9ba4);
 
   /* Cores: status */
-  --color-danger-bg: light-dark(#fdecea, #4a1f1f);
-  --color-danger-text: light-dark(#b00020, #ff8a8a);
-  --color-danger-border: light-dark(#f5c6cb, #6b2c2c);
-  --color-warning-bg: light-dark(#fff3cd, #4a3c14);
-  --color-warning-text: light-dark(#664d03, #ffe69c);
-  --color-warning-border: light-dark(#ffe69c, #664d03);
+  --color-success: light-dark(#2f9e5b, #4cc27a);
+  --color-warning: light-dark(#d08a12, #e5a93a);
+  --color-danger-bg: light-dark(#fdecea, #3d1d1f);
+  --color-danger-text: light-dark(#b42318, #ff8f87);
+  --color-danger-border: light-dark(#f6cbc7, #64292b);
+  --color-warning-bg: light-dark(#fff6dc, #3a3015);
+  --color-warning-text: light-dark(#6b4e05, #f3d68a);
+  --color-warning-border: light-dark(#f4e1a6, #5c4a14);
 
   /* Cores: tooltip da toolbar (#60) */
-  --color-tooltip-bg: light-dark(#333333, #eeeeee);
-  --color-tooltip-text: light-dark(#ffffff, #1e1e1e);
+  --color-tooltip-bg: light-dark(#1f2024, #f2f2f4);
+  --color-tooltip-text: light-dark(#ffffff, #1b1b1e);
 
   /* Tipografia */
-  --font-reading: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-reading: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
   --font-size-base: 15px;
   --font-size-xs: 0.75rem;
-  --font-size-sm: 0.8rem;
-  --line-height-base: 1.6;
+  --font-size-sm: 0.8125rem;
+  --line-height-base: 1.7;
   --font-size-h1: 1.6em;
   --font-size-h2: 1.45em;
   --font-size-h3: 1.3em;
@@ -60,8 +69,8 @@
   --opacity-muted: 0.45;
 
   /* Layout */
-  --tab-bar-height: 2.25rem;
-  --status-bar-height: 1.5rem;
+  --tab-bar-height: 2.625rem;
+  --status-bar-height: 1.75rem;
   --pane-min-width: 240px;
   --reading-width: 70ch;
   --icon-size: 16px;
@@ -74,8 +83,12 @@
   --space-5: 1.5rem;
   --space-6: 2rem;
 
-  /* Raio e sombra */
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --shadow-panel: 0 2px 8px light-dark(rgba(0, 0, 0, 0.15), rgba(0, 0, 0, 0.4));
+  /* Raio, sombra e movimento */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --shadow-sm: 0 1px 2px light-dark(rgba(16, 16, 24, 0.06), rgba(0, 0, 0, 0.35));
+  --shadow-panel:
+    0 0 0 1px light-dark(rgba(16, 16, 24, 0.04), rgba(255, 255, 255, 0.02)),
+    0 8px 24px light-dark(rgba(16, 16, 24, 0.12), rgba(0, 0, 0, 0.5));
+  --transition-fast: 120ms ease;
 }

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent } from "react";
+import { ChevronRight, FileText, Folder, FolderOpen } from "lucide-react";
 import { useTabsStore } from "../store/tabsStore";
 import { useExplorerStore, type ExplorerEntry } from "./explorerStore";
 import { ExplorerContextMenu, type ExplorerContextMenuTarget } from "./ExplorerContextMenu";
@@ -24,6 +25,9 @@ function ExplorerNode({ path, entry, depth, renamingPath, onContextMenu, onCommi
   const children = useExplorerStore((state) => state.entriesByDir[path]);
   const toggleDir = useExplorerStore((state) => state.toggleDir);
   const openTab = useTabsStore((state) => state.openTab);
+  const isActiveFile = useTabsStore(
+    (state) => !entry.isDir && state.tabs.some((tab) => tab.id === state.activeTabId && tab.path === path),
+  );
 
   const isRenaming = renamingPath === path;
 
@@ -42,10 +46,24 @@ function ExplorerNode({ path, entry, depth, renamingPath, onContextMenu, onCommi
       <div
         className="explorer-node-row"
         style={{ paddingLeft: `${depth * 14 + 8}px` }}
+        aria-current={isActiveFile || undefined}
         onClick={handleClick}
         onContextMenu={(event) => onContextMenu(event, path, entry.isDir)}
       >
-        {entry.isDir && <span className="explorer-node-chevron">{expanded ? "▾" : "▸"}</span>}
+        {entry.isDir ? (
+          <ChevronRight className="explorer-node-chevron" data-expanded={expanded} size={14} aria-hidden="true" />
+        ) : (
+          <span className="explorer-node-spacer" aria-hidden="true" />
+        )}
+        {entry.isDir ? (
+          expanded ? (
+            <FolderOpen className="explorer-node-icon" size={15} aria-hidden="true" />
+          ) : (
+            <Folder className="explorer-node-icon" size={15} aria-hidden="true" />
+          )
+        ) : (
+          <FileText className="explorer-node-icon" size={15} aria-hidden="true" />
+        )}
         {isRenaming ? (
           <input
             className="explorer-node-rename-input"
@@ -157,6 +175,7 @@ export function ExplorerPanel() {
       style={{ "--explorer-width": `${width}px` } as CSSProperties}
       onContextMenu={(event) => openContextMenu(event, null, true)}
     >
+      <div className="explorer-header">Arquivos</div>
       <div className="explorer-tree">
         {(rootEntries ?? []).map((entry) => (
           <ExplorerNode
