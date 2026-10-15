@@ -33,6 +33,15 @@
     ],
     "macOS": {
       "signingIdentity": "-"
+    },
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "SUBSTITUIR_PELA_CHAVE_PUBLICA_DO_UPDATER",
+      "endpoints": [
+        "https://github.com/eduardohitek/scrible/releases/latest/download/latest.json"
+      ]
     }
   }
 }

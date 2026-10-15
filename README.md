@@ -23,6 +23,10 @@ Cada release traz um `SHA256SUMS.txt` para conferir a integridade do download:
 shasum -a 256 -c SHA256SUMS.txt
 ```
 
+### Atualizações
+
+A partir da primeira versão com o updater, o scrible confere sozinho, ao abrir, se há uma versão nova (e também pelo menu **scrible → Procurar atualizações…**). Ao confirmar no aviso, ele salva as abas, baixa, instala e reinicia. Quem está numa versão anterior ao updater precisa instalar o `.dmg` uma última vez.
+
 ## Stack
 
 - [Tauri v2](https://v2.tauri.app/) (backend Rust) + [React](https://react.dev/) + [TypeScript](https://www.typescriptlang.org/) + [Vite](https://vite.dev/)
@@ -53,7 +57,7 @@ Rode `mise tasks` para a lista completa. As principais:
 | Task | O que faz |
 |---|---|
 | `mise run dev` | Roda o app em modo desenvolvimento |
-| `mise run build` | Compila e gera o instalável (`.app`/`.dmg`) |
+| `mise run build` | Compila e gera o instalável (`.app`/`.dmg`) e o pacote do updater — exige a chave em `TAURI_SIGNING_PRIVATE_KEY` |
 | `mise run lint` | ESLint no frontend + `cargo clippy` no backend |
 | `mise run typecheck` | Verifica os tipos do TypeScript |
 | `mise run test` | Testes do frontend (Vitest) e do backend (`cargo test`) |

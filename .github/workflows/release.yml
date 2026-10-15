@@ -36,12 +36,34 @@ jobs:
       - name: Instalar dependências
         run: mise run setup
 
-      - name: Build (.app / .dmg, assinatura ad-hoc)
+      # Com `createUpdaterArtifacts`, o build também gera
+      # bundle/macos/scrible.app.tar.gz + .sig, assinados com a chave do
+      # updater (minisign, independente da assinatura ad-hoc da Apple).
+      - name: Build (.app / .dmg, assinatura ad-hoc + pacote do updater)
         run: mise run build
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
       - name: Gerar checksum
         working-directory: src-tauri/target/release/bundle/dmg
         run: shasum -a 256 *.dmg > SHA256SUMS.txt
+
+      # Manifesto que o app consulta em releases/latest/download/latest.json
+      # (plugins.updater.endpoints em tauri.conf.json). Pre-releases também o
+      # publicam, mas nunca são a "latest" do GitHub — não são oferecidas.
+      - name: Gerar latest.json do updater
+        working-directory: src-tauri/target/release/bundle/macos
+        run: |
+          jq -n \
+            --arg version "${GITHUB_REF_NAME#v}" \
+            --arg notes "https://github.com/${GITHUB_REPOSITORY}/releases/tag/${GITHUB_REF_NAME}" \
+            --arg pub_date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg signature "$(cat scrible.app.tar.gz.sig)" \
+            --arg url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/scrible.app.tar.gz" \
+            '{version: $version, notes: $notes, pub_date: $pub_date,
+              platforms: {"darwin-aarch64": {signature: $signature, url: $url}}}' \
+            > latest.json
 
       - name: Publicar release
         uses: softprops/action-gh-release@v3
@@ -49,6 +71,9 @@ jobs:
           files: |
             src-tauri/target/release/bundle/dmg/*.dmg
             src-tauri/target/release/bundle/dmg/SHA256SUMS.txt
+            src-tauri/target/release/bundle/macos/scrible.app.tar.gz
+            src-tauri/target/release/bundle/macos/scrible.app.tar.gz.sig
+            src-tauri/target/release/bundle/macos/latest.json
           generate_release_notes: true
           prerelease: ${{ contains(github.ref_name, '-') }}
           body: |

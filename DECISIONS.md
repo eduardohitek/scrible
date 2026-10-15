@@ -1197,3 +1197,44 @@ afetam os dois caminhos igualmente.
 
 **Afeta:** issues de UI futuras devem usar `--color-surface-hover` para hover e
 `--color-accent-soft` para estados ativos, em vez de `--color-selection-bg`.
+
+## Checagem e instalação de atualizações (sem issue)
+
+- **`tauri-plugin-updater` + `tauri-plugin-process`**, decisão via sabatina (contra só abrir o
+  `.dmg` no navegador). O updater baixa `scrible.app.tar.gz`, confere a assinatura minisign com a
+  `pubkey` de `tauri.conf.json` e troca o `.app` no lugar; `relaunch()` reinicia. Essa assinatura
+  é independente da Apple — funciona com a assinatura ad-hoc da `#63`, e como o download é feito
+  pelo próprio app (não por um navegador) não ganha o atributo de quarentena do Gatekeeper.
+  Exigiu subir o `tauri` de 2.11 para 2.12 (dependência do plugin 2.14) e, junto, `@tauri-apps/api`
+  e `@tauri-apps/cli`, que precisam acompanhar o minor do crate.
+- **Chave do updater**: privada no secret `TAURI_SIGNING_PRIVATE_KEY` (+ `_PASSWORD`), pública em
+  `plugins.updater.pubkey`. Perder a privada significa que nenhuma instalação existente aceita mais
+  atualizações — ela precisa ser guardada fora do GitHub também. Com `createUpdaterArtifacts: true`,
+  todo `tauri build` (inclusive `mise run build` local) exige a chave privada no ambiente.
+- **Endpoint `releases/latest/download/latest.json`** do próprio GitHub, sem servidor: o
+  `release.yml` gera o manifesto (`darwin-aarch64` só, mesma restrição da `#63`) com `jq` e publica
+  junto do `.dmg`. "latest" do GitHub nunca é uma pre-release, então tags com `-` (`v0.3.0-rc.1`)
+  nunca são oferecidas pelo updater. `requireSignedVersion` ficou desligado: não foi confirmado
+  que o CLI atual grava a versão no comentário confiável da assinatura; ligá-lo sem isso
+  rejeitaria toda atualização.
+- **Quando checa**: na abertura (`App.tsx`, silenciosa — sem versão nova ou sem rede, nada
+  aparece) e pelo item "Procurar atualizações…" no submenu de app (`app_menu.rs`, id
+  `check_updates`, roteado pelo `registry.ts` da `#60`), que sempre responde (versão nova, "já está
+  na mais recente" ou o erro). Se uma checagem manual já estiver em curso, a da abertura descarta o
+  próprio resultado.
+- **Aviso**: `src/updater/UpdateBanner.tsx`, faixa não-modal no mesmo padrão do `ConflictBanner`
+  (`#10`), em `--color-accent-soft` (informação, não alerta). "Atualizar e reiniciar" roda o mesmo
+  `flushAll()` do Cmd+Q (`#7`/`#24`) antes de baixar; progresso em % (ou MB, se o servidor não
+  mandar o tamanho). "Ver novidades" abre a página da release via `plugin-opener`.
+- **"Pular esta versão"** grava `skippedVersion` em `settings.json` (`AppSettings`, campo de topo,
+  `patchAppSettings` sem merge dedicado — mesmo caso do `zoom` da `#66`). Só a checagem da abertura
+  respeita; a do menu oferece a versão pulada mesmo assim.
+- O `Update` devolvido por `check()` segura um resource no Rust: fica fora do estado zustand
+  (`updateStore.ts`, variável de módulo) e é fechado (`close()`) sempre que o aviso some sem
+  instalar.
+- **Transição**: versões anteriores a esta não têm o updater — a primeira com ele precisa ser
+  instalada pelo `.dmg` uma última vez.
+
+**Afeta:** `#28` (assinar/notarizar) não muda o updater — a assinatura minisign continua por cima
+da da Apple. `#32` (Windows/Linux) precisa acrescentar as plataformas no `latest.json` e o pacote de
+updater de cada uma (`.msi`/`.AppImage` + `.sig`) no `release.yml`.

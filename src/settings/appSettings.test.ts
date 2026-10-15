@@ -37,6 +37,7 @@ describe("appSettings", () => {
       layout: { splitRatio: 0.5, previewVisible: true },
       explorer: { visible: true, width: 240 },
       zoom: 1,
+      skippedVersion: null,
     });
     expect(mockedInvoke).toHaveBeenCalledWith("save_file", {
       path: "/ws/.scrible/settings.json",
@@ -45,6 +46,7 @@ describe("appSettings", () => {
         layout: { splitRatio: 0.5, previewVisible: true },
         explorer: { visible: true, width: 240 },
         zoom: 1,
+        skippedVersion: null,
       }),
       expectedMtime: null,
     });
@@ -93,6 +95,7 @@ describe("appSettings", () => {
         layout: { splitRatio: 0.7, previewVisible: true },
         explorer: { visible: true, width: 240 },
         zoom: 1,
+        skippedVersion: null,
       }),
       expectedMtime: null,
     });
@@ -106,6 +109,7 @@ describe("appSettings", () => {
         layout: { splitRatio: 0.7, previewVisible: true },
         explorer: { visible: true, width: 240 },
         zoom: 1,
+        skippedVersion: null,
       }),
       expectedMtime: null,
     });
@@ -135,6 +139,7 @@ describe("appSettings", () => {
         layout: { splitRatio: 0.5, previewVisible: true },
         explorer: { visible: false, width: 240 },
         zoom: 1,
+        skippedVersion: null,
       }),
       expectedMtime: null,
     });
@@ -155,6 +160,7 @@ describe("appSettings", () => {
       layout: { splitRatio: 0.5, previewVisible: true },
       explorer: { visible: true, width: 240 },
       zoom: 1,
+      skippedVersion: null,
     });
     expect(mockedInvoke).not.toHaveBeenCalledWith("save_file", expect.anything());
   });
@@ -169,6 +175,7 @@ describe("appSettings", () => {
           layout: { splitRatio: 0.5, previewVisible: true },
           explorer: { visible: true, width: 240 },
           zoom: 1.25,
+          skippedVersion: null,
         });
       throw new Error(`unexpected invoke: ${cmd}`);
     });
@@ -188,6 +195,7 @@ describe("appSettings", () => {
           layout: { splitRatio: 0.5, previewVisible: true },
           explorer: { visible: true, width: 240 },
           zoom: 3,
+          skippedVersion: null,
         });
       throw new Error(`unexpected invoke: ${cmd}`);
     });
@@ -195,5 +203,23 @@ describe("appSettings", () => {
     const settings = await loadAppSettings();
 
     expect(settings.zoom).toBe(2);
+  });
+
+  it("skippedVersion é lido de volta, e valor que não é string vira null", async () => {
+    for (const [raw, expected] of [
+      ["0.3.0", "0.3.0"],
+      [42, null],
+    ] as const) {
+      const { loadAppSettings } = await freshModule();
+      mockedInvoke.mockImplementation(async (cmd: string) => {
+        if (cmd === "workspace_status") return { root: "/ws", hidden: "/ws/.scrible" };
+        if (cmd === "read_file") return JSON.stringify({ theme: "system", skippedVersion: raw });
+        throw new Error(`unexpected invoke: ${cmd}`);
+      });
+
+      const settings = await loadAppSettings();
+
+      expect(settings.skippedVersion).toBe(expected);
+    }
   });
 });

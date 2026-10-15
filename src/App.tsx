@@ -17,6 +17,8 @@ import { useZoomShortcuts } from "./zoom/useZoomShortcuts";
 import { runCommand, setEditorBridge } from "./commands/registry";
 import { Toolbar } from "./ui/Toolbar";
 import { StatusBar } from "./ui/StatusBar";
+import { UpdateBanner } from "./updater/UpdateBanner";
+import { useUpdateStore } from "./updater/updateStore";
 import "./theme/tokens.css";
 import "./App.css";
 import "./preview/PreviewPane.css";
@@ -73,6 +75,10 @@ function App() {
   useEffect(() => {
     void initZoom();
   }, [initZoom]);
+
+  useEffect(() => {
+    void useUpdateStore.getState().checkOnStartup();
+  }, []);
 
   useEffect(() => {
     document.documentElement.dataset.theme = resolvedTheme;
@@ -142,6 +148,7 @@ function App() {
           <TabBar />
           <Toolbar />
         </header>
+        <UpdateBanner />
         {activeDoc?.status === "conflict" && <ConflictBanner />}
         <SplitLayout ref={splitLayoutRef} tabId={activeTabId} source={activeDoc?.content ?? ""} />
         <StatusBar />
