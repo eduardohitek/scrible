@@ -26,7 +26,7 @@
   --color-accent: light-dark(#4f5bd5, #8b95ff);
   --color-accent-soft: light-dark(rgba(79, 91, 213, 0.1), rgba(139, 149, 255, 0.14));
   --color-selection-bg: light-dark(#dfe2fb, #2f3366);
-  --color-focus-ring: light-dark(rgba(79, 91, 213, 0.45), rgba(139, 149, 255, 0.55));
+  --color-focus-ring: var(--color-accent);
 
   /* Cores: busca (#16) — highlight de ocorrências no editor */
   --color-search-match-bg: light-dark(#ffe58a, #5c4d00);

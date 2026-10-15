@@ -1119,7 +1119,7 @@ também, e `useZoomShortcuts.ts` vira o dono de todas as variantes, não só das
 - **Paleta**: neutros levemente quentes, chrome (barra do topo, sidebar, status bar) um tom abaixo
   da área de escrita. O accent deixa de ser o azul de link do GitHub (`#22`) e vira um índigo
   (`#4f5bd5`/`#8b95ff`), ainda único. Tokens novos: `--color-surface-hover`, `--color-accent-soft`,
-  `--color-focus-ring`, `--color-success`, `--color-warning`, `--color-markdown-code-text`,
+  `--color-focus-ring` (opaco, igual ao accent, para manter contraste ≥ 3:1 no anel de foco), `--color-success`, `--color-warning`, `--color-markdown-code-text`,
   `--shadow-sm`, `--transition-fast`. Hover usa overlay translúcido (`--color-surface-hover`) em vez
   de `--color-surface-elevated`, que no tema escuro ficava invisível sobre a sidebar.
 - **Abas em pílula** (ativa elevada com sombra leve), `×` só na aba ativa/sob o mouse, ponto de
