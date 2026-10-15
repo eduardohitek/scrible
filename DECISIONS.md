@@ -1159,3 +1159,33 @@ também, e `useZoomShortcuts.ts` vira o dono de todas as variantes, não só das
 Windows/Linux) precisa lembrar que agora existem dois gatilhos (`push: tags` e `workflow_dispatch`)
 alimentando o mesmo job de build — mudanças no `on:` ou nos outputs esperados de `$GITHUB_REF_NAME`
 afetam os dois caminhos igualmente.
+
+## Refresh visual do layout (sem issue)
+
+- **Só camada visual**: nenhuma mudança de comportamento, store ou atalho. O grosso vive em
+  `tokens.css`, `App.css`, `PreviewPane.css` e `editorTheme.ts`; nos componentes, só ícones
+  (`lucide-react`, já dependência desde a `#60`) e marcações para CSS (`aria-current`,
+  `data-state`).
+- **Paleta**: neutros levemente quentes, chrome (barra do topo, sidebar, status bar) um tom abaixo
+  da área de escrita. O accent deixa de ser o azul de link do GitHub (`#22`) e vira um índigo
+  (`#4f5bd5`/`#8b95ff`), ainda único. Tokens novos: `--color-surface-hover`, `--color-accent-soft`,
+  `--color-focus-ring` (opaco, igual ao accent, para manter contraste ≥ 3:1 no anel de foco), `--color-success`, `--color-warning`, `--color-markdown-code-text`,
+  `--shadow-sm`, `--transition-fast`. Hover usa overlay translúcido (`--color-surface-hover`) em vez
+  de `--color-surface-elevated`, que no tema escuro ficava invisível sobre a sidebar.
+- **Abas em pílula** (ativa elevada com sombra leve), `×` só na aba ativa/sob o mouse, ponto de
+  não-salvo no accent. Botões ativos da toolbar (`aria-pressed`) em accent suave.
+- **Explorador**: cabeçalho "Arquivos", chevron/pasta/arquivo com ícones, e o arquivo da aba ativa
+  destacado (`aria-current`, seletor booleano por nó — mesma assinatura por item da `#25`).
+- **Status bar**: ponto colorido no estado de salvamento (verde salvo, âmbar não salvo, accent
+  pulsando ao salvar), via `data-state`; o texto continua o mesmo, testes intactos.
+- **Preview**: tipografia própria para títulos, código inline/bloco, citação, links, `hr`, imagens e
+  tabelas arredondadas — antes ficava nos defaults do navegador. Como `PreviewPane.css` é inlinada
+  no export (`#26`/`#27`), o HTML/PDF exportado herda o mesmo visual.
+- **Editor**: padding lateral e entrelinha 1.7 via `editorTheme.ts`. O padding vertical fica
+  pequeno de propósito: o scroll sync (`#20`) usa `lineBlockAt().top`, que ignora esse deslocamento.
+- Título de `index.html` passou a ser `scrible`. `titleBarStyle: "Overlay"` do Tauri (barra de
+  título integrada) ficou de fora: exige região de arraste e recuo para os semáforos do macOS, a
+  validar no app nativo.
+
+**Afeta:** issues de UI futuras devem usar `--color-surface-hover` para hover e
+`--color-accent-soft` para estados ativos, em vez de `--color-selection-bg`.

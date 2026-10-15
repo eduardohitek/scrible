@@ -26,6 +26,47 @@ body {
   font-family: var(--font-reading);
   color: var(--color-text);
   background: var(--color-bg);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+button {
+  font-family: inherit;
+}
+
+/* Anel de foco só para navegação por teclado — clique de mouse não acende. */
+:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 1px;
+}
+
+/* Scrollbars finas e discretas (WebKit), que só ganham contraste no hover. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: light-dark(rgba(0, 0, 0, 0.14), rgba(255, 255, 255, 0.14));
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: light-dark(rgba(0, 0, 0, 0.28), rgba(255, 255, 255, 0.26));
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+::selection {
+  background: var(--color-selection-bg);
 }
 
 .app-shell {
@@ -59,19 +100,29 @@ body {
    `.app-shell-content`. */
 .app-header {
   display: flex;
-  align-items: stretch;
+  align-items: center;
   flex: 0 0 auto;
   height: var(--tab-bar-height);
+  padding: 0 var(--space-1) 0 var(--space-2);
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border-subtle);
 }
 
+/* Abas em formato de "pílula" dentro da barra: a ativa sobe para a
+   superfície elevada com uma sombra leve, as demais ficam planas. */
 .tab-bar {
   display: flex;
-  align-items: stretch;
+  align-items: center;
+  gap: 2px;
   flex: 1 1 auto;
   min-width: 0;
+  height: 100%;
   overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tab-bar::-webkit-scrollbar {
+  display: none;
 }
 
 .toolbar {
@@ -83,28 +134,42 @@ body {
 }
 
 .toolbar-separator {
-  align-self: stretch;
   width: 1px;
-  margin: var(--space-2) var(--space-1);
-  background: var(--color-border-subtle);
+  height: 18px;
+  margin: 0 var(--space-1);
+  background: var(--color-border);
 }
 
 .tab {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-1);
   flex: 0 0 auto;
-  max-width: 200px;
-  padding: 0 var(--space-2) 0 var(--space-3);
+  max-width: 220px;
+  height: 30px;
+  padding: 0 var(--space-1) 0 var(--space-3);
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
-  border-right: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
   cursor: pointer;
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast);
 }
 
-.tab-active {
+.tab:hover {
   color: var(--color-text);
+  background: var(--color-surface-hover);
+}
+
+.tab-active,
+.tab-active:hover {
+  color: var(--color-text);
+  font-weight: 500;
   background: var(--color-surface-elevated);
+  box-shadow:
+    var(--shadow-sm),
+    0 0 0 1px var(--color-border-subtle);
 }
 
 .tab-title {
@@ -127,20 +192,31 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.1em;
-  font-size: var(--font-size-sm);
-  line-height: 1;
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  padding: 0;
   color: inherit;
   background: none;
   border: none;
+  border-radius: 4px;
   cursor: pointer;
-  padding: var(--space-1);
-  border-radius: var(--radius-sm);
-  opacity: var(--opacity-muted);
+  opacity: 0;
+  transition:
+    opacity var(--transition-fast),
+    background-color var(--transition-fast);
+}
+
+/* O × só aparece na aba ativa ou sob o mouse — menos ruído com várias abas. */
+.tab:hover .tab-close,
+.tab-active .tab-close,
+.tab-close:focus-visible {
+  opacity: 0.6;
 }
 
 .tab-close:hover {
-  opacity: 1;
+  opacity: 1 !important;
+  background: var(--color-surface-hover);
 }
 
 /* Indicador de não-salvo (#60): os dois glifos ficam no DOM o tempo todo,
@@ -148,10 +224,10 @@ body {
    (e perder o :hover) ao trocar de estado. */
 .tab-dirty-dot {
   display: none;
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  background: currentColor;
+  background: var(--color-accent);
 }
 
 .tab-close[data-dirty="true"] {
@@ -175,14 +251,27 @@ body {
 }
 
 .tab-new {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex: 0 0 auto;
-  width: var(--tab-bar-height);
-  font-size: var(--font-size-base);
+  width: 28px;
+  height: 28px;
+  margin-left: var(--space-1);
+  padding: 0;
   color: var(--color-text-secondary);
   background: none;
   border: none;
-  border-right: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
   cursor: pointer;
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.tab-new:hover {
+  color: var(--color-text);
+  background: var(--color-surface-hover);
 }
 
 /* flex-grow: 1 em ambos os painéis (não flex: 0 0 ...) é o que faz o toggle
@@ -211,8 +300,12 @@ body {
   font-size: var(--font-size-base);
 }
 
+.editor-pane .cm-editor.cm-focused {
+  outline: none;
+}
+
 .split-divider {
-  flex: 0 0 8px;
+  flex: 0 0 9px;
   cursor: col-resize;
   background: transparent;
 }
@@ -224,10 +317,15 @@ body {
   height: 100%;
   margin: 0 auto;
   background: var(--color-border-subtle);
+  transition:
+    background-color var(--transition-fast),
+    width var(--transition-fast);
 }
 
 .split-divider:hover::after,
 .is-resizing .split-divider::after {
+  width: 3px;
+  border-radius: 2px;
   background: var(--color-accent);
 }
 
@@ -296,15 +394,32 @@ body {
   text-decoration: line-through;
 }
 
+.cm-md-h1,
+.cm-md-h2,
+.cm-md-h3,
+.cm-md-h4,
+.cm-md-h5,
+.cm-md-h6 {
+  color: var(--color-markdown-heading);
+  letter-spacing: -0.01em;
+}
+
 .cm-md-inline-code,
 .cm-md-fenced-code {
   font-family: var(--font-mono);
+  font-size: 0.92em;
   background: var(--color-markdown-code-bg);
+}
+
+.cm-md-inline-code {
+  border-radius: 4px;
 }
 
 .cm-md-link {
   color: var(--color-markdown-link);
   text-decoration: underline;
+  text-decoration-color: var(--color-accent-soft);
+  text-underline-offset: 3px;
 }
 
 /* Estilos de conteúdo do preview (.preview-pane, mermaid, tabelas, front
@@ -318,23 +433,27 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: calc(var(--icon-size) + 2 * var(--space-2));
-  height: calc(var(--icon-size) + 2 * var(--space-2));
+  width: 30px;
+  height: 30px;
+  padding: 0;
   color: var(--color-text-secondary);
   background: none;
   border: none;
   border-radius: var(--radius-sm);
   cursor: pointer;
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast);
 }
 
 .icon-button:hover {
   color: var(--color-text);
-  background: var(--color-surface-elevated);
+  background: var(--color-surface-hover);
 }
 
 .icon-button[aria-pressed="true"] {
-  color: var(--color-text);
-  background: var(--color-selection-bg);
+  color: var(--color-accent);
+  background: var(--color-accent-soft);
 }
 
 /* Tooltip próprio (#60): o `title` nativo do WKWebView demora ~1,5s pra
@@ -353,20 +472,31 @@ body {
   transform: translateX(-50%);
   white-space: nowrap;
   font-size: var(--font-size-xs);
+  font-weight: 500;
   color: var(--color-tooltip-text);
   background: var(--color-tooltip-bg);
   border-radius: var(--radius-sm);
-  padding: var(--space-1) var(--space-2);
+  box-shadow: var(--shadow-panel);
+  padding: 5px var(--space-2);
   pointer-events: none;
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.1s ease 0.4s;
+  transition: opacity 0.12s ease 0.4s;
   z-index: 30;
 }
 
 [data-tooltip]:hover::after {
   opacity: 1;
   visibility: visible;
+}
+
+/* Tooltips dos últimos botões da barra ancoram pela direita, senão o texto
+   ("Tema — Sistema") vazaria para fora da janela. */
+.toolbar > :last-child [data-tooltip]::after,
+.toolbar > :nth-last-child(2) [data-tooltip]::after {
+  left: auto;
+  right: 0;
+  transform: none;
 }
 
 /* Superfície compartilhada de popover (#60): substitui as 3 versões
@@ -382,6 +512,18 @@ body {
   padding: var(--space-1);
   list-style: none;
   margin: 0;
+  animation: popover-in 120ms ease-out;
+}
+
+@keyframes popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 /* Item de menu dentro de um popover — não usa o seletor genérico `button`
@@ -396,13 +538,17 @@ body {
   background: none;
   border: none;
   border-radius: var(--radius-sm);
-  padding: var(--space-1) var(--space-2);
+  padding: 6px var(--space-2);
   cursor: pointer;
 }
 
-.popover-menu-item:hover,
+.popover-menu-item:hover {
+  background: var(--color-surface-hover);
+}
+
 .popover-menu-item[aria-current="true"] {
-  background: var(--color-selection-bg);
+  color: var(--color-accent);
+  background: var(--color-accent-soft);
 }
 
 .theme-toggle-container,
@@ -455,7 +601,7 @@ body {
   align-items: center;
   justify-content: space-between;
   font-size: var(--font-size-sm);
-  padding: var(--space-1) var(--space-1);
+  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-2);
   border-bottom: 1px solid var(--color-border-subtle);
 }
 
@@ -465,7 +611,17 @@ body {
 
 .history-item button {
   font-size: var(--font-size-xs);
+  font-weight: 500;
+  color: var(--color-accent);
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 3px var(--space-2);
   cursor: pointer;
+}
+
+.history-item button:hover {
+  background: var(--color-accent-soft);
 }
 
 /* Entra no fluxo normal (#60) — antes ficava `position: absolute` cobrindo
@@ -491,12 +647,18 @@ body {
 
 .conflict-banner-actions button {
   font-size: var(--font-size-sm);
+  font-weight: 500;
   cursor: pointer;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--color-warning-text);
-  background: transparent;
-  color: inherit;
-  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-warning-border);
+  background: var(--color-surface-elevated);
+  color: var(--color-text);
+  padding: var(--space-1) var(--space-3);
+  box-shadow: var(--shadow-sm);
+}
+
+.conflict-banner-actions button:hover {
+  border-color: var(--color-warning-text);
 }
 
 /* Barra de status (#60): substitui o `.save-indicator` intermitente por uma
@@ -520,6 +682,36 @@ body {
   gap: var(--space-3);
 }
 
+.status-bar-save-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Ponto colorido do estado de salvamento: verde salvo, âmbar não salvo,
+   accent pulsando enquanto grava. */
+.status-bar-save-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-success);
+}
+
+.status-bar-save-state[data-state="dirty"] .status-bar-save-dot {
+  background: var(--color-warning);
+}
+
+.status-bar-save-state[data-state="saving"] .status-bar-save-dot {
+  background: var(--color-accent);
+  animation: save-pulse 1s ease-in-out infinite;
+}
+
+@keyframes save-pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+
 .explorer-panel {
   position: relative;
   flex: 0 0 var(--explorer-width);
@@ -530,8 +722,17 @@ body {
   border-right: 1px solid var(--color-border-subtle);
 }
 
+.explorer-header {
+  padding: var(--space-4) var(--space-4) var(--space-2);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
 .explorer-tree {
-  padding: var(--space-2) 0;
+  padding: 0 var(--space-2) var(--space-2);
 }
 
 .explorer-resize-handle {
@@ -541,28 +742,59 @@ body {
   bottom: 0;
   width: 4px;
   cursor: col-resize;
+  transition: background-color var(--transition-fast);
+}
+
+.explorer-resize-handle:hover {
+  background: var(--color-accent);
 }
 
 .explorer-node-row {
   display: flex;
   align-items: center;
-  gap: var(--space-1);
-  padding: var(--space-1) var(--space-2);
+  gap: 6px;
+  height: 28px;
+  padding: 0 var(--space-2);
   font-size: var(--font-size-sm);
   color: var(--color-text);
+  border-radius: var(--radius-sm);
   cursor: pointer;
   white-space: nowrap;
+  transition: background-color var(--transition-fast);
 }
 
 .explorer-node-row:hover {
-  background: var(--color-surface-elevated);
+  background: var(--color-surface-hover);
+}
+
+.explorer-node-row[aria-current="true"] {
+  color: var(--color-accent);
+  font-weight: 500;
+  background: var(--color-accent-soft);
+}
+
+.explorer-node-chevron,
+.explorer-node-icon {
+  flex: 0 0 auto;
+  color: var(--color-text-secondary);
 }
 
 .explorer-node-chevron {
-  display: inline-block;
-  width: 1em;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
+  transition: transform var(--transition-fast);
+}
+
+.explorer-node-chevron[data-expanded="true"] {
+  transform: rotate(90deg);
+}
+
+/* Arquivos não têm chevron — o espaçador mantém o ícone alinhado ao das
+   pastas irmãs. */
+.explorer-node-spacer {
+  flex: 0 0 14px;
+}
+
+.explorer-node-row[aria-current="true"] .explorer-node-icon {
+  color: var(--color-accent);
 }
 
 .explorer-node-name {
@@ -592,7 +824,7 @@ body {
 
 .explorer-context-menu-separator {
   height: 1px;
-  margin: var(--space-1) 0;
+  margin: var(--space-1) var(--space-1);
   background: var(--color-border-subtle);
 }
 

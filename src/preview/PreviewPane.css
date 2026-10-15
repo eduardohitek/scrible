@@ -4,8 +4,10 @@
  * (via import `?raw`) pelo export HTML standalone, sem duplicar regras.
  */
 .preview-pane {
-  padding: var(--space-4) var(--space-6);
+  padding: var(--space-5) var(--space-6) var(--space-6);
   line-height: var(--line-height-base);
+  font-size: var(--font-size-base);
+  overflow-wrap: break-word;
 }
 
 /* Largura de leitura (#60): aplicada aos filhos, não ao `.preview-pane` —
@@ -18,38 +20,194 @@
   margin-inline: auto;
 }
 
+/* Tipografia do conteúdo (refresh visual): hierarquia de títulos, código,
+   citações e links — antes ficava tudo nos defaults do navegador. */
+.preview-pane h1,
+.preview-pane h2,
+.preview-pane h3,
+.preview-pane h4,
+.preview-pane h5,
+.preview-pane h6 {
+  color: var(--color-markdown-heading);
+  font-weight: 650;
+  line-height: 1.3;
+  letter-spacing: -0.015em;
+  margin-top: 1.6em;
+  margin-bottom: 0.6em;
+}
+
+.preview-pane > h1:first-child,
+.preview-pane > h2:first-child,
+.preview-pane > .front-matter + h1 {
+  margin-top: 0.4em;
+}
+
+.preview-pane h1 {
+  font-size: 2em;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+.preview-pane h2 {
+  font-size: 1.45em;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.preview-pane h3 {
+  font-size: 1.2em;
+}
+
+.preview-pane h4 {
+  font-size: 1.05em;
+}
+
+.preview-pane h5,
+.preview-pane h6 {
+  font-size: 0.95em;
+  color: var(--color-text-secondary);
+}
+
+.preview-pane p,
+.preview-pane ul,
+.preview-pane ol {
+  margin-top: 0;
+  margin-bottom: 1em;
+}
+
+.preview-pane li + li {
+  margin-top: 0.25em;
+}
+
+.preview-pane li::marker {
+  color: var(--color-text-secondary);
+}
+
+.preview-pane a {
+  color: var(--color-markdown-link);
+  text-decoration: underline;
+  text-decoration-color: var(--color-accent-soft);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+  transition: text-decoration-color 120ms ease;
+}
+
+.preview-pane a:hover {
+  text-decoration-color: currentColor;
+}
+
+.preview-pane strong {
+  font-weight: 650;
+  color: var(--color-markdown-heading);
+}
+
+.preview-pane code {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+  color: var(--color-markdown-code-text);
+  background: var(--color-markdown-code-bg);
+  border-radius: 4px;
+  padding: 0.15em 0.4em;
+}
+
+.preview-pane pre {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+  line-height: 1.6;
+  background: var(--color-markdown-code-bg);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  margin: 0 auto 1.2em;
+  overflow-x: auto;
+}
+
+.preview-pane pre code {
+  font-size: inherit;
+  color: inherit;
+  background: none;
+  border-radius: 0;
+  padding: 0;
+}
+
+.preview-pane blockquote {
+  color: var(--color-markdown-quote);
+  border-left: 3px solid var(--color-accent);
+  background: var(--color-accent-soft);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  padding: var(--space-2) var(--space-4);
+  margin-top: 0;
+  margin-bottom: 1.2em;
+}
+
+.preview-pane blockquote > :last-child {
+  margin-bottom: 0;
+}
+
+.preview-pane hr {
+  height: 1px;
+  border: none;
+  background: var(--color-border);
+  margin: 2em auto;
+}
+
+.preview-pane img {
+  max-width: 100%;
+  border-radius: var(--radius-sm);
+}
+
+.preview-pane mark {
+  background: var(--color-search-match-bg);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 0.15em;
+}
+
 .mermaid-diagram {
   display: flex;
   justify-content: center;
-  margin: var(--space-4) 0;
+  margin: var(--space-4) auto;
 }
 
 .mermaid-error {
   color: var(--color-danger-text);
   background: var(--color-danger-bg);
   border: 1px solid var(--color-danger-border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   padding: var(--space-2) var(--space-3);
   font-family: var(--font-mono);
   font-size: var(--font-size-sm);
-  margin: var(--space-4) 0;
+  margin: var(--space-4) auto;
 }
 
 .preview-pane table {
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   width: 100%;
-  margin: var(--space-4) 0;
+  margin: var(--space-4) auto;
   font-size: var(--font-size-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
 }
 
 .preview-pane th,
 .preview-pane td {
-  border: 1px solid var(--color-border);
-  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border-subtle);
+  padding: var(--space-2) var(--space-3);
   text-align: left;
 }
 
+.preview-pane tr > :not(:last-child) {
+  border-right: 1px solid var(--color-border-subtle);
+}
+
+.preview-pane tbody tr:last-child td {
+  border-bottom: none;
+}
+
 .preview-pane thead th {
+  font-weight: 600;
   background: var(--color-surface);
 }
 
@@ -64,10 +222,11 @@
 
 .preview-pane .task-list-item-checkbox {
   margin-right: var(--space-2);
+  accent-color: var(--color-accent);
 }
 
 .front-matter {
-  margin-bottom: var(--space-4);
+  margin-bottom: var(--space-5);
 }
 
 .front-matter-table {
@@ -81,6 +240,11 @@
   text-align: left;
   padding: var(--space-1) var(--space-2);
   border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.front-matter-table tr:last-child th,
+.front-matter-table tr:last-child td {
+  border-bottom: none;
 }
 
 .front-matter-table th {

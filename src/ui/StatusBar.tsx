@@ -22,10 +22,10 @@ export function StatusBar() {
   const saveState = !activeDoc
     ? null
     : activeDoc.status === "saving"
-      ? "Salvando…"
+      ? ({ key: "saving", label: "Salvando…" } as const)
       : activeDoc.dirty
-        ? "Não salvo"
-        : "Salvo";
+        ? ({ key: "dirty", label: "Não salvo" } as const)
+        : ({ key: "saved", label: "Salvo" } as const);
 
   return (
     <div className="status-bar">
@@ -34,7 +34,12 @@ export function StatusBar() {
       </span>
       <span className="status-bar-right">
         {zoom !== 1 && <span className="status-bar-zoom">{Math.round(zoom * 100)}%</span>}
-        {saveState && <span className="status-bar-save-state">{saveState}</span>}
+        {saveState && (
+          <span className="status-bar-save-state" data-state={saveState.key}>
+            <span className="status-bar-save-dot" aria-hidden="true" />
+            <span>{saveState.label}</span>
+          </span>
+        )}
       </span>
     </div>
   );
