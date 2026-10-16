@@ -1286,7 +1286,7 @@ Plano fechado via sabatina (matriz, instaladores e updater ficam para o PR 2).
 - **Paths no Windows**: o Rust devolve `C:\Users\…`, mas o frontend monta/compara caminhos com `/`
   (`lastIndexOf("/")`, `startsWith(`${dir}/`)`, rename de pasta, roteamento do watcher). Todo path
   que entra do Rust ou do diálogo de abrir passa por `normalizePath` (`src/fs/paths.ts`) na
-  fronteira (`workspace_status` em `App.tsx`/`appSettings.ts`, `openFileDialog`). O Rust aceita `/`
+  fronteira — só no Windows (`isWindows()`), porque em macOS/Linux `\` é caractere válido de nome (`workspace_status` em `App.tsx`/`appSettings.ts`, `openFileDialog`). O Rust aceita `/`
   no Windows, então o path normalizado volta sem conversão. O hash do histórico (`#8`) é por string
   do path; Windows é instalação nova, então não há migração.
 - **Workspace no Linux**: `document_dir()` falha sem XDG user-dirs; `workspace::bootstrap` cai para

@@ -4,6 +4,10 @@ export function isMac(): boolean {
   return typeof navigator !== "undefined" && /^Mac/i.test(navigator.platform);
 }
 
+export function isWindows(): boolean {
+  return typeof navigator !== "undefined" && /^Win/i.test(navigator.platform);
+}
+
 /** Tecla "primária" da plataforma: ⌘ no macOS, Ctrl nos demais (DECISIONS.md #32). */
 export function hasPrimaryModifier(event: Pick<KeyboardEvent, "metaKey" | "ctrlKey">): boolean {
   return isMac() ? event.metaKey : event.ctrlKey;
