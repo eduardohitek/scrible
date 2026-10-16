@@ -1345,6 +1345,7 @@ entra na lista `platforms` de `build-release-assets.sh` e na matriz do `build`.
 - **Um comando, três motores**: `export_pdf` existe nas três plataformas. macOS segue com
   `WKWebView.createPDF`; Windows usa `ICoreWebView2_7::PrintToPdf` e Linux usa
   `WebKitPrintOperation` com a "impressora" `Print to File` (sem diálogo), ambos A4 com fundos.
+  O nome da impressora vem de `dgettext("gtk30", …)`, porque o GTK o traduz (pt-BR incluso).
   Item de menu (`app_menu.rs`), `ExportMenu.tsx` e `registry.ts` voltaram a aparecer em todas.
 - **HTML via arquivo temporário + `file://`**, não `NavigateToString`: o WebView2 limita a 2 MB e
   documentos com vários diagramas mermaid em SVG passam disso. O fim do load vem de `on_page_load`.

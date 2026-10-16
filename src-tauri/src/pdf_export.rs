@@ -297,7 +297,11 @@ mod portable {
                 return;
             };
             let settings = gtk::PrintSettings::new();
-            settings.set_printer("Print to File");
+            // O GTK traduz o nome da impressora virtual (domínio `gtk30`), e o
+            // WebKit a procura pelo nome traduzido: em pt-BR "Print to File"
+            // sozinho dá "Printer not found". `dgettext` devolve o mesmo
+            // texto que o GTK usa; sem tradução, volta o msgid em inglês.
+            settings.set_printer(&gtk::glib::dgettext(Some("gtk30"), "Print to File"));
             settings.set(gtk::PRINT_SETTINGS_OUTPUT_FILE_FORMAT, Some("pdf"));
             settings.set(gtk::PRINT_SETTINGS_OUTPUT_URI, Some(uri.as_str()));
             let page = gtk::PageSetup::new();
