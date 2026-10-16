@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useTabsStore } from "../store/tabsStore";
+import { hasPrimaryModifier } from "../platform/platform";
 
 /**
  * Atalhos globais de abas (Cmd+1-9/Shift+]/[). Registrados em `window` — não
@@ -11,7 +12,7 @@ import { useTabsStore } from "../store/tabsStore";
 export function useTabShortcuts() {
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (!event.metaKey) return;
+      if (!hasPrimaryModifier(event)) return;
 
       const { focusTabByIndex, focusNextTab, focusPrevTab } = useTabsStore.getState();
 

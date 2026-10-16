@@ -4,6 +4,7 @@ import { useThemeStore, type ThemePreference } from "../theme/themeStore";
 import { useTabsStore } from "../store/tabsStore";
 import { useZoomStore } from "../zoom/zoomStore";
 import { useUpdateStore } from "../updater/updateStore";
+import { formatShortcut, isMac } from "../platform/platform";
 import { exportActiveTabAsHtml, exportActiveTabAsPdf } from "../export/exportHtml";
 
 /** Ponte imperativa para ações que só existem dentro da árvore React (hoje,
@@ -44,19 +45,19 @@ export const commands: readonly AppCommand[] = [
   {
     id: "new_tab",
     label: "Nova aba",
-    shortcut: "⌘T",
+    shortcut: formatShortcut("⌘T"),
     run: () => useTabsStore.getState().newTab(),
   },
   {
     id: "open_file",
     label: "Abrir arquivo…",
-    shortcut: "⌘O",
+    shortcut: formatShortcut("⌘O"),
     run: () => useTabsStore.getState().openFileDialog(),
   },
   {
     id: "close_tab",
     label: "Fechar aba",
-    shortcut: "⌘W",
+    shortcut: formatShortcut("⌘W"),
     run: () => {
       const { activeTabId, closeTab } = useTabsStore.getState();
       if (activeTabId) void closeTab(activeTabId);
@@ -73,13 +74,13 @@ export const commands: readonly AppCommand[] = [
   {
     id: "find",
     label: "Buscar",
-    shortcut: "⌘F",
+    shortcut: formatShortcut("⌘F"),
     run: () => editorBridge?.openSearch(),
   },
   {
     id: "cycle_view_mode",
     label: "Alternar modo de exibição",
-    shortcut: "⇧⌘P",
+    shortcut: formatShortcut("⇧⌘P"),
     run: () => useLayoutStore.getState().cycleViewMode(),
   },
   {
@@ -103,26 +104,26 @@ export const commands: readonly AppCommand[] = [
   {
     id: "toggle_explorer",
     label: "Alternar explorador",
-    shortcut: "⇧⌘E",
+    shortcut: formatShortcut("⇧⌘E"),
     run: () => useExplorerStore.getState().toggle(),
     isActive: () => useExplorerStore.getState().visible,
   },
   {
     id: "zoom_in",
     label: "Aumentar",
-    shortcut: "⌘=",
+    shortcut: formatShortcut("⌘="),
     run: () => useZoomStore.getState().zoomIn(),
   },
   {
     id: "zoom_out",
     label: "Diminuir",
-    shortcut: "⌘-",
+    shortcut: formatShortcut("⌘-"),
     run: () => useZoomStore.getState().zoomOut(),
   },
   {
     id: "zoom_reset",
     label: "Tamanho original",
-    shortcut: "⌘0",
+    shortcut: formatShortcut("⌘0"),
     run: () => useZoomStore.getState().resetZoom(),
   },
   {
@@ -130,11 +131,16 @@ export const commands: readonly AppCommand[] = [
     label: "Exportar para HTML…",
     run: () => exportActiveTabAsHtml(),
   },
-  {
-    id: "export_pdf",
-    label: "Exportar para PDF…",
-    run: () => exportActiveTabAsPdf(),
-  },
+  // PDF só no macOS (#27); Windows/Linux ficam sem o comando até o follow-up da #32.
+  ...(isMac()
+    ? [
+        {
+          id: "export_pdf",
+          label: "Exportar para PDF…",
+          run: () => exportActiveTabAsPdf(),
+        },
+      ]
+    : []),
   {
     id: "check_updates",
     label: "Procurar atualizações…",

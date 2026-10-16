@@ -1,6 +1,7 @@
 mod app_menu;
 mod fs_ops;
 mod history;
+#[cfg(target_os = "macos")]
 mod pdf_export;
 mod tree_watcher;
 mod watcher;

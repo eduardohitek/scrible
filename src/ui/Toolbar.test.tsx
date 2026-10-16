@@ -1,3 +1,4 @@
+import { formatShortcut } from "../platform/platform";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { invoke } from "@tauri-apps/api/core";
@@ -38,7 +39,7 @@ describe("Toolbar", () => {
     render(<Toolbar />);
 
     const button = screen.getByRole("button", { name: "Modo de exibição: Visualização" });
-    expect(button.getAttribute("data-tooltip")).toBe("Visualização — ⇧⌘P alterna");
+    expect(button.getAttribute("data-tooltip")).toBe(`Visualização — ${formatShortcut("⇧⌘P")} alterna`);
 
     fireEvent.click(button);
     expect(cycleViewMode).toHaveBeenCalledOnce();

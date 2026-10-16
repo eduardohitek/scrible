@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderHook } from "@testing-library/react";
 import { useZoomShortcuts } from "./useZoomShortcuts";
 import { useZoomStore } from "./zoomStore";
@@ -8,6 +8,11 @@ function fireKeydown(init: KeyboardEventInit) {
 }
 
 describe("useZoomShortcuts", () => {
+  beforeEach(() => {
+    vi.spyOn(navigator, "platform", "get").mockReturnValue("MacIntel");
+  });
+
+  afterEach(() => vi.restoreAllMocks());
   beforeEach(() => {
     useZoomStore.setState({
       zoomIn: vi.fn().mockResolvedValue(undefined),
@@ -47,5 +52,12 @@ describe("useZoomShortcuts", () => {
     fireKeydown({ key: "+", metaKey: true });
 
     expect(useZoomStore.getState().zoomIn).not.toHaveBeenCalled();
+  });
+
+  it("fora do macOS, Ctrl+Shift++ chama zoomIn", () => {
+    vi.spyOn(navigator, "platform", "get").mockReturnValue("Linux x86_64");
+    renderHook(() => useZoomShortcuts());
+    fireKeydown({ key: "+", ctrlKey: true, shiftKey: true });
+    expect(useZoomStore.getState().zoomIn).toHaveBeenCalled();
   });
 });

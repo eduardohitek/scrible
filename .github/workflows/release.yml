@@ -9,15 +9,69 @@ on:
   # tag (proteção anti-recursão do GitHub Actions), mas workflow_dispatch é
   # uma exceção explícita a essa regra — ver DECISIONS.md.
   workflow_dispatch:
+    inputs:
+      # Modo de teste (#32): roda em qualquer branch, builda as 5 plataformas e
+      # sobe os instaladores como artefatos do workflow, sem publicar release.
+      dry_run:
+        description: "Só builda e sobe os instaladores como artefatos (não publica release)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
 
 jobs:
   build:
-    runs-on: macos-latest
+    name: build (${{ matrix.name }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macos-arm64
+            runner: macos-latest
+            build_args: ""
+            bundle_glob: |
+              src-tauri/target/release/bundle/dmg/*.dmg
+              src-tauri/target/release/bundle/macos/scrible.app.tar.gz
+              src-tauri/target/release/bundle/macos/scrible.app.tar.gz.sig
+          - name: windows-x64
+            runner: windows-latest
+            build_args: "--bundles nsis"
+            bundle_glob: |
+              src-tauri/target/release/bundle/nsis/*-setup.exe
+              src-tauri/target/release/bundle/nsis/*-setup.exe.sig
+          - name: windows-arm64
+            runner: windows-11-arm
+            build_args: "--bundles nsis"
+            bundle_glob: |
+              src-tauri/target/release/bundle/nsis/*-setup.exe
+              src-tauri/target/release/bundle/nsis/*-setup.exe.sig
+          - name: linux-x64
+            runner: ubuntu-22.04
+            build_args: "--bundles appimage,deb"
+            bundle_glob: |
+              src-tauri/target/release/bundle/appimage/*.AppImage
+              src-tauri/target/release/bundle/appimage/*.AppImage.sig
+              src-tauri/target/release/bundle/deb/*.deb
+          - name: linux-arm64
+            runner: ubuntu-22.04-arm
+            build_args: "--bundles appimage,deb"
+            bundle_glob: |
+              src-tauri/target/release/bundle/appimage/*.AppImage
+              src-tauri/target/release/bundle/appimage/*.AppImage.sig
+              src-tauri/target/release/bundle/deb/*.deb
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v5
+
+      - name: Dependências do sistema (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libayatana-appindicator3-dev patchelf
 
       - name: Instalar mise
         uses: jdx/mise-action@v4
@@ -25,27 +79,41 @@ jobs:
           cache: true
 
       - name: Conferir tag × versão do package.json
+        if: ${{ !inputs.dry_run }}
         run: ./scripts/check-version.sh "$GITHUB_REF_NAME"
 
       - name: Cache node_modules
         uses: actions/cache@v5
         with:
           path: node_modules
-          key: ${{ runner.os }}-npm-${{ hashFiles('package-lock.json') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-npm-${{ hashFiles('package-lock.json') }}
 
       - name: Instalar dependências
         run: mise run setup
 
-      # Com `createUpdaterArtifacts`, o build também gera
-      # bundle/macos/scrible.app.tar.gz + .sig, assinados com a chave do
-      # updater (minisign, independente da assinatura ad-hoc da Apple).
-      - name: Build (.app / .dmg, assinatura ad-hoc + pacote do updater)
-        run: mise run build
+      # Com `createUpdaterArtifacts`, o build também gera o pacote do updater
+      # de cada plataforma + .sig, assinados com a chave do updater (minisign,
+      # independente da assinatura ad-hoc da Apple). Os bundles de cada
+      # plataforma são escolhidos aqui via `--bundles`, sem mexer no
+      # `"targets": "all"` global (o `mise run build` local continua igual).
+      - name: Build
+        run: npm run tauri build -- ${{ matrix.build_args }}
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
+      - name: Subir instaladores como artefatos (modo de teste)
+        if: ${{ inputs.dry_run }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: scrible-${{ matrix.name }}
+          path: ${{ matrix.bundle_glob }}
+          if-no-files-found: error
+
+      # Até o PR de release das 3 plataformas (#32, PR 2), só o macOS é
+      # publicado, exatamente como antes.
       - name: Gerar checksum
+        if: ${{ !inputs.dry_run && runner.os == 'macOS' }}
         working-directory: src-tauri/target/release/bundle/dmg
         run: shasum -a 256 *.dmg > SHA256SUMS.txt
 
@@ -53,6 +121,7 @@ jobs:
       # (plugins.updater.endpoints em tauri.conf.json). Pre-releases também o
       # publicam, mas nunca são a "latest" do GitHub — não são oferecidas.
       - name: Gerar latest.json do updater
+        if: ${{ !inputs.dry_run && runner.os == 'macOS' }}
         working-directory: src-tauri/target/release/bundle/macos
         run: |
           jq -n \
@@ -66,6 +135,7 @@ jobs:
             > latest.json
 
       - name: Publicar release
+        if: ${{ !inputs.dry_run && runner.os == 'macOS' }}
         uses: softprops/action-gh-release@v3
         with:
           files: |

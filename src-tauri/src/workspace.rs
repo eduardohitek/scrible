@@ -51,12 +51,24 @@ pub fn ensure_workspace(base: &Path) -> Result<WorkspacePaths, WorkspaceError> {
 /// Resolve o diretório Documents do usuário via API do Tauri e delega a
 /// criação idempotente para `ensure_workspace`.
 pub fn bootstrap(app: &AppHandle) -> Result<WorkspacePaths, WorkspaceError> {
-    let documents = app
-        .path()
-        .document_dir()
-        .map_err(|err| WorkspaceError::Io(err.to_string()))?;
+    let documents = resolve_documents_dir(
+        app.path().document_dir().ok(),
+        app.path().home_dir().ok(),
+    )?;
 
     ensure_workspace(&documents)
+}
+
+/// Linux sem XDG user-dirs configurado faz `document_dir()` falhar; nesse caso
+/// cai para `~/Documents`. Quando o XDG existe (ex.: `~/Documentos` em pt-BR),
+/// ele tem prioridade.
+fn resolve_documents_dir(
+    documents: Option<PathBuf>,
+    home: Option<PathBuf>,
+) -> Result<PathBuf, WorkspaceError> {
+    documents
+        .or_else(|| home.map(|h| h.join("Documents")))
+        .ok_or_else(|| WorkspaceError::Io("não foi possível resolver a pasta Documents".to_string()))
 }
 
 #[cfg(test)]
@@ -64,6 +76,23 @@ mod tests {
     use super::*;
     #[cfg(unix)]
     use std::os::unix::fs::PermissionsExt;
+
+    #[test]
+    fn documents_dir_prefers_xdg_over_home_fallback() {
+        let docs = resolve_documents_dir(Some(PathBuf::from("/h/Documentos")), Some(PathBuf::from("/h"))).unwrap();
+        assert_eq!(docs, PathBuf::from("/h/Documentos"));
+    }
+
+    #[test]
+    fn documents_dir_falls_back_to_home_documents() {
+        let docs = resolve_documents_dir(None, Some(PathBuf::from("/h"))).unwrap();
+        assert_eq!(docs, PathBuf::from("/h/Documents"));
+    }
+
+    #[test]
+    fn documents_dir_errors_without_documents_or_home() {
+        assert!(resolve_documents_dir(None, None).is_err());
+    }
 
     #[test]
     fn creates_workspace_dirs_on_first_run() {

@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { normalizePath } from "../fs/paths";
 import { DEFAULT_ZOOM, snapZoom } from "../zoom/zoomLevels";
 
 export type ThemePreference = "system" | "light" | "dark";
@@ -106,7 +107,7 @@ async function writeSettings(settings: AppSettings): Promise<void> {
 
 async function doLoad(): Promise<AppSettings> {
   const { hidden } = await invoke<WorkspacePaths>("workspace_status");
-  settingsPath = `${hidden}/settings.json`;
+  settingsPath = `${normalizePath(hidden)}/settings.json`;
 
   try {
     const raw = await invoke<string>("read_file", { path: settingsPath });

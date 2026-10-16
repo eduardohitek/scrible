@@ -1278,3 +1278,41 @@ A paleta de comandos (issue B da `#60`) já encontra os 4 comandos de modo no `r
   verificação manual (mesma postura da `#24`).
 
 **Afeta:** nada pendente. Se o autor mudar, é só o `authors` do `Cargo.toml`.
+
+## #32 (PR 1) — App multiplataforma, CI em 3 SOs e modo de teste do release
+
+Plano fechado via sabatina (matriz, instaladores e updater ficam para o PR 2).
+
+- **Paths no Windows**: o Rust devolve `C:\Users\…`, mas o frontend monta/compara caminhos com `/`
+  (`lastIndexOf("/")`, `startsWith(`${dir}/`)`, rename de pasta, roteamento do watcher). Todo path
+  que entra do Rust ou do diálogo de abrir passa por `normalizePath` (`src/fs/paths.ts`) na
+  fronteira (`workspace_status` em `App.tsx`/`appSettings.ts`, `openFileDialog`). O Rust aceita `/`
+  no Windows, então o path normalizado volta sem conversão. O hash do histórico (`#8`) é por string
+  do path; Windows é instalação nova, então não há migração.
+- **Workspace no Linux**: `document_dir()` falha sem XDG user-dirs; `workspace::bootstrap` cai para
+  `~/Documents`. Com XDG configurado (ex.: `~/Documentos`), ele tem prioridade.
+- **Tecla primária**: `src/platform/platform.ts` (`isMac`, `hasPrimaryModifier`, `formatShortcut`),
+  sem dependência nova. `useTabShortcuts`/`useZoomShortcuts` usam `ctrlKey` fora do macOS; os
+  rótulos de `registry.ts` viram `Ctrl+T`, `Ctrl+Shift+P`… Menu (`CmdOrCtrl+…`) e CodeMirror
+  (`Mod-`) já se adaptavam. `navigator.platform` é vazio no jsdom: testes que dependem de
+  plataforma forçam o valor (`vi.spyOn(navigator, "platform", "get")`; o registry precisa de
+  `vi.hoisted` porque decide `export_pdf` em tempo de import).
+- **Menu igual nas três plataformas** (inclusive o submenu "scrible"). Consequência: a previsão da
+  `#66` de que o zoom viraria listener JS fora do macOS não se confirmou — `Ctrl+=`/`-`/`0`
+  continuam vindo do accelerator do menu. Se menu e listener JS disparam juntos no Windows/Linux
+  não está confirmado; faz parte do checklist de validação manual.
+- **Exportar PDF escondido fora do macOS**: `mod pdf_export` e o item de menu só sob
+  `cfg(target_os = "macos")`; comando do registry e item do `ExportMenu` só com `isMac()`.
+  Follow-up: implementar via WebView2 `PrintToPdf` / impressão do WebKitGTK.
+- **CI** (`ci.yml`): matriz macOS, `ubuntu-22.04` e `windows-latest`, com as libs do WebKitGTK no
+  Linux para o clippy compilar.
+- **Modo de teste do `release.yml`**: `workflow_dispatch` com `dry_run` builda as 5 plataformas
+  (macOS arm64, Windows x64/arm64, Linux x64/arm64, builds nativos) e sobe os instaladores como
+  artefatos, sem checar tag nem publicar. Sem `dry_run`, só o macOS é publicado, como antes.
+  `--bundles` por plataforma na linha de comando, sem tocar no `"targets": "all"` global.
+- **Observação de ambiente**: `workspace::tests::reports_permission_denied_on_existing_readonly_dir`
+  falha quando os testes rodam como root (root ignora `0o500`) — já falhava em `main`; não é regressão.
+
+**Afeta:** `#32` PR 2 (publicação das 3 plataformas, `latest.json` com 5 chaves, corpo da release,
+README), issue de follow-up do PDF, e qualquer código novo que monte paths (usar `normalizePath`
+em tudo que vier do Rust/diálogos).

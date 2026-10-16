@@ -9,6 +9,7 @@ import { SplitLayout, type SplitLayoutHandle } from "./layout/SplitLayout";
 import { useLayoutStore } from "./layout/layoutStore";
 import { useDocumentStore, DEFAULT_DOCUMENT } from "./store/documentStore";
 import { useTabsStore } from "./store/tabsStore";
+import { normalizePath } from "./fs/paths";
 import { useExplorerStore } from "./explorer/explorerStore";
 import { ExplorerPanel } from "./explorer/ExplorerPanel";
 import { useThemeStore } from "./theme/themeStore";
@@ -54,7 +55,8 @@ function App() {
 
   useEffect(() => {
     invoke<WorkspacePaths>("workspace_status")
-      .then(async ({ root }) => {
+      .then(async ({ root: rawRoot }) => {
+        const root = normalizePath(rawRoot);
         useTabsStore.getState().setWorkspaceRoot(root);
         await useTabsStore.getState().openTab(`${root}/untitled.md`, { fallbackContent: DEFAULT_DOCUMENT });
         await useExplorerStore.getState().init(root);
