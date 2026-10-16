@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderHook } from "@testing-library/react";
 import { useTabShortcuts } from "./useTabShortcuts";
 import { useTabsStore } from "../store/tabsStore";
@@ -12,6 +12,11 @@ function fireKeydown(init: KeyboardEventInit) {
 }
 
 describe("useTabShortcuts", () => {
+  beforeEach(() => {
+    vi.spyOn(navigator, "platform", "get").mockReturnValue("MacIntel");
+  });
+
+  afterEach(() => vi.restoreAllMocks());
   beforeEach(() => {
     useTabsStore.setState({
       workspaceRoot: "/root",
@@ -55,5 +60,14 @@ describe("useTabShortcuts", () => {
     unmount();
     fireKeydown({ key: "3", metaKey: true });
     expect(useTabsStore.getState().focusTabByIndex).not.toHaveBeenCalled();
+  });
+
+  it("fora do macOS, Ctrl+3 chama focusTabByIndex(3) e Cmd+3 é ignorado", () => {
+    vi.spyOn(navigator, "platform", "get").mockReturnValue("Win32");
+    renderHook(() => useTabShortcuts());
+    fireKeydown({ key: "3", metaKey: true });
+    expect(useTabsStore.getState().focusTabByIndex).not.toHaveBeenCalled();
+    fireKeydown({ key: "3", ctrlKey: true });
+    expect(useTabsStore.getState().focusTabByIndex).toHaveBeenCalledWith(3);
   });
 });

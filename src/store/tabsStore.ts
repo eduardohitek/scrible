@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
+import { normalizePath } from "../fs/paths";
 import { useDocumentStore } from "./documentStore";
 import { discard as discardEditorState } from "../editor/editorStateRegistry";
 
@@ -99,7 +100,7 @@ export const useTabsStore = create<TabsState>((set, get) => ({
       multiple: false,
       directory: false,
     });
-    if (typeof path === "string") await get().openTab(path);
+    if (typeof path === "string") await get().openTab(normalizePath(path));
   },
 
   newTab: async (targetDir) => {

@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { Download } from "lucide-react";
 import { runCommand } from "../commands/registry";
+import { isMac } from "../platform/platform";
 import { useClickOutside } from "../ui/useClickOutside";
 
 /** Mesmo idioma de popover de `ThemeToggle`/`HistoryPanel` — um único slot
@@ -37,11 +38,13 @@ export function ExportMenu() {
               Exportar para HTML…
             </button>
           </li>
-          <li>
-            <button type="button" className="popover-menu-item" onClick={() => runAndClose("export_pdf")}>
-              Exportar para PDF…
-            </button>
-          </li>
+          {isMac() && (
+            <li>
+              <button type="button" className="popover-menu-item" onClick={() => runAndClose("export_pdf")}>
+                Exportar para PDF…
+              </button>
+            </li>
+          )}
         </ul>
       )}
     </div>

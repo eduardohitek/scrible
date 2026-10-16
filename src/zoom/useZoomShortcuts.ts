@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useZoomStore } from "./zoomStore";
+import { hasPrimaryModifier } from "../platform/platform";
 
 /**
  * Variantes com Shift do zoom (⌘⇧+ / ⌘⇧_) — as únicas que não têm accelerator
@@ -11,7 +12,7 @@ import { useZoomStore } from "./zoomStore";
 export function useZoomShortcuts() {
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (!event.metaKey || !event.shiftKey) return;
+      if (!hasPrimaryModifier(event) || !event.shiftKey) return;
 
       const { zoomIn, zoomOut } = useZoomStore.getState();
 

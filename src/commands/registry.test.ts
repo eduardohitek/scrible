@@ -6,6 +6,13 @@ import { useThemeStore } from "../theme/themeStore";
 import { useTabsStore } from "../store/tabsStore";
 import { useZoomStore } from "../zoom/zoomStore";
 import { exportActiveTabAsHtml, exportActiveTabAsPdf } from "../export/exportHtml";
+import { formatShortcut } from "../platform/platform";
+
+// O registry decide em tempo de import se `export_pdf` existe (só no macOS) —
+// `navigator.platform` vem vazio no jsdom, então precisa ser forçado antes do import.
+vi.hoisted(() => {
+  Object.defineProperty(navigator, "platform", { value: "MacIntel", configurable: true });
+});
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
@@ -138,7 +145,7 @@ describe("commands registry", () => {
   it("getCommand expõe label e shortcut pra exibição (ex.: tooltip da Toolbar)", () => {
     const command = getCommand("cycle_view_mode");
     expect(command?.label).toBe("Alternar modo de exibição");
-    expect(command?.shortcut).toBe("⇧⌘P");
+    expect(command?.shortcut).toBe(formatShortcut("⇧⌘P"));
     expect(getCommand("nao_existe")).toBeUndefined();
   });
 
