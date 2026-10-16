@@ -22,7 +22,7 @@ pub enum FsError {
 }
 
 impl FsError {
-    fn from_io(err: io::Error, path: &Path) -> Self {
+    pub(crate) fn from_io(err: io::Error, path: &Path) -> Self {
         match err.kind() {
             io::ErrorKind::NotFound => FsError::NotFound {
                 path: path.display().to_string(),

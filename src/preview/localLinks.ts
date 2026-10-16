@@ -20,8 +20,9 @@ export function prepareLocalLinks(
     const path = resolveWorkspaceLink(link.getAttribute('href')!, documentPath, root)
     if (!path) return
     event.preventDefault()
+    // openTab creates missing files, so a broken link is checked first.
     const action = /\.md$/i.test(path)
-      ? useTabsStore.getState().openTab(path)
+      ? invoke('check_workspace_file', { path }).then(() => useTabsStore.getState().openTab(path))
       : invoke('open_workspace_file', { path })
     void action.catch((error: unknown) => console.error('falha ao abrir link local:', error))
   }

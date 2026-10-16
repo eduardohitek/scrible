@@ -1429,6 +1429,12 @@ restauradas de outros arquivos não recebem alteração externa em tempo real.
   raiz real do workspace**, incluindo o fallback de Documents do Linux. Links `.md` abrem abas;
   outros arquivos abrem no aplicativo padrão via `open_workspace_file`, que valida arquivo
   existente e caminho canônico dentro do workspace. URLs remotas e âncoras mantêm o comportamento.
+- Links `.md` passam antes por `check_workspace_file`: `openTab`/`initDocument` **criam** arquivos
+  ausentes (fluxo de "novo arquivo"), e um link quebrado não pode virar arquivo vazio no disco — o
+  clique só registra o erro. `open_workspace_file` recusa extensões que executam código ao abrir
+  (`.command`, `.pkg`, `.sh`, `.exe`, `.js`, `.webloc`… lista em `file_index.rs`) e, no Unix,
+  arquivos sem extensão com bit de execução (o macOS os roda no Terminal): Markdown de terceiros
+  não pode executar nada com um clique no preview.
 - Troca de documento invalida imediatamente o source debounced do preview, para não resolver os
   links da aba anterior contra o path novo. Exports continuam consumindo o pipeline original,
   sem URLs asset do preview; embutir imagens em HTML/PDF exportados é outro escopo.

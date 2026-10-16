@@ -29,7 +29,7 @@ describe('local links in the preview', () => {
     )
   })
 
-  it('opens Markdown in a tab and other files in the system app', () => {
+  it('opens Markdown in a tab and other files in the system app', async () => {
     const open = vi.spyOn(useTabsStore.getState(), 'openTab').mockResolvedValue()
     const { container } = render(
       <PreviewPane
@@ -40,10 +40,25 @@ describe('local links in the preview', () => {
     )
     const links = container.querySelectorAll('a')
     fireEvent.click(links[0])
-    expect(open).toHaveBeenCalledWith('/w/b.md')
+    expect(invoke).toHaveBeenCalledWith('check_workspace_file', { path: '/w/b.md' })
+    await vi.waitFor(() => expect(open).toHaveBeenCalledWith('/w/b.md'))
     fireEvent.click(links[1])
     expect(invoke).toHaveBeenCalledWith('open_workspace_file', { path: '/w/report.pdf' })
     open.mockRestore()
+  })
+
+  it('does not open (and so create) a missing Markdown file from a broken link', async () => {
+    const open = vi.spyOn(useTabsStore.getState(), 'openTab').mockResolvedValue()
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.mocked(invoke).mockRejectedValueOnce({ kind: 'NotFound', path: '/w/typo.md' })
+    const { container } = render(
+      <PreviewPane source="[typo](typo.md)" documentPath="/w/a.md" workspaceRoot="/w" />,
+    )
+    fireEvent.click(container.querySelector('a')!)
+    await vi.waitFor(() => expect(log).toHaveBeenCalled())
+    expect(open).not.toHaveBeenCalled()
+    open.mockRestore()
+    log.mockRestore()
   })
 
   it('shows the new document immediately when switching tabs, without resolving stale links', () => {

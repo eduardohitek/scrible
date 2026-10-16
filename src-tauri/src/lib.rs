@@ -142,10 +142,18 @@ async fn list_workspace_files(state: tauri::State<'_, WorkspaceState>) -> Result
         .await.map_err(|err| FsError::Io { message: err.to_string() })?
 }
 
+/// Links `.md` do preview só abrem aba de arquivo existente — `openTab` cria
+/// arquivos ausentes, e um link quebrado não pode virar arquivo vazio no disco.
+#[tauri::command]
+fn check_workspace_file(path: String, state: tauri::State<WorkspaceState>) -> Result<(), FsError> {
+    let root = &state.0.as_ref().map_err(|err| FsError::Io { message: err.to_string() })?.root;
+    file_index::workspace_file(root, &PathBuf::from(path)).map(|_| ())
+}
+
 #[tauri::command]
 fn open_workspace_file(app: AppHandle, path: String, state: tauri::State<WorkspaceState>) -> Result<(), FsError> {
     let root = &state.0.as_ref().map_err(|err| FsError::Io { message: err.to_string() })?.root;
-    let path = file_index::workspace_file(root, &PathBuf::from(path))?;
+    let path = file_index::openable_workspace_file(root, &PathBuf::from(path))?;
     app.opener().open_path(path.to_string_lossy().into_owned(), None::<&str>)
         .map_err(|err| FsError::Io { message: err.to_string() })
 }
@@ -221,6 +229,7 @@ pub fn run() {
             list_dir,
             list_dir_entries,
             list_workspace_files,
+            check_workspace_file,
             open_workspace_file,
             create_dir,
             delete_dir,
