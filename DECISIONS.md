@@ -1265,3 +1265,16 @@ updater de cada uma (`.msi`/`.AppImage` + `.sig`) no `release.yml`.
 
 **Afeta:** o `previewVisible` citado na `#19` não existe mais — código novo deve ler `viewMode`.
 A paleta de comandos (issue B da `#60`) já encontra os 4 comandos de modo no `registry.ts`.
+
+## Item "Sobre o scrible" no menu do app (sem issue)
+
+- **`PredefinedMenuItem::about`, não um item customizado**: usa o painel nativo de cada SO, sem
+  UI nova nem evento JS. É o primeiro item do submenu "scrible" em `app_menu.rs`.
+- **Nome e versão vêm de `app.package_info()`**, que o Tauri preenche a partir do `package.json`
+  (via `tauri.conf.json`) — continua valendo que a versão vive só lá. O autor vem de `authors` no
+  `Cargo.toml` (`CARGO_PKG_AUTHORS`), com fallback "Eduardo Hitek" se estiver vazio.
+- **O painel do macOS ignora `AboutMetadata.authors`**, então o autor também vai em `credits`
+  ("Autor: …"), que é o campo exibido lá. Testes cobrem só o parse de autores; o painel em si é
+  verificação manual (mesma postura da `#24`).
+
+**Afeta:** nada pendente. Se o autor mudar, é só o `authors` do `Cargo.toml`.
