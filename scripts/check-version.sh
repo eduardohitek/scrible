@@ -19,7 +19,9 @@ if [[ -z "$tag_version" || "$tag" == "$tag_version" ]]; then
   exit 1
 fi
 
-pkg_version="$(node -p "require('$repo_root/package.json').version")"
+# Caminho relativo a partir da raiz: no Git Bash do Windows `$repo_root` vem como
+# /d/a/..., que o Node (nativo do Windows) não resolve — #32.
+pkg_version="$(cd "$repo_root" && node -p "require('./package.json').version")"
 
 if [[ "$tag_version" != "$pkg_version" ]]; then
   echo "Divergência de versão: tag '$tag' (=> $tag_version) != package.json ($pkg_version)" >&2
