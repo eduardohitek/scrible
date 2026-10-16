@@ -45,6 +45,10 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const mountedTabIdRef = useRef<string | null>(null);
+  // Enquanto verdadeiro, eventos de scroll não sobrescrevem o scrollTop salvo:
+  // logo após montar/trocar de aba o layout ainda não foi medido e o DOM pode
+  // clampar a posição restaurada (sessão, #9) antes de ela valer de fato.
+  const restoringScrollRef = useRef(false);
 
   const content = useDocumentStore((state) => state.documents[tabId]?.content ?? "");
   const setContent = useDocumentStore((state) => state.setContent);
@@ -56,7 +60,12 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
     const state = getOrCreateEditorState(tabId, content, onChange);
 
     if (!viewRef.current) {
-      viewRef.current = new EditorView({ state, parent: containerRef.current });
+      const created = new EditorView({ state, parent: containerRef.current });
+      created.scrollDOM.addEventListener("scroll", () => {
+        const current = mountedTabIdRef.current;
+        if (current && !restoringScrollRef.current) saveScrollTop(current, created.scrollDOM.scrollTop);
+      });
+      viewRef.current = created;
     } else {
       const previousTabId = mountedTabIdRef.current;
       if (previousTabId && previousTabId !== tabId) {
@@ -66,7 +75,16 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
       viewRef.current.setState(state);
     }
     mountedTabIdRef.current = tabId;
-    viewRef.current.scrollDOM.scrollTop = getScrollTop(tabId);
+    const view = viewRef.current;
+    const targetScrollTop = getScrollTop(tabId);
+    view.scrollDOM.scrollTop = targetScrollTop;
+    if (targetScrollTop > 0) {
+      restoringScrollRef.current = true;
+      requestAnimationFrame(() => {
+        if (mountedTabIdRef.current === tabId) view.scrollDOM.scrollTop = targetScrollTop;
+        restoringScrollRef.current = false;
+      });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- só a troca de aba dispara isto; conteúdo é resincronizado no efeito abaixo
   }, [tabId]);
 
@@ -76,7 +94,10 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
       const tabIdAtUnmount = mountedTabIdRef.current;
       if (view && tabIdAtUnmount) {
         saveEditorState(tabIdAtUnmount, view.state);
-        saveScrollTop(tabIdAtUnmount, view.scrollDOM.scrollTop);
+        // Durante a restauração o DOM ainda pode ter clampado o scroll (ex.:
+        // o cleanup de teste do StrictMode logo após a montagem) — não
+        // sobrescreve a posição salva com esse valor.
+        if (!restoringScrollRef.current) saveScrollTop(tabIdAtUnmount, view.scrollDOM.scrollTop);
       }
       view?.destroy();
       // Sem isto, o StrictMode do React 18 (mount -> cleanup -> mount, só em

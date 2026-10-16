@@ -1,10 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { EditorView } from "@codemirror/view";
 import {
   discard,
   getOrCreateEditorState,
+  getPosition,
   getScrollTop,
   saveEditorState,
   saveScrollTop,
+  seedPosition,
+  subscribePositions,
 } from "./editorStateRegistry";
 
 describe("editorStateRegistry", () => {
@@ -75,5 +79,44 @@ describe("editorStateRegistry", () => {
 
     expect(state1.doc.toString()).toBe("aba 1");
     expect(state2.doc.toString()).toBe("aba 2");
+  });
+});
+
+describe("posição para a sessão (#9)", () => {
+  it("seedPosition define o cursor inicial do EditorState criado depois", () => {
+    discard("tab-seed");
+    seedPosition("tab-seed", 4, 77);
+    const state = getOrCreateEditorState("tab-seed", "abcdefgh", () => {});
+    expect(state.selection.main.head).toBe(4);
+    expect(getPosition("tab-seed")).toEqual({ cursorPos: 4, scrollTop: 77 });
+    discard("tab-seed");
+  });
+
+  it("limita o cursor semeado ao tamanho do documento", () => {
+    discard("tab-seed");
+    seedPosition("tab-seed", 999, 0);
+    const state = getOrCreateEditorState("tab-seed", "abc", () => {});
+    expect(state.selection.main.head).toBe(3);
+    discard("tab-seed");
+  });
+
+  it("acompanha o cursor movido num EditorView real", () => {
+    discard("tab-seed");
+    const view = new EditorView({ state: getOrCreateEditorState("tab-seed", "abcdef", () => {}) });
+    view.dispatch({ selection: { anchor: 5 } });
+    expect(getPosition("tab-seed").cursorPos).toBe(5);
+    view.destroy();
+    discard("tab-seed");
+  });
+
+  it("notifica assinantes quando o scroll é salvo", () => {
+    const listener = vi.fn();
+    const unsubscribe = subscribePositions(listener);
+    saveScrollTop("tab-seed", 10);
+    expect(listener).toHaveBeenCalledTimes(1);
+    unsubscribe();
+    saveScrollTop("tab-seed", 11);
+    expect(listener).toHaveBeenCalledTimes(1);
+    discard("tab-seed");
   });
 });
