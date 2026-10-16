@@ -1404,3 +1404,38 @@ release publicada (o job `publish` não rodou). **Lição:** passo que só roda 
 **Afeta:** qualquer issue que mude o shape de `Tab` ou crie outra fonte de abas abertas precisa manter
 `collectSession()` em sincronia. O watcher continua observando só `untitled.md` (dívida de `#21`): abas
 restauradas de outros arquivos não recebem alteração externa em tempo real.
+
+## #31 — Autocomplete grupo C: caminhos de arquivos e imagens
+
+- Links sugerem **todos os arquivos visíveis, priorizando `.md`**; imagens só `.png`, `.jpg`,
+  `.jpeg`, `.gif`, `.svg` e `.webp` (case-insensitive). Decisão confirmada com o usuário, resolvendo
+  a diferença entre o contexto técnico e o primeiro critério de aceite da issue.
+- `file_index.rs` percorre a raiz do workspace recursivamente, sem ler conteúdo, ignorando ocultos,
+  temporários `.scrible-tmp` e symlinks (evita ciclos/saídas do workspace). O novo command
+  `list_workspace_files` roda em `spawn_blocking`; nenhum scan acontece durante a digitação.
+- `src/workspace/fileIndex.ts` mantém um snapshot em memória; o evento **existente**
+  `workspace-tree-changed` (#25) atualiza o explorador e esse índice. Não foi criado outro watcher.
+  Scans concorrentes são coalescidos, com uma nova passagem se houver eventos durante a anterior;
+  consultas usam o snapshot anterior durante refresh, e falhas preservam esse snapshot.
+- A quarta fonte entra no mesmo `autocompletion({ override })` de `slashMenu.ts` (#14/#15).
+  `createEditorCompletion` recebe uma função que consulta o path atual **da aba** no documentStore,
+  cobrindo rename sem remontar o editor. Só dispara no destino inline de link/imagem, fora de
+  código, destinos remotos, absolutos e âncoras. Setas/Enter/Esc vêm do CodeMirror.
+- Sugestões exibem paths relativos legíveis; a inserção codifica cada segmento como URL (inclusive
+  espaços, parênteses, `%` e `#`), mantendo a sintaxe Markdown válida. `src/fs/linkPaths.ts` é a
+  implementação compartilhada de paths relativos e resolução lexical, usando `/` como na #32.
+- O preview passa a receber `documentPath`/`workspaceRoot`. Depois da sanitização, imagens locais
+  são convertidas com `convertFileSrc`; o protocolo asset é habilitado com escopo dinâmico **só da
+  raiz real do workspace**, incluindo o fallback de Documents do Linux. Links `.md` abrem abas;
+  outros arquivos abrem no aplicativo padrão via `open_workspace_file`, que valida arquivo
+  existente e caminho canônico dentro do workspace. URLs remotas e âncoras mantêm o comportamento.
+- Troca de documento invalida imediatamente o source debounced do preview, para não resolver os
+  links da aba anterior contra o path novo. Exports continuam consumindo o pipeline original,
+  sem URLs asset do preview; embutir imagens em HTML/PDF exportados é outro escopo.
+- Verificação automatizada: índice com 600 arquivos, refresh concorrente/falhas, filtragem/inserção,
+  teclado com EditorView real, preview e paths entre pastas. O app de desenvolvimento compilou e
+  iniciou; inspeção visual não foi possível porque Computer Use não tem permissão neste ambiente.
+
+**Afeta:** fontes futuras de autocomplete devem usar a mesma factory/override. Novos consumidores
+podem reutilizar o índice sem outro watcher; imagens locais fora do workspace continuam fora do
+escopo do protocolo asset desta issue.

@@ -1,4 +1,5 @@
 mod app_menu;
+mod file_index;
 mod fs_ops;
 mod history;
 mod pdf_export;
@@ -13,6 +14,7 @@ use fs_ops::FsError;
 use history::{HistoryError, RestoreResult, SnapshotInfo};
 use session::{Session, SessionError};
 use tauri::{AppHandle, Emitter, Manager, WindowEvent};
+use tauri_plugin_opener::OpenerExt;
 use watcher::LastSaveMtime;
 use workspace::{WorkspaceError, WorkspacePaths};
 
@@ -134,6 +136,21 @@ fn list_dir_entries(path: String) -> Result<Vec<fs_ops::DirEntry>, FsError> {
 }
 
 #[tauri::command]
+async fn list_workspace_files(state: tauri::State<'_, WorkspaceState>) -> Result<Vec<String>, FsError> {
+    let root = state.0.as_ref().map_err(|err| FsError::Io { message: err.to_string() })?.root.clone();
+    tauri::async_runtime::spawn_blocking(move || file_index::scan(&root))
+        .await.map_err(|err| FsError::Io { message: err.to_string() })?
+}
+
+#[tauri::command]
+fn open_workspace_file(app: AppHandle, path: String, state: tauri::State<WorkspaceState>) -> Result<(), FsError> {
+    let root = &state.0.as_ref().map_err(|err| FsError::Io { message: err.to_string() })?.root;
+    let path = file_index::workspace_file(root, &PathBuf::from(path))?;
+    app.opener().open_path(path.to_string_lossy().into_owned(), None::<&str>)
+        .map_err(|err| FsError::Io { message: err.to_string() })
+}
+
+#[tauri::command]
 fn create_dir(path: String) -> Result<(), FsError> {
     fs_ops::create_dir(&PathBuf::from(path))
 }
@@ -169,6 +186,7 @@ pub fn run() {
 
             let last_save_mtime = LastSaveMtime::default();
             if let Ok(paths) = &result {
+                app.asset_protocol_scope().allow_directory(&paths.root, true)?;
                 let target = paths.root.join("untitled.md");
                 watcher::start_watching(app.handle().clone(), target, last_save_mtime.clone());
                 tree_watcher::start_watching(app.handle().clone(), paths.root.clone(), paths.hidden.clone());
@@ -202,6 +220,8 @@ pub fn run() {
             delete_file,
             list_dir,
             list_dir_entries,
+            list_workspace_files,
+            open_workspace_file,
             create_dir,
             delete_dir,
             quit_app,

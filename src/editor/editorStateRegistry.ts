@@ -5,9 +5,10 @@ import { searchKeymap } from "@codemirror/search";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { markdownDecorations } from "./markdownDecorations";
 import { markdownEditingKeymap } from "./markdownCommands";
-import { editorCompletion } from "./slashMenu";
+import { createEditorCompletion } from "./slashMenu";
 import { editorTheme } from "./editorTheme";
 import { searchExtensions } from "./searchExtensions";
+import { useDocumentStore } from "../store/documentStore";
 
 const states = new Map<string, EditorState>();
 const scrollTops = new Map<string, number>();
@@ -27,7 +28,7 @@ function buildExtensions(tabId: string, onChange: (value: string) => void) {
     markdown({ base: markdownLanguage }),
     markdownDecorations(),
     markdownEditingKeymap,
-    editorCompletion,
+    createEditorCompletion(() => useDocumentStore.getState().documents[tabId]?.path ?? null),
     searchExtensions,
     editorTheme,
     EditorView.updateListener.of((update) => {
