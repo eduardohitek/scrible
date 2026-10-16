@@ -159,6 +159,16 @@ mod tests {
         assert!(workspace_file(tmp.path(), &tmp.path().join("external.md")).is_err());
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn rejects_markdown_reached_through_a_symlinked_directory_outside() {
+        let tmp = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        fs::write(outside.path().join("note.md"), "").unwrap();
+        std::os::unix::fs::symlink(outside.path(), tmp.path().join("external")).unwrap();
+        assert!(workspace_file(tmp.path(), &tmp.path().join("external/note.md")).is_err());
+    }
+
     #[test]
     fn missing_files_are_not_found_instead_of_being_created() {
         let tmp = tempfile::tempdir().unwrap();
