@@ -1340,6 +1340,16 @@ em tudo que vier do Rust/diálogos).
 **Afeta:** `#28` (notarização) só mexe no passo de build do macOS; qualquer nova plataforma/formato
 entra na lista `platforms` de `build-release-assets.sh` e na matriz do `build`.
 
+### Bugfix pós-merge (#32): `check-version.sh` quebrava no Windows
+
+A primeira release de teste (`v0.6.0-rc.1`) falhou nos dois jobs Windows em `check-version.sh`: no Git
+Bash o `$repo_root` vira `/d/a/scrible/scrible`, caminho que o Node (binário nativo do Windows) não
+resolve em `require('$repo_root/package.json')`. O `dry_run` não pegou porque ele pula esse passo.
+Fix: `cd "$repo_root"` e `require('./package.json')`. Como a tag `v0.6.0-rc.1` já aponta para o script
+antigo (e reescrever tag está fora de questão), a validação continua em `v0.6.0-rc.2`; a rc.1 ficou sem
+release publicada (o job `publish` não rodou). **Lição:** passo que só roda com tag não é coberto pelo
+`dry_run` — o `dry_run` deveria exercitar também a checagem de versão (contra a versão atual, sem tag).
+
 ## #81 — Exportar PDF no Windows e no Linux
 
 - **Um comando, três motores**: `export_pdf` existe nas três plataformas. macOS segue com
