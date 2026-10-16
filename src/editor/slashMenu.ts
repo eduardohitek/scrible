@@ -5,6 +5,7 @@ import {
   type CompletionResult,
   snippetCompletion,
 } from "@codemirror/autocomplete";
+import { createPathCompletionSource } from "./pathCompletions";
 import type { Extension } from "@codemirror/state";
 import {
   fenceLanguageSource,
@@ -69,11 +70,15 @@ export function slashCommandSource(context: CompletionContext): CompletionResult
   return { from: word.from, options, filter: false };
 }
 
-/** Extensão única de autocomplete do editor: registra as três fontes (menu
- * `/`, linguagem de fence, tipo de diagrama mermaid) no mesmo `override` —
+/** Extensão única de autocomplete do editor: registra as fontes (menu
+ * `/`, linguagem de fence, tipo de diagrama mermaid e caminhos) no mesmo `override` —
  * `autocompletion()` não soma entre instâncias, uma segunda extensão
  * substituiria esta configuração em vez de complementá-la. */
-export const editorCompletion: Extension = autocompletion({
-  override: [slashCommandSource, fenceLanguageSource, mermaidTypeSource],
-  icons: false,
-});
+export function createEditorCompletion(getDocumentPath: () => string | null): Extension {
+  return autocompletion({
+    override: [slashCommandSource, fenceLanguageSource, mermaidTypeSource, createPathCompletionSource(getDocumentPath)],
+    icons: false,
+  });
+}
+
+export const editorCompletion: Extension = createEditorCompletion(() => null);

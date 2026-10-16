@@ -1,6 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type CSSProperties } from "react";
 import { EditorPane, type EditorPaneHandle } from "../editor/EditorPane";
 import { PreviewPane, type PreviewPaneHandle } from "../preview/PreviewPane";
+import { useTabsStore } from "../store/tabsStore";
 import { useLayoutStore } from "./layoutStore";
 import { clampSplitRatio } from "./constants";
 import { useScrollSync } from "./useScrollSync";
@@ -22,6 +23,8 @@ export const SplitLayout = forwardRef<SplitLayoutHandle, SplitLayoutProps>(funct
   { tabId, source },
   ref,
 ) {
+  const documentPath = useTabsStore((state) => state.tabs.find((tab) => tab.id === tabId)?.path);
+  const workspaceRoot = useTabsStore((state) => state.workspaceRoot);
   const splitRatio = useLayoutStore((state) => state.splitRatio);
   const viewMode = useLayoutStore((state) => state.viewMode);
   const setSplitRatio = useLayoutStore((state) => state.setSplitRatio);
@@ -128,7 +131,7 @@ export const SplitLayout = forwardRef<SplitLayoutHandle, SplitLayoutProps>(funct
               onMouseDown={handleDividerMouseDown}
             />
           )}
-          <PreviewPane ref={previewRef} source={source} />
+          <PreviewPane ref={previewRef} source={source} documentPath={documentPath} workspaceRoot={workspaceRoot} />
         </>
       )}
       {isDragging && <div className="split-drag-overlay" />}

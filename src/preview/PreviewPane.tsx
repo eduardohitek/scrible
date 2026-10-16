@@ -2,10 +2,13 @@ import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState }
 import DOMPurify from "dompurify";
 import mermaid from "mermaid";
 import { useThemeStore } from "../theme/themeStore";
+import { prepareLocalLinks } from "./localLinks";
 import { md, extractFrontMatter, renderFrontMatterTable } from "./markdownPipeline";
 
 interface PreviewPaneProps {
   source: string;
+  documentPath?: string;
+  workspaceRoot?: string | null;
 }
 
 /** API imperativa mínima para o sync de scroll (#20) orquestrar o preview
@@ -26,7 +29,7 @@ let mermaidIdCounter = 0;
  * ```mermaid``` via mermaid.js.
  */
 export const PreviewPane = forwardRef<PreviewPaneHandle, PreviewPaneProps>(function PreviewPane(
-  { source },
+  { source, documentPath, workspaceRoot },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -37,7 +40,9 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, PreviewPaneProps>(funct
   // Debounce do parse/sanitização: o primeiro render é imediato (useState já
   // inicializa com `source`); mudanças seguintes só disparam um novo parse
   // depois de RENDER_DEBOUNCE_MS de silêncio.
-  const [debouncedSource, setDebouncedSource] = useState(source);
+  const [debounced, setDebounced] = useState({ source, documentPath });
+  // A tab switch must not resolve the previous document's URLs against the new path.
+  const debouncedSource = debounced.documentPath === documentPath ? debounced.source : source;
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isFirstSourceEffectRef = useRef(true);
 
@@ -52,7 +57,7 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, PreviewPaneProps>(funct
     }
     debounceTimerRef.current = setTimeout(() => {
       debounceTimerRef.current = null;
-      setDebouncedSource(source);
+      setDebounced({ source, documentPath });
     }, RENDER_DEBOUNCE_MS);
 
     return () => {
@@ -61,7 +66,7 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, PreviewPaneProps>(funct
         debounceTimerRef.current = null;
       }
     };
-  }, [source]);
+  }, [source, documentPath]);
 
   // Derivação pura de `debouncedSource` — sem efeito colateral.
   const html = useMemo(() => {
@@ -82,6 +87,9 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, PreviewPaneProps>(funct
 
     let cancelled = false;
     container.innerHTML = html;
+    const cleanupLinks = documentPath && workspaceRoot
+      ? prepareLocalLinks(container, documentPath, workspaceRoot)
+      : undefined;
 
     const blocks = container.querySelectorAll<HTMLElement>(
       'code.language-mermaid, pre > code[class*="mermaid"]',
@@ -120,8 +128,9 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, PreviewPaneProps>(funct
 
     return () => {
       cancelled = true;
+      cleanupLinks?.();
     };
-  }, [html, resolvedTheme]);
+  }, [html, resolvedTheme, documentPath, workspaceRoot]);
 
   return <div className="preview-pane" ref={containerRef} />;
 });

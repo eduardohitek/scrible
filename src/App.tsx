@@ -9,6 +9,7 @@ import { SplitLayout, type SplitLayoutHandle } from "./layout/SplitLayout";
 import { useLayoutStore } from "./layout/layoutStore";
 import { useDocumentStore, DEFAULT_DOCUMENT } from "./store/documentStore";
 import { useTabsStore } from "./store/tabsStore";
+import { initFileIndex, refreshFileIndex } from "./workspace/fileIndex";
 import { normalizePath } from "./fs/paths";
 import { useExplorerStore } from "./explorer/explorerStore";
 import { ExplorerPanel } from "./explorer/ExplorerPanel";
@@ -65,6 +66,7 @@ function App() {
       .then(async ({ root: rawRoot }) => {
         const root = normalizePath(rawRoot);
         useTabsStore.getState().setWorkspaceRoot(root);
+        void initFileIndex(root);
         // Sessão anterior (#9); sem ela (primeira execução) abre o documento padrão.
         const restored = await restoreSession();
         if (!restored) {
@@ -132,6 +134,7 @@ function App() {
     // sem payload, o frontend decide o que re-buscar (raiz + pastas expandidas).
     const unlistenTreeChange = listen("workspace-tree-changed", () => {
       void useExplorerStore.getState().refreshVisible();
+      void refreshFileIndex();
     });
     // Itens do menu nativo (#24) que não são `Predefined*` chegam aqui como
     // string simples via `app.emit("menu", id)` (Rust). "quit" não passa por
