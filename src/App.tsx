@@ -20,6 +20,7 @@ import { Toolbar } from "./ui/Toolbar";
 import { StatusBar } from "./ui/StatusBar";
 import { UpdateBanner } from "./updater/UpdateBanner";
 import { useUpdateStore } from "./updater/updateStore";
+import { restoreSession, startSessionPersistence, type SessionPersistence } from "./session/session";
 import "./theme/tokens.css";
 import "./App.css";
 import "./preview/PreviewPane.css";
@@ -49,16 +50,27 @@ function App() {
   const initLayout = useLayoutStore((state) => state.init);
   const initZoom = useZoomStore((state) => state.init);
   const splitLayoutRef = useRef<SplitLayoutHandle>(null);
+  const sessionRef = useRef<SessionPersistence | null>(null);
+  const bootstrappedRef = useRef(false);
 
   useTabShortcuts();
   useZoomShortcuts();
 
   useEffect(() => {
+    // Ref (não módulo) porque o StrictMode em dev roda este efeito duas vezes
+    // na mesma instância — restaurar a sessão duas vezes duplicaria as abas.
+    if (bootstrappedRef.current) return;
+    bootstrappedRef.current = true;
     invoke<WorkspacePaths>("workspace_status")
       .then(async ({ root: rawRoot }) => {
         const root = normalizePath(rawRoot);
         useTabsStore.getState().setWorkspaceRoot(root);
-        await useTabsStore.getState().openTab(`${root}/untitled.md`, { fallbackContent: DEFAULT_DOCUMENT });
+        // Sessão anterior (#9); sem ela (primeira execução) abre o documento padrão.
+        const restored = await restoreSession();
+        if (!restored) {
+          await useTabsStore.getState().openTab(`${root}/untitled.md`, { fallbackContent: DEFAULT_DOCUMENT });
+        }
+        sessionRef.current = startSessionPersistence();
         await useExplorerStore.getState().init(root);
       })
       .catch((err: WorkspaceError) => {
@@ -93,11 +105,15 @@ function App() {
 
   useEffect(() => {
     const unlistenFocus = getCurrentWindow().onFocusChanged(({ payload: focused }) => {
-      if (!focused) void flushAll();
+      if (!focused) {
+        void flushAll();
+        void sessionRef.current?.flush();
+      }
     });
     const unlistenClose = listen("app-close-requested", () => {
       void (async () => {
         await flushAll();
+        await sessionRef.current?.flush();
         await invoke("quit_app");
       })();
     });

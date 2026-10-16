@@ -2,6 +2,7 @@ mod app_menu;
 mod fs_ops;
 mod history;
 mod pdf_export;
+mod session;
 mod tree_watcher;
 mod watcher;
 mod workspace;
@@ -10,6 +11,7 @@ use std::path::PathBuf;
 
 use fs_ops::FsError;
 use history::{HistoryError, RestoreResult, SnapshotInfo};
+use session::{Session, SessionError};
 use tauri::{AppHandle, Emitter, Manager, WindowEvent};
 use watcher::LastSaveMtime;
 use workspace::{WorkspaceError, WorkspacePaths};
@@ -83,6 +85,20 @@ fn restore_snapshot(
         message: err.to_string(),
     })?;
     history::restore_snapshot(&workspace.hidden, &PathBuf::from(path), timestamp)
+}
+
+#[tauri::command]
+fn read_session(state: tauri::State<WorkspaceState>) -> Session {
+    match &state.0 {
+        Ok(workspace) => session::load(&workspace.hidden),
+        Err(_) => Session::default(),
+    }
+}
+
+#[tauri::command]
+fn write_session(session: Session, state: tauri::State<WorkspaceState>) -> Result<(), SessionError> {
+    let workspace = state.0.as_ref().map_err(|err| SessionError::Io(err.to_string()))?;
+    session::save(&workspace.hidden, &session)
 }
 
 #[tauri::command]
@@ -191,7 +207,9 @@ pub fn run() {
             quit_app,
             list_snapshots,
             restore_snapshot,
-            snapshot_before_discard
+            snapshot_before_discard,
+            read_session,
+            write_session
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

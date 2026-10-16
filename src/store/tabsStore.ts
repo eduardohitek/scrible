@@ -3,7 +3,14 @@ import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { normalizePath } from "../fs/paths";
 import { useDocumentStore } from "./documentStore";
-import { discard as discardEditorState } from "../editor/editorStateRegistry";
+import { discard as discardEditorState, seedPosition } from "../editor/editorStateRegistry";
+
+/** Aba lida de `session.json` (#9). */
+export interface SessionTabEntry {
+  path: string;
+  cursorPos: number;
+  scrollTop: number;
+}
 
 export interface Tab {
   id: string;
@@ -23,6 +30,10 @@ interface TabsState {
   /** Abre uma aba para `path`; se já houver uma aba aberta com esse path,
    * só a foca em vez de duplicar. */
   openTab: (path: string, opts?: { fallbackContent?: string }) => Promise<void>;
+  /** Reidrata as abas de uma sessão salva (#9): carrega todos os documentos
+   * *antes* de ativar a aba, para o editor já montar com o conteúdo final e
+   * conseguir aplicar cursor/scroll. Paths duplicados são ignorados. */
+  restoreTabs: (entries: SessionTabEntry[], activeIndex: number) => Promise<void>;
   /** Abre um seletor nativo de arquivo filtrado por `.md` (#24) e abre a
    * aba correspondente ao path escolhido. No-op se o usuário cancelar. */
   openFileDialog: () => Promise<void>;
@@ -89,6 +100,25 @@ export const useTabsStore = create<TabsState>((set, get) => ({
     const title = basename(path);
     set((state) => ({ tabs: [...state.tabs, { id, path, title }], activeTabId: id }));
     await useDocumentStore.getState().initDocument(id, path, opts?.fallbackContent);
+  },
+
+  restoreTabs: async (entries, activeIndex) => {
+    const seen = new Set<string>();
+    const tabs: Tab[] = [];
+    let activeId: string | null = null;
+    entries.forEach((entry, index) => {
+      const path = normalizePath(entry.path);
+      if (seen.has(path)) return;
+      seen.add(path);
+      const id = crypto.randomUUID();
+      tabs.push({ id, path, title: basename(path) });
+      seedPosition(id, entry.cursorPos, entry.scrollTop);
+      if (index === activeIndex) activeId = id;
+    });
+    if (tabs.length === 0) return;
+
+    await Promise.all(tabs.map((tab) => useDocumentStore.getState().initDocument(tab.id, tab.path)));
+    set({ tabs, activeTabId: activeId ?? tabs[0].id });
   },
 
   openFileDialog: async () => {

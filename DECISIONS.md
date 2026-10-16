@@ -1364,3 +1364,43 @@ release publicada (o job `publish` não rodou). **Lição:** passo que só roda 
   no CI — o `PrintToPdf` numa janela oculta precisa de verificação manual num Windows real.
 
 **Afeta:** nada pendente além da verificação manual no Windows.
+
+## #9 — Persistência e restauração de sessão (abas)
+
+- **Backend**: novo `src-tauri/src/session.rs` com `Session { tabs: [{ path, cursorPos, scrollTop }], activeTabIndex }`
+  (serde `camelCase`) em `.scrible/session.json`, e dois commands (`read_session`, `write_session`). Escrita
+  atômica (tmp + fsync + rename, mesmo padrão de `fs_ops::save_file`). **Não** reaproveita `settings.json`/
+  `appSettings.ts` (#19): sessão tem ciclo de escrita e formato próprios, e misturar traria o
+  read-merge-write de volta.
+- **Tolerância a falhas na leitura** (`session::load`): arquivo ausente (primeira execução) ou corrompido
+  devolve sessão vazia — nunca bloqueia o boot. Abas cujo arquivo não existe mais são descartadas **no
+  Rust** (com `eprintln!` de aviso) e `activeTabIndex` é reapontado para a mesma aba depois da filtragem
+  (ou `0`, se a própria aba ativa sumiu). Filtrar lá (e não no frontend) evita que `initDocument`
+  recrie por engano o arquivo apagado (seu ramo `NotFound` cria o arquivo com o conteúdo de fallback).
+- **Posição do cursor/scroll**: `editorStateRegistry.ts` passou a manter `cursors` (offset do cursor, via
+  `updateListener` — `selectionSet || docChanged`) ao lado de `scrollTops`, e expõe `getPosition`,
+  `seedPosition` e `subscribePositions`. O scroll é gravado por um listener em `view.scrollDOM`
+  (`EditorPane`). Cursor é **offset de caracteres** (não linha/coluna), limitado ao tamanho do documento
+  na criação do `EditorState`; scroll é `scrollTop` em pixels — "linha correta" é o mínimo do AC e o
+  cursor garante isso mesmo que o scroll em px derive após mudar zoom/largura da janela.
+- **Ordem de boot** (`App.tsx`): `restoreSession()` → `tabsStore.restoreTabs()` carrega **todos** os
+  documentos antes de ativar a aba (o `EditorPane` monta já com conteúdo final; senão a reconciliação de
+  conteúdo substituiria o doc e perderia cursor/scroll). Sem sessão, cai no fluxo antigo
+  (`untitled.md` com `DEFAULT_DOCUMENT`). O guard `bootstrappedRef` existe porque o StrictMode (dev)
+  roda o efeito duas vezes e restaurar duas vezes duplicaria as abas.
+- **Armadilha de scroll**: logo após montar/trocar de aba o layout do CodeMirror ainda não foi medido e o
+  DOM clampa o `scrollTop` restaurado. `EditorPane` reaplica o alvo num `requestAnimationFrame` e, enquanto
+  isso, ignora eventos de scroll (e o cleanup do StrictMode) para não sobrescrever o valor salvo com o
+  clampado.
+- **Persistência** (`src/session/session.ts`): `startSessionPersistence()` só roda **depois** da
+  restauração (salvar antes apagaria a sessão anterior). Debounce de 2s via `setTimeout`, disparado por
+  qualquer mudança em `tabsStore` ou no registry; não regrava se o JSON serializado for idêntico ao
+  último gravado; nunca grava lista de abas vazia. "Mover cursor/scroll significativamente" da issue
+  virou "qualquer mudança, com debounce" — mais simples e o custo é desprezível. `flush()` é chamado no
+  blur da janela e no handshake de fechamento (`app-close-requested`), antes de `quit_app`.
+- Sem teste de integração do `EditorPane` com scroll real (jsdom não faz layout); cobertura em
+  `session.test.ts`, `editorStateRegistry.test.ts` e nos testes Rust de `session.rs`.
+
+**Afeta:** qualquer issue que mude o shape de `Tab` ou crie outra fonte de abas abertas precisa manter
+`collectSession()` em sincronia. O watcher continua observando só `untitled.md` (dívida de `#21`): abas
+restauradas de outros arquivos não recebem alteração externa em tempo real.
