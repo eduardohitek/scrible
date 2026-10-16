@@ -34,7 +34,7 @@ describe("appSettings", () => {
 
     expect(settings).toEqual({
       theme: "system",
-      layout: { splitRatio: 0.5, previewVisible: true },
+      layout: { splitRatio: 0.5, viewMode: "split" },
       explorer: { visible: true, width: 240 },
       zoom: 1,
       skippedVersion: null,
@@ -43,7 +43,7 @@ describe("appSettings", () => {
       path: "/ws/.scrible/settings.json",
       content: JSON.stringify({
         theme: "system",
-        layout: { splitRatio: 0.5, previewVisible: true },
+        layout: { splitRatio: 0.5, viewMode: "split" },
         explorer: { visible: true, width: 240 },
         zoom: 1,
         skippedVersion: null,
@@ -59,7 +59,7 @@ describe("appSettings", () => {
       if (cmd === "workspace_status") return { root: "/ws", hidden: "/ws/.scrible" };
       if (cmd === "read_file") {
         readCalls += 1;
-        return JSON.stringify({ theme: "dark", layout: { splitRatio: 0.6, previewVisible: false } });
+        return JSON.stringify({ theme: "dark", layout: { splitRatio: 0.6, viewMode: "editor" } });
       }
       throw new Error(`unexpected invoke: ${cmd}`);
     });
@@ -78,7 +78,7 @@ describe("appSettings", () => {
       if (cmd === "read_file")
         return JSON.stringify({
           theme: "dark",
-          layout: { splitRatio: 0.5, previewVisible: true },
+          layout: { splitRatio: 0.5, viewMode: "split" },
           explorer: { visible: true, width: 240 },
         });
       if (cmd === "save_file") return 2000;
@@ -86,13 +86,13 @@ describe("appSettings", () => {
     });
     await loadAppSettings();
 
-    await patchAppSettings({ layout: { splitRatio: 0.7, previewVisible: true } });
+    await patchAppSettings({ layout: { splitRatio: 0.7, viewMode: "split" } });
 
     expect(mockedInvoke).toHaveBeenCalledWith("save_file", {
       path: "/ws/.scrible/settings.json",
       content: JSON.stringify({
         theme: "dark",
-        layout: { splitRatio: 0.7, previewVisible: true },
+        layout: { splitRatio: 0.7, viewMode: "split" },
         explorer: { visible: true, width: 240 },
         zoom: 1,
         skippedVersion: null,
@@ -106,7 +106,7 @@ describe("appSettings", () => {
       path: "/ws/.scrible/settings.json",
       content: JSON.stringify({
         theme: "light",
-        layout: { splitRatio: 0.7, previewVisible: true },
+        layout: { splitRatio: 0.7, viewMode: "split" },
         explorer: { visible: true, width: 240 },
         zoom: 1,
         skippedVersion: null,
@@ -122,7 +122,7 @@ describe("appSettings", () => {
       if (cmd === "read_file")
         return JSON.stringify({
           theme: "dark",
-          layout: { splitRatio: 0.5, previewVisible: true },
+          layout: { splitRatio: 0.5, viewMode: "split" },
           explorer: { visible: true, width: 240 },
         });
       if (cmd === "save_file") return 2000;
@@ -136,7 +136,7 @@ describe("appSettings", () => {
       path: "/ws/.scrible/settings.json",
       content: JSON.stringify({
         theme: "dark",
-        layout: { splitRatio: 0.5, previewVisible: true },
+        layout: { splitRatio: 0.5, viewMode: "split" },
         explorer: { visible: false, width: 240 },
         zoom: 1,
         skippedVersion: null,
@@ -157,12 +157,31 @@ describe("appSettings", () => {
 
     expect(settings).toEqual({
       theme: "system",
-      layout: { splitRatio: 0.5, previewVisible: true },
+      layout: { splitRatio: 0.5, viewMode: "split" },
       explorer: { visible: true, width: 240 },
       zoom: 1,
       skippedVersion: null,
     });
     expect(mockedInvoke).not.toHaveBeenCalledWith("save_file", expect.anything());
+  });
+
+  it.each([
+    [{ previewVisible: true }, "split"],
+    [{ previewVisible: false }, "editor"],
+    [{ viewMode: "preview", previewVisible: false }, "preview"],
+    [{ viewMode: "outro" }, "split"],
+    [{}, "split"],
+  ])("layout %j vira viewMode %s (migra o previewVisible antigo)", async (layout, expected) => {
+    const { loadAppSettings } = await freshModule();
+    mockedInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "workspace_status") return { root: "/ws", hidden: "/ws/.scrible" };
+      if (cmd === "read_file") return JSON.stringify({ theme: "system", layout: { splitRatio: 0.5, ...layout } });
+      throw new Error(`unexpected invoke: ${cmd}`);
+    });
+
+    const settings = await loadAppSettings();
+
+    expect(settings.layout).toEqual({ splitRatio: 0.5, viewMode: expected });
   });
 
   it("zoom persistido é lido de volta", async () => {
@@ -172,7 +191,7 @@ describe("appSettings", () => {
       if (cmd === "read_file")
         return JSON.stringify({
           theme: "system",
-          layout: { splitRatio: 0.5, previewVisible: true },
+          layout: { splitRatio: 0.5, viewMode: "split" },
           explorer: { visible: true, width: 240 },
           zoom: 1.25,
           skippedVersion: null,
@@ -192,7 +211,7 @@ describe("appSettings", () => {
       if (cmd === "read_file")
         return JSON.stringify({
           theme: "system",
-          layout: { splitRatio: 0.5, previewVisible: true },
+          layout: { splitRatio: 0.5, viewMode: "split" },
           explorer: { visible: true, width: 240 },
           zoom: 3,
           skippedVersion: null,

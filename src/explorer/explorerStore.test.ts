@@ -51,7 +51,7 @@ describe("explorerStore", () => {
       if (cmd === "read_file")
         return JSON.stringify({
           theme: "system",
-          layout: { splitRatio: 0.5, previewVisible: true },
+          layout: { splitRatio: 0.5, viewMode: "split" },
           explorer: { visible: false, width: 300 },
         });
       if (cmd === "list_dir_entries") return [{ name: "nota.md", isDir: false }];

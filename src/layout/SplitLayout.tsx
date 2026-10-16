@@ -23,8 +23,10 @@ export const SplitLayout = forwardRef<SplitLayoutHandle, SplitLayoutProps>(funct
   ref,
 ) {
   const splitRatio = useLayoutStore((state) => state.splitRatio);
-  const previewVisible = useLayoutStore((state) => state.previewVisible);
+  const viewMode = useLayoutStore((state) => state.viewMode);
   const setSplitRatio = useLayoutStore((state) => state.setSplitRatio);
+  const previewVisible = viewMode !== "editor";
+  const editorHidden = viewMode === "preview";
 
   const containerRef = useRef<HTMLDivElement>(null);
   const dragRatioRef = useRef(splitRatio);
@@ -34,9 +36,35 @@ export const SplitLayout = forwardRef<SplitLayoutHandle, SplitLayoutProps>(funct
   const previewRef = useRef<PreviewPaneHandle>(null);
   useScrollSync(containerRef, editorRef, previewRef, source, previewVisible);
 
+  // Buscar no modo só visualização volta pro lado a lado e só abre o painel
+  // depois do render que torna o editor visível de novo (painel aberto num
+  // editor `inert` não receberia o foco).
+  const pendingSearchRef = useRef(false);
   useImperativeHandle(ref, () => ({
-    openSearch: () => editorRef.current?.openSearch(),
+    openSearch: () => {
+      if (useLayoutStore.getState().viewMode === "preview") {
+        pendingSearchRef.current = true;
+        void useLayoutStore.getState().setViewMode("split");
+        return;
+      }
+      editorRef.current?.openSearch();
+    },
   }));
+
+  // Saindo do modo só visualização, o foco volta pro editor — quem alterna com
+  // ⇧⌘P pra editar não precisa clicar no texto antes de digitar.
+  const previousModeRef = useRef(viewMode);
+  useEffect(() => {
+    const previousMode = previousModeRef.current;
+    previousModeRef.current = viewMode;
+    if (viewMode === "preview") return;
+    if (pendingSearchRef.current) {
+      pendingSearchRef.current = false;
+      editorRef.current?.openSearch();
+    } else if (previousMode === "preview") {
+      editorRef.current?.focus();
+    }
+  }, [viewMode]);
 
   function handleDividerMouseDown(event: React.MouseEvent) {
     event.preventDefault();
@@ -89,15 +117,17 @@ export const SplitLayout = forwardRef<SplitLayoutHandle, SplitLayoutProps>(funct
       ref={containerRef}
       style={{ "--split-ratio": splitRatio } as CSSProperties}
     >
-      {tabId && <EditorPane ref={editorRef} tabId={tabId} />}
+      {tabId && <EditorPane ref={editorRef} tabId={tabId} hidden={editorHidden} />}
       {previewVisible && (
         <>
-          <div
-            className="split-divider"
-            role="separator"
-            aria-orientation="vertical"
-            onMouseDown={handleDividerMouseDown}
-          />
+          {!editorHidden && (
+            <div
+              className="split-divider"
+              role="separator"
+              aria-orientation="vertical"
+              onMouseDown={handleDividerMouseDown}
+            />
+          )}
           <PreviewPane ref={previewRef} source={source} />
         </>
       )}

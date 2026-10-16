@@ -77,11 +77,28 @@ export const commands: readonly AppCommand[] = [
     run: () => editorBridge?.openSearch(),
   },
   {
-    id: "toggle_preview",
-    label: "Alternar preview",
+    id: "cycle_view_mode",
+    label: "Alternar modo de exibição",
     shortcut: "⇧⌘P",
-    run: () => useLayoutStore.getState().togglePreview(),
-    isActive: () => useLayoutStore.getState().previewVisible,
+    run: () => useLayoutStore.getState().cycleViewMode(),
+  },
+  {
+    id: "view_editor",
+    label: "Editor",
+    run: () => useLayoutStore.getState().setViewMode("editor"),
+    isActive: () => useLayoutStore.getState().viewMode === "editor",
+  },
+  {
+    id: "view_split",
+    label: "Lado a lado",
+    run: () => useLayoutStore.getState().setViewMode("split"),
+    isActive: () => useLayoutStore.getState().viewMode === "split",
+  },
+  {
+    id: "view_preview",
+    label: "Visualização",
+    run: () => useLayoutStore.getState().setViewMode("preview"),
+    isActive: () => useLayoutStore.getState().viewMode === "preview",
   },
   {
     id: "toggle_explorer",

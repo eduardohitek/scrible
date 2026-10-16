@@ -6,6 +6,10 @@ import { getOrCreateEditorState, getScrollTop, saveEditorState, saveScrollTop } 
 
 interface EditorPaneProps {
   tabId: string;
+  /** Modo só visualização: o editor continua montado (mesma `EditorView`,
+   * undo/redo e autosave intactos) e com layout, só invisível e fora do
+   * foco — assim o sync de scroll segue acompanhando o preview. */
+  hidden?: boolean;
 }
 
 /** API imperativa mínima para o sync de scroll (#20) orquestrar o editor
@@ -22,6 +26,7 @@ export interface EditorPaneHandle {
    * do menu nativo (#24) — Cmd+F em si vira exclusividade do menu, ver
    * `useTabShortcuts.ts`. */
   openSearch(): void;
+  focus(): void;
 }
 
 /**
@@ -36,7 +41,7 @@ export interface EditorPaneHandle {
  * `view.setState`, preservando undo/redo e seleção por aba (ver
  * `editorStateRegistry.ts`).
  */
-export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function EditorPane({ tabId }, ref) {
+export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function EditorPane({ tabId, hidden = false }, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const mountedTabIdRef = useRef<string | null>(null);
@@ -125,9 +130,17 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
         const view = viewRef.current;
         if (view) openSearchPanel(view);
       },
+      focus: () => viewRef.current?.focus(),
     }),
     [],
   );
 
-  return <div className="editor-pane" ref={containerRef} />;
+  return (
+    <div
+      className={hidden ? "editor-pane is-hidden" : "editor-pane"}
+      ref={containerRef}
+      inert={hidden}
+      aria-hidden={hidden || undefined}
+    />
+  );
 });

@@ -1,12 +1,29 @@
 import { create } from "zustand";
-import { loadAppSettings, patchAppSettings } from "../settings/appSettings";
+import { loadAppSettings, patchAppSettings, type ViewMode } from "../settings/appSettings";
+
+export type { ViewMode };
+
+/** Ordem do ciclo do ⇧⌘P: só editor → lado a lado → só visualização → volta. */
+export const VIEW_MODE_CYCLE: readonly ViewMode[] = ["editor", "split", "preview"];
+
+export const VIEW_MODE_LABEL: Record<ViewMode, string> = {
+  editor: "Editor",
+  split: "Lado a lado",
+  preview: "Visualização",
+};
+
+export function nextViewMode(mode: ViewMode): ViewMode {
+  const index = VIEW_MODE_CYCLE.indexOf(mode);
+  return VIEW_MODE_CYCLE[(index + 1) % VIEW_MODE_CYCLE.length];
+}
 
 interface LayoutState {
   splitRatio: number;
-  previewVisible: boolean;
+  viewMode: ViewMode;
   init: () => Promise<void>;
   setSplitRatio: (ratio: number) => Promise<void>;
-  togglePreview: () => Promise<void>;
+  setViewMode: (mode: ViewMode) => Promise<void>;
+  cycleViewMode: () => Promise<void>;
 }
 
 export const useLayoutStore = create<LayoutState>((set, get) => ({
@@ -14,29 +31,30 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
   // existia antes desta issue — quem já usa o app não vê mudança até
   // arrastar o divisor pela primeira vez.
   splitRatio: 0.5,
-  previewVisible: true,
+  viewMode: "split",
 
   init: async () => {
     const settings = await loadAppSettings();
-    set({ splitRatio: settings.layout.splitRatio, previewVisible: settings.layout.previewVisible });
+    set({ splitRatio: settings.layout.splitRatio, viewMode: settings.layout.viewMode });
   },
 
   setSplitRatio: async (ratio) => {
     set({ splitRatio: ratio });
     try {
-      await patchAppSettings({ layout: { splitRatio: ratio, previewVisible: get().previewVisible } });
+      await patchAppSettings({ layout: { splitRatio: ratio, viewMode: get().viewMode } });
     } catch (err) {
       console.error("falha ao persistir largura do split:", err);
     }
   },
 
-  togglePreview: async () => {
-    const previewVisible = !get().previewVisible;
-    set({ previewVisible });
+  setViewMode: async (viewMode) => {
+    set({ viewMode });
     try {
-      await patchAppSettings({ layout: { splitRatio: get().splitRatio, previewVisible } });
+      await patchAppSettings({ layout: { splitRatio: get().splitRatio, viewMode } });
     } catch (err) {
-      console.error("falha ao persistir visibilidade do preview:", err);
+      console.error("falha ao persistir modo de exibição:", err);
     }
   },
+
+  cycleViewMode: () => get().setViewMode(nextViewMode(get().viewMode)),
 }));

@@ -64,7 +64,7 @@ describe("themeStore", () => {
       path: "/ws/.scrible/settings.json",
       content: JSON.stringify({
         theme: "system",
-        layout: { splitRatio: 0.5, previewVisible: true },
+        layout: { splitRatio: 0.5, viewMode: "split" },
         explorer: { visible: true, width: 240 },
         zoom: 1,
         skippedVersion: null,
@@ -80,7 +80,7 @@ describe("themeStore", () => {
     mockMatchMedia(false);
     mockedInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === "workspace_status") return { root: "/ws", hidden: "/ws/.scrible" };
-      if (cmd === "read_file") return JSON.stringify({ theme: "dark", layout: { splitRatio: 0.5, previewVisible: true } });
+      if (cmd === "read_file") return JSON.stringify({ theme: "dark", layout: { splitRatio: 0.5, viewMode: "split" } });
       throw new Error(`unexpected invoke: ${cmd}`);
     });
     const useThemeStore = await freshThemeStore();
@@ -96,7 +96,7 @@ describe("themeStore", () => {
     mockMatchMedia(false);
     mockedInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === "workspace_status") return { root: "/ws", hidden: "/ws/.scrible" };
-      if (cmd === "read_file") return JSON.stringify({ theme: "light", layout: { splitRatio: 0.6, previewVisible: false } });
+      if (cmd === "read_file") return JSON.stringify({ theme: "light", layout: { splitRatio: 0.6, viewMode: "editor" } });
       if (cmd === "save_file") return 2000;
       throw new Error(`unexpected invoke: ${cmd}`);
     });
@@ -108,7 +108,7 @@ describe("themeStore", () => {
       path: "/ws/.scrible/settings.json",
       content: JSON.stringify({
         theme: "dark",
-        layout: { splitRatio: 0.6, previewVisible: false },
+        layout: { splitRatio: 0.6, viewMode: "editor" },
         explorer: { visible: true, width: 240 },
         zoom: 1,
         skippedVersion: null,
@@ -122,7 +122,7 @@ describe("themeStore", () => {
     const media = mockMatchMedia(false);
     mockedInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === "workspace_status") return { root: "/ws", hidden: "/ws/.scrible" };
-      if (cmd === "read_file") return JSON.stringify({ theme: "system", layout: { splitRatio: 0.5, previewVisible: true } });
+      if (cmd === "read_file") return JSON.stringify({ theme: "system", layout: { splitRatio: 0.5, viewMode: "split" } });
       if (cmd === "save_file") return 2000;
       throw new Error(`unexpected invoke: ${cmd}`);
     });
@@ -142,7 +142,7 @@ describe("themeStore", () => {
     const media = mockMatchMedia(false);
     mockedInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === "workspace_status") return { root: "/ws", hidden: "/ws/.scrible" };
-      if (cmd === "read_file") return JSON.stringify({ theme: "system", layout: { splitRatio: 0.5, previewVisible: true } });
+      if (cmd === "read_file") return JSON.stringify({ theme: "system", layout: { splitRatio: 0.5, viewMode: "split" } });
       if (cmd === "save_file") return 2000;
       throw new Error(`unexpected invoke: ${cmd}`);
     });
