@@ -1256,6 +1256,9 @@ updater de cada uma (`.msi`/`.AppImage` + `.sig`) no `release.yml`.
   `EditorView` única da `#21`; `display: none` deixaria o editor sem caixa, então o sync de scroll
   (`#20`, que continua ligado nesse modo) não conseguiria movê-lo e, ao voltar pra edição, ele
   estaria longe do trecho que estava sendo lido.
+- **`useScrollSync` alinha o preview com o editor uma vez sempre que é ligado** (boot ou saída do
+  modo só editor), não só no próximo scroll: indo de só editor direto pra só visualização, o
+  preview remontava no topo do documento com o editor já oculto.
 - **Saindo do modo só visualização o foco volta pro editor**; "Buscar" (⌘F) nesse modo troca pra
   lado a lado e só abre o painel depois do render que torna o editor visível
   (`SplitLayout.openSearch`).
