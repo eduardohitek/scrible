@@ -1349,3 +1349,18 @@ Fix: `cd "$repo_root"` e `require('./package.json')`. Como a tag `v0.6.0-rc.1` j
 antigo (e reescrever tag está fora de questão), a validação continua em `v0.6.0-rc.2`; a rc.1 ficou sem
 release publicada (o job `publish` não rodou). **Lição:** passo que só roda com tag não é coberto pelo
 `dry_run` — o `dry_run` deveria exercitar também a checagem de versão (contra a versão atual, sem tag).
+
+## #81 — Exportar PDF no Windows e no Linux
+
+- **Um comando, três motores**: `export_pdf` existe nas três plataformas. macOS segue com
+  `WKWebView.createPDF`; Windows usa `ICoreWebView2_7::PrintToPdf` e Linux usa
+  `WebKitPrintOperation` com a "impressora" `Print to File` (sem diálogo), ambos A4 com fundos.
+  O nome da impressora vem de `dgettext("gtk30", …)`, porque o GTK o traduz (pt-BR incluso).
+  Item de menu (`app_menu.rs`), `ExportMenu.tsx` e `registry.ts` voltaram a aparecer em todas.
+- **HTML via arquivo temporário + `file://`**, não `NavigateToString`: o WebView2 limita a 2 MB e
+  documentos com vários diagramas mermaid em SVG passam disso. O fim do load vem de `on_page_load`.
+  Os temporários (`.html` e `.pdf`) são apagados em qualquer desfecho.
+- **Verificação**: Linux foi exercitado de verdade sob xvfb (PDF válido gerado). Windows só compila
+  no CI — o `PrintToPdf` numa janela oculta precisa de verificação manual num Windows real.
+
+**Afeta:** nada pendente além da verificação manual no Windows.

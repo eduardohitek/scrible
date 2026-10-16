@@ -4,7 +4,7 @@ import { useThemeStore, type ThemePreference } from "../theme/themeStore";
 import { useTabsStore } from "../store/tabsStore";
 import { useZoomStore } from "../zoom/zoomStore";
 import { useUpdateStore } from "../updater/updateStore";
-import { formatShortcut, isMac } from "../platform/platform";
+import { formatShortcut } from "../platform/platform";
 import { exportActiveTabAsHtml, exportActiveTabAsPdf } from "../export/exportHtml";
 
 /** Ponte imperativa para ações que só existem dentro da árvore React (hoje,
@@ -131,16 +131,11 @@ export const commands: readonly AppCommand[] = [
     label: "Exportar para HTML…",
     run: () => exportActiveTabAsHtml(),
   },
-  // PDF só no macOS (#27); Windows/Linux ficam sem o comando até o follow-up da #32.
-  ...(isMac()
-    ? [
-        {
-          id: "export_pdf",
-          label: "Exportar para PDF…",
-          run: () => exportActiveTabAsPdf(),
-        },
-      ]
-    : []),
+  {
+    id: "export_pdf",
+    label: "Exportar para PDF…",
+    run: () => exportActiveTabAsPdf(),
+  },
   {
     id: "check_updates",
     label: "Procurar atualizações…",
