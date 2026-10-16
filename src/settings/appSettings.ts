@@ -3,11 +3,14 @@ import { DEFAULT_ZOOM, snapZoom } from "../zoom/zoomLevels";
 
 export type ThemePreference = "system" | "light" | "dark";
 
+/** Modo de exibição: só editor, lado a lado ou só visualização. */
+export type ViewMode = "editor" | "split" | "preview";
+
 export interface AppSettings {
   theme: ThemePreference;
   layout: {
     splitRatio: number;
-    previewVisible: boolean;
+    viewMode: ViewMode;
   };
   explorer: {
     visible: boolean;
@@ -32,7 +35,7 @@ type FsError = FsErrorNotFound | { kind: "PermissionDenied" | "Io" | "ExternalCh
 
 export const DEFAULT_SETTINGS: AppSettings = {
   theme: "system",
-  layout: { splitRatio: 0.5, previewVisible: true },
+  layout: { splitRatio: 0.5, viewMode: "split" },
   explorer: { visible: true, width: 240 },
   zoom: DEFAULT_ZOOM,
   skippedVersion: null,
@@ -57,16 +60,26 @@ function isValidTheme(value: unknown): value is ThemePreference {
   return value === "light" || value === "dark" || value === "system";
 }
 
+function isValidViewMode(value: unknown): value is ViewMode {
+  return value === "editor" || value === "split" || value === "preview";
+}
+
+/** Lê `viewMode`; sem ele, migra o booleano `previewVisible` de antes do modo
+ * só visualização (`false` → só editor, `true` → lado a lado). */
+function normalizeViewMode(layout: unknown): ViewMode {
+  const raw = layout as { viewMode?: unknown; previewVisible?: unknown } | null | undefined;
+  if (isValidViewMode(raw?.viewMode)) return raw.viewMode;
+  if (typeof raw?.previewVisible === "boolean") return raw.previewVisible ? "split" : "editor";
+  return DEFAULT_SETTINGS.layout.viewMode;
+}
+
 function normalize(parsed: Partial<AppSettings> | null | undefined): AppSettings {
   const theme = isValidTheme(parsed?.theme) ? parsed.theme : DEFAULT_SETTINGS.theme;
   const splitRatio =
     typeof parsed?.layout?.splitRatio === "number"
       ? parsed.layout.splitRatio
       : DEFAULT_SETTINGS.layout.splitRatio;
-  const previewVisible =
-    typeof parsed?.layout?.previewVisible === "boolean"
-      ? parsed.layout.previewVisible
-      : DEFAULT_SETTINGS.layout.previewVisible;
+  const viewMode = normalizeViewMode(parsed?.layout);
   const explorerVisible =
     typeof parsed?.explorer?.visible === "boolean" ? parsed.explorer.visible : DEFAULT_SETTINGS.explorer.visible;
   const explorerWidth =
@@ -76,7 +89,7 @@ function normalize(parsed: Partial<AppSettings> | null | undefined): AppSettings
     typeof parsed?.skippedVersion === "string" ? parsed.skippedVersion : DEFAULT_SETTINGS.skippedVersion;
   return {
     theme,
-    layout: { splitRatio, previewVisible },
+    layout: { splitRatio, viewMode },
     explorer: { visible: explorerVisible, width: explorerWidth },
     zoom,
     skippedVersion,

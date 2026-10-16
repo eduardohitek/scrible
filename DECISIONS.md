@@ -1238,3 +1238,30 @@ afetam os dois caminhos igualmente.
 **Afeta:** `#28` (assinar/notarizar) não muda o updater — a assinatura minisign continua por cima
 da da Apple. `#32` (Windows/Linux) precisa acrescentar as plataformas no `latest.json` e o pacote de
 updater de cada uma (`.msi`/`.AppImage` + `.sig`) no `release.yml`.
+
+## Modo só visualização e ciclo de modos com ⇧⌘P (sem issue)
+
+- **`viewMode: "editor" | "split" | "preview"` substitui o booleano `previewVisible`** da `#19`
+  em `AppSettings.layout` e no `layoutStore`. `appSettings.ts` migra o campo antigo na leitura
+  (`false` → `"editor"`, `true` → `"split"`); valor desconhecido cai em `"split"`. O arquivo passa
+  a ser gravado só com `viewMode`.
+- **⇧⌘P agora cicla os 3 modos** (editor → lado a lado → visualização → editor), em vez de
+  alternar o preview — mesmo accelerator nativo da `#24`, item renomeado para "Alternar modo de
+  exibição" (id `cycle_view_mode`). O submenu Visualizar ganhou "Modo de exibição" com os 3 modos
+  diretos (`view_editor`/`view_split`/`view_preview`), sem accelerator, no mesmo formato do submenu
+  Tema. Na toolbar, o botão que era "Alternar preview" mostra o ícone do modo atual e cicla ao
+  clicar (sem `aria-pressed`, não é mais um liga/desliga).
+- **No modo só visualização o editor continua montado**, só que `inert`, `visibility: hidden` e
+  `position: absolute` na largura cheia (`.editor-pane.is-hidden`). Desmontar perderia a
+  `EditorView` única da `#21`; `display: none` deixaria o editor sem caixa, então o sync de scroll
+  (`#20`, que continua ligado nesse modo) não conseguiria movê-lo e, ao voltar pra edição, ele
+  estaria longe do trecho que estava sendo lido.
+- **`useScrollSync` alinha o preview com o editor uma vez sempre que é ligado** (boot ou saída do
+  modo só editor), não só no próximo scroll: indo de só editor direto pra só visualização, o
+  preview remontava no topo do documento com o editor já oculto.
+- **Saindo do modo só visualização o foco volta pro editor**; "Buscar" (⌘F) nesse modo troca pra
+  lado a lado e só abre o painel depois do render que torna o editor visível
+  (`SplitLayout.openSearch`).
+
+**Afeta:** o `previewVisible` citado na `#19` não existe mais — código novo deve ler `viewMode`.
+A paleta de comandos (issue B da `#60`) já encontra os 4 comandos de modo no `registry.ts`.

@@ -31,17 +31,17 @@ describe("Toolbar", () => {
     expect(toggle).toHaveBeenCalledOnce();
   });
 
-  it("botão de preview reflete previewVisible e chama togglePreview ao clicar", () => {
-    const togglePreview = vi.fn().mockResolvedValue(undefined);
-    useLayoutStore.setState({ previewVisible: false, togglePreview });
+  it("botão de modo de exibição mostra o modo atual e chama cycleViewMode ao clicar", () => {
+    const cycleViewMode = vi.fn().mockResolvedValue(undefined);
+    useLayoutStore.setState({ viewMode: "preview", cycleViewMode });
 
     render(<Toolbar />);
 
-    const button = screen.getByRole("button", { name: "Alternar preview" });
-    expect(button.getAttribute("aria-pressed")).toBe("false");
+    const button = screen.getByRole("button", { name: "Modo de exibição: Visualização" });
+    expect(button.getAttribute("data-tooltip")).toBe("Visualização — ⇧⌘P alterna");
 
     fireEvent.click(button);
-    expect(togglePreview).toHaveBeenCalledOnce();
+    expect(cycleViewMode).toHaveBeenCalledOnce();
   });
 
   it("botão de buscar aciona a ponte do editor instalada", () => {

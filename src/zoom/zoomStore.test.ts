@@ -36,7 +36,7 @@ describe("zoomStore", () => {
       if (cmd === "read_file")
         return JSON.stringify({
           theme: "system",
-          layout: { splitRatio: 0.5, previewVisible: true },
+          layout: { splitRatio: 0.5, viewMode: "split" },
           explorer: { visible: true, width: 240 },
           zoom: 1.25,
           skippedVersion: null,
@@ -71,7 +71,7 @@ describe("zoomStore", () => {
       if (cmd === "read_file")
         return JSON.stringify({
           theme: "system",
-          layout: { splitRatio: 0.5, previewVisible: true },
+          layout: { splitRatio: 0.5, viewMode: "split" },
           explorer: { visible: true, width: 240 },
           zoom: 1,
           skippedVersion: null,
@@ -89,7 +89,7 @@ describe("zoomStore", () => {
       path: "/ws/.scrible/settings.json",
       content: JSON.stringify({
         theme: "system",
-        layout: { splitRatio: 0.5, previewVisible: true },
+        layout: { splitRatio: 0.5, viewMode: "split" },
         explorer: { visible: true, width: 240 },
         zoom: 1.1,
         skippedVersion: null,
@@ -104,7 +104,7 @@ describe("zoomStore", () => {
       if (cmd === "read_file")
         return JSON.stringify({
           theme: "system",
-          layout: { splitRatio: 0.5, previewVisible: true },
+          layout: { splitRatio: 0.5, viewMode: "split" },
           explorer: { visible: true, width: 240 },
           zoom: 1,
           skippedVersion: null,
@@ -126,7 +126,7 @@ describe("zoomStore", () => {
       if (cmd === "read_file")
         return JSON.stringify({
           theme: "system",
-          layout: { splitRatio: 0.5, previewVisible: true },
+          layout: { splitRatio: 0.5, viewMode: "split" },
           explorer: { visible: true, width: 240 },
           zoom: 1.5,
           skippedVersion: null,
@@ -149,7 +149,7 @@ describe("zoomStore", () => {
       if (cmd === "read_file")
         return JSON.stringify({
           theme: "system",
-          layout: { splitRatio: 0.5, previewVisible: true },
+          layout: { splitRatio: 0.5, viewMode: "split" },
           explorer: { visible: true, width: 240 },
           zoom: 2,
           skippedVersion: null,

@@ -25,12 +25,25 @@ describe("commands registry", () => {
   });
 
   it("runCommand roteia pro run() do comando certo", () => {
-    const togglePreview = vi.fn().mockResolvedValue(undefined);
-    useLayoutStore.setState({ togglePreview });
+    const cycleViewMode = vi.fn().mockResolvedValue(undefined);
+    useLayoutStore.setState({ cycleViewMode });
 
-    runCommand("toggle_preview");
+    runCommand("cycle_view_mode");
 
-    expect(togglePreview).toHaveBeenCalledOnce();
+    expect(cycleViewMode).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ["view_editor", "editor"],
+    ["view_split", "split"],
+    ["view_preview", "preview"],
+  ])("%s chama setViewMode(%s)", (id, mode) => {
+    const setViewMode = vi.fn().mockResolvedValue(undefined);
+    useLayoutStore.setState({ setViewMode });
+
+    runCommand(id);
+
+    expect(setViewMode).toHaveBeenCalledWith(mode);
   });
 
   it("id desconhecido é no-op silencioso", () => {
@@ -123,18 +136,20 @@ describe("commands registry", () => {
   });
 
   it("getCommand expõe label e shortcut pra exibição (ex.: tooltip da Toolbar)", () => {
-    const command = getCommand("toggle_preview");
-    expect(command?.label).toBe("Alternar preview");
+    const command = getCommand("cycle_view_mode");
+    expect(command?.label).toBe("Alternar modo de exibição");
     expect(command?.shortcut).toBe("⇧⌘P");
     expect(getCommand("nao_existe")).toBeUndefined();
   });
 
   it("isActive reflete o estado do store em tempo real", () => {
-    useLayoutStore.setState({ previewVisible: true });
-    expect(getCommand("toggle_preview")?.isActive?.()).toBe(true);
+    useLayoutStore.setState({ viewMode: "preview" });
+    expect(getCommand("view_preview")?.isActive?.()).toBe(true);
+    expect(getCommand("view_split")?.isActive?.()).toBe(false);
 
-    useLayoutStore.setState({ previewVisible: false });
-    expect(getCommand("toggle_preview")?.isActive?.()).toBe(false);
+    useLayoutStore.setState({ viewMode: "editor" });
+    expect(getCommand("view_editor")?.isActive?.()).toBe(true);
+    expect(getCommand("view_preview")?.isActive?.()).toBe(false);
   });
 
   it("todos os comandos têm id único", () => {

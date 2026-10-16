@@ -144,7 +144,18 @@ export function useScrollSync(
     }
 
     root.addEventListener("scroll", handleScroll, true);
+
+    // O preview acabou de aparecer (boot, ou saída do modo só editor) e
+    // remontou com scrollTop 0: alinha uma vez com o editor, senão ele só
+    // acompanharia no próximo scroll — e no modo só visualização, com o
+    // editor oculto, abriria no início do documento.
+    let disposed = false;
+    requestAnimationFrame(() => {
+      if (!disposed) syncEditorToPreview();
+    });
+
     return () => {
+      disposed = true;
       root.removeEventListener("scroll", handleScroll, true);
     };
   }, [containerRef, editorRef, previewRef, enabled]);

@@ -1,7 +1,7 @@
-import { PanelLeft, Search, Columns2 } from "lucide-react";
+import { PanelLeft, Search, Columns2, Eye, PenLine, type LucideIcon } from "lucide-react";
 import { runCommand, getCommand } from "../commands/registry";
 import { useExplorerStore } from "../explorer/explorerStore";
-import { useLayoutStore } from "../layout/layoutStore";
+import { useLayoutStore, VIEW_MODE_LABEL, type ViewMode } from "../layout/layoutStore";
 import { ThemeToggle } from "../theme/ThemeToggle";
 import { HistoryPanel } from "../history/HistoryPanel";
 import { ExportMenu } from "../export/ExportMenu";
@@ -11,13 +11,20 @@ import { ExportMenu } from "../export/ExportMenu";
  * `.app-shell-content` (ver DECISIONS.md #60). Os três primeiros botões só
  * disparam `runCommand`; os dois últimos (histórico e exportar) e o de tema
  * têm popover próprio, então continuam como componentes dedicados. */
+const VIEW_MODE_ICON: Record<ViewMode, LucideIcon> = {
+  editor: PenLine,
+  split: Columns2,
+  preview: Eye,
+};
+
 export function Toolbar() {
   const explorerVisible = useExplorerStore((state) => state.visible);
-  const previewVisible = useLayoutStore((state) => state.previewVisible);
+  const viewMode = useLayoutStore((state) => state.viewMode);
+  const ViewModeIcon = VIEW_MODE_ICON[viewMode];
 
   const findShortcut = getCommand("find")?.shortcut;
   const toggleExplorerShortcut = getCommand("toggle_explorer")?.shortcut;
-  const togglePreviewShortcut = getCommand("toggle_preview")?.shortcut;
+  const cycleViewModeShortcut = getCommand("cycle_view_mode")?.shortcut;
 
   return (
     <div className="toolbar">
@@ -44,12 +51,11 @@ export function Toolbar() {
       <button
         type="button"
         className="icon-button"
-        aria-label="Alternar preview"
-        aria-pressed={previewVisible}
-        data-tooltip={`Alternar preview — ${togglePreviewShortcut}`}
-        onClick={() => runCommand("toggle_preview")}
+        aria-label={`Modo de exibição: ${VIEW_MODE_LABEL[viewMode]}`}
+        data-tooltip={`${VIEW_MODE_LABEL[viewMode]} — ${cycleViewModeShortcut} alterna`}
+        onClick={() => runCommand("cycle_view_mode")}
       >
-        <Columns2 size={16} aria-hidden="true" />
+        <ViewModeIcon size={16} aria-hidden="true" />
       </button>
       <HistoryPanel />
       <div className="toolbar-separator" role="separator" aria-orientation="vertical" />

@@ -56,9 +56,17 @@ pub fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
         .item(&find)
         .build()?;
 
-    let toggle_preview = MenuItemBuilder::with_id("toggle_preview", "Alternar preview")
+    let cycle_view_mode = MenuItemBuilder::with_id("cycle_view_mode", "Alternar modo de exibição")
         .accelerator("CmdOrCtrl+Shift+P")
         .build(app)?;
+    let view_editor = MenuItemBuilder::with_id("view_editor", "Editor").build(app)?;
+    let view_split = MenuItemBuilder::with_id("view_split", "Lado a lado").build(app)?;
+    let view_preview = MenuItemBuilder::with_id("view_preview", "Visualização").build(app)?;
+    let view_mode_menu = SubmenuBuilder::new(app, "Modo de exibição")
+        .item(&view_editor)
+        .item(&view_split)
+        .item(&view_preview)
+        .build()?;
     let toggle_explorer = MenuItemBuilder::with_id("toggle_explorer", "Alternar explorador")
         .accelerator("CmdOrCtrl+Shift+E")
         .build(app)?;
@@ -80,7 +88,8 @@ pub fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
         .item(&theme_dark)
         .build()?;
     let view_menu = SubmenuBuilder::new(app, "Visualizar")
-        .item(&toggle_preview)
+        .item(&cycle_view_mode)
+        .item(&view_mode_menu)
         .item(&toggle_explorer)
         .separator()
         .item(&zoom_in)

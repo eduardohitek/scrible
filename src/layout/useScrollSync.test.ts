@@ -23,6 +23,7 @@ function makeEditorHandle(scrollDOM: HTMLElement): EditorPaneHandle {
     getTopVisibleLine: () => 0,
     scrollToLine: vi.fn(),
     openSearch: vi.fn(),
+    focus: vi.fn(),
   };
 }
 
@@ -115,7 +116,6 @@ describe("useScrollSync", () => {
     Object.defineProperty(previewContainer, "scrollHeight", { value: 400, configurable: true });
 
     const editorHandle = makeEditorHandle(editorScrollDOM);
-    vi.spyOn(editorHandle, "getTopVisibleLine").mockReturnValue(5);
 
     const editorRef = { current: editorHandle };
     const previewRef = { current: makePreviewHandle(previewContainer) };
@@ -125,12 +125,41 @@ describe("useScrollSync", () => {
       // 20 linhas no total: âncoras sintéticas {0,0} e {20,400} + o bloco {10,100}.
       useScrollSync(containerRef, editorRef, previewRef, Array.from({ length: 20 }).join("\n"), true),
     );
+    // Só depois do sync inicial (editor no topo), pra ele não mexer no scrollTop.
+    vi.spyOn(editorHandle, "getTopVisibleLine").mockReturnValue(5);
 
     editorScrollDOM.dispatchEvent(new Event("scroll"));
 
     // Linha 5 fica na metade do caminho entre a âncora sintética inicial
     // (0, 0) e o bloco marcado (10, 100) → offset 50.
     expect(previewContainer.scrollTop).toBe(50);
+  });
+
+  it("alinha o preview com o editor assim que é ligado, sem esperar um scroll", () => {
+    // Do modo só editor direto pro só visualização, o preview remonta com
+    // scrollTop 0 e o editor fica oculto — ninguém rolaria pra disparar o sync.
+    const { root, editorScrollDOM, previewContainer } = makeTree();
+    vi.spyOn(previewContainer, "getBoundingClientRect").mockReturnValue({ top: 0 } as DOMRect);
+    Object.defineProperty(previewContainer, "scrollHeight", { value: 400, configurable: true });
+
+    const editorHandle = makeEditorHandle(editorScrollDOM);
+    vi.spyOn(editorHandle, "getTopVisibleLine").mockReturnValue(10);
+
+    const editorRef = { current: editorHandle };
+    const previewRef = { current: makePreviewHandle(previewContainer) };
+    const containerRef = { current: root };
+
+    const { rerender } = renderHook(
+      ({ enabled }) =>
+        useScrollSync(containerRef, editorRef, previewRef, Array.from({ length: 20 }).join("\n"), enabled),
+      { initialProps: { enabled: false } },
+    );
+    expect(previewContainer.scrollTop).toBe(0);
+
+    rerender({ enabled: true });
+
+    // Linha 10 de 20, sem blocos marcados: metade do scrollHeight.
+    expect(previewContainer.scrollTop).toBe(200);
   });
 
   it("rolar o preview rola o editor (chama scrollToLine)", () => {
@@ -142,7 +171,6 @@ describe("useScrollSync", () => {
     vi.spyOn(previewContainer, "getBoundingClientRect").mockReturnValue({ top: 0 } as DOMRect);
     vi.spyOn(block, "getBoundingClientRect").mockReturnValue({ top: 100 } as DOMRect);
     Object.defineProperty(previewContainer, "scrollHeight", { value: 400, configurable: true });
-    Object.defineProperty(previewContainer, "scrollTop", { value: 50, configurable: true });
 
     const editorHandle = makeEditorHandle(editorScrollDOM);
     const editorRef = { current: editorHandle };
@@ -152,6 +180,8 @@ describe("useScrollSync", () => {
     renderHook(() =>
       useScrollSync(containerRef, editorRef, previewRef, Array.from({ length: 20 }).join("\n"), true),
     );
+    // Depois do sync inicial, que escreve scrollTop.
+    Object.defineProperty(previewContainer, "scrollTop", { value: 50, configurable: true });
 
     previewContainer.dispatchEvent(new Event("scroll"));
 
@@ -183,6 +213,8 @@ describe("useScrollSync", () => {
     const containerRef = { current: root };
 
     renderHook(() => useScrollSync(containerRef, editorRef, previewRef, "linha única", true));
+    // Descarta o frame do sync inicial (ligar o hook já alinha o preview uma vez).
+    rafCallbacks.length = 0;
 
     // Rajada de 5 eventos "scroll" brutos antes de qualquer frame rodar —
     // só o primeiro deveria agendar um rAF (o resto é descartado pelo guard
