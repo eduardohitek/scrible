@@ -8,8 +8,8 @@ import { useZoomStore } from "../zoom/zoomStore";
 import { exportActiveTabAsHtml, exportActiveTabAsPdf } from "../export/exportHtml";
 import { formatShortcut } from "../platform/platform";
 
-// O registry decide em tempo de import se `export_pdf` existe (só no macOS) —
-// `navigator.platform` vem vazio no jsdom, então precisa ser forçado antes do import.
+// `navigator.platform` vem vazio no jsdom, então precisa ser forçado antes do import
+// para os rótulos de atalho do registry saírem no formato do macOS.
 vi.hoisted(() => {
   Object.defineProperty(navigator, "platform", { value: "MacIntel", configurable: true });
 });

@@ -3341,6 +3341,7 @@ name = "scrible"
 version = "0.5.0"
 dependencies = [
  "block2 0.5.1",
+ "gtk",
  "notify",
  "objc2 0.5.2",
  "objc2-foundation 0.2.2",
@@ -3356,6 +3357,9 @@ dependencies = [
  "tempfile",
  "thiserror 1.0.69",
  "tokio",
+ "webkit2gtk",
+ "webview2-com",
+ "windows-core 0.62.2",
 ]
 
 [[package]]

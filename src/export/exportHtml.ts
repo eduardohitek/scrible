@@ -135,7 +135,7 @@ export async function exportActiveTabAsHtml(): Promise<void> {
 }
 
 /** Exporta a aba ativa como PDF (#27), via `WKWebView.createPDF()` nativo no
- * lado Rust (comando `export_pdf`, macOS-only) — `window.print()` não faz
+ * lado Rust (comando `export_pdf`) — `window.print()` não faz
  * nada no WKWebView do Tauri/wry, limitação confirmada na verificação manual
  * e documentada upstream (github.com/tauri-apps/wry#707). Ao contrário do
  * export de HTML, o tema é sempre claro — critério de aceite literal da

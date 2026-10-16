@@ -1,13 +1,11 @@
 import { useRef, useState } from "react";
 import { Download } from "lucide-react";
 import { runCommand } from "../commands/registry";
-import { isMac } from "../platform/platform";
 import { useClickOutside } from "../ui/useClickOutside";
 
 /** Mesmo idioma de popover de `ThemeToggle`/`HistoryPanel` — um único slot
  * na toolbar para as duas ações de exportação, que hoje só existem no menu
- * nativo (#26/#27). Um ícone só, não dois: export PDF é macOS-only (#27),
- * e no Windows/Linux (#32) um segundo ícone ficaria morto. */
+ * nativo (#26/#27). Um ícone só, não dois. */
 export function ExportMenu() {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -38,13 +36,11 @@ export function ExportMenu() {
               Exportar para HTML…
             </button>
           </li>
-          {isMac() && (
-            <li>
-              <button type="button" className="popover-menu-item" onClick={() => runAndClose("export_pdf")}>
-                Exportar para PDF…
-              </button>
-            </li>
-          )}
+          <li>
+            <button type="button" className="popover-menu-item" onClick={() => runAndClose("export_pdf")}>
+              Exportar para PDF…
+            </button>
+          </li>
         </ul>
       )}
     </div>

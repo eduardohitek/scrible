@@ -1,7 +1,6 @@
 mod app_menu;
 mod fs_ops;
 mod history;
-#[cfg(target_os = "macos")]
 mod pdf_export;
 mod tree_watcher;
 mod watcher;
@@ -91,7 +90,6 @@ fn write_export_file(path: String, content: String) -> Result<(), FsError> {
     fs_ops::write_export_file(&PathBuf::from(path), &content)
 }
 
-#[cfg(target_os = "macos")]
 #[tauri::command]
 async fn export_pdf(app: AppHandle, html: String, path: String) -> Result<(), pdf_export::PdfExportError> {
     let bytes = pdf_export::render_html_to_pdf(&app, html).await?;
@@ -183,7 +181,6 @@ pub fn run() {
             read_file,
             save_file,
             write_export_file,
-            #[cfg(target_os = "macos")]
             export_pdf,
             rename_file,
             delete_file,

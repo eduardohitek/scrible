@@ -68,6 +68,7 @@ pub fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
         .build(app)?;
     let rename_tab = MenuItemBuilder::with_id("rename_tab", "Renomear").build(app)?;
     let export_html = MenuItemBuilder::with_id("export_html", "Exportar para HTML…").build(app)?;
+    let export_pdf = MenuItemBuilder::with_id("export_pdf", "Exportar para PDF…").build(app)?;
     let file_menu = SubmenuBuilder::new(app, "Arquivo")
         .item(&new_tab)
         .item(&open_file)
@@ -75,14 +76,9 @@ pub fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
         .item(&close_tab)
         .item(&rename_tab)
         .separator()
-        .item(&export_html);
-    // PDF só no macOS (#27); Windows/Linux ficam sem o item até o follow-up da #32.
-    #[cfg(target_os = "macos")]
-    let file_menu = {
-        let export_pdf = MenuItemBuilder::with_id("export_pdf", "Exportar para PDF…").build(app)?;
-        file_menu.item(&export_pdf)
-    };
-    let file_menu = file_menu.build()?;
+        .item(&export_html)
+        .item(&export_pdf)
+        .build()?;
 
     let find = MenuItemBuilder::with_id("find", "Buscar")
         .accelerator("CmdOrCtrl+F")

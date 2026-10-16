@@ -1339,3 +1339,17 @@ em tudo que vier do Rust/diálogos).
 
 **Afeta:** `#28` (notarização) só mexe no passo de build do macOS; qualquer nova plataforma/formato
 entra na lista `platforms` de `build-release-assets.sh` e na matriz do `build`.
+
+## #81 — Exportar PDF no Windows e no Linux
+
+- **Um comando, três motores**: `export_pdf` existe nas três plataformas. macOS segue com
+  `WKWebView.createPDF`; Windows usa `ICoreWebView2_7::PrintToPdf` e Linux usa
+  `WebKitPrintOperation` com a "impressora" `Print to File` (sem diálogo), ambos A4 com fundos.
+  Item de menu (`app_menu.rs`), `ExportMenu.tsx` e `registry.ts` voltaram a aparecer em todas.
+- **HTML via arquivo temporário + `file://`**, não `NavigateToString`: o WebView2 limita a 2 MB e
+  documentos com vários diagramas mermaid em SVG passam disso. O fim do load vem de `on_page_load`.
+  Os temporários (`.html` e `.pdf`) são apagados em qualquer desfecho.
+- **Verificação**: Linux foi exercitado de verdade sob xvfb (PDF válido gerado). Windows só compila
+  no CI — o `PrintToPdf` numa janela oculta precisa de verificação manual num Windows real.
+
+**Afeta:** nada pendente além da verificação manual no Windows.
