@@ -1316,3 +1316,26 @@ Plano fechado via sabatina (matriz, instaladores e updater ficam para o PR 2).
 **Afeta:** `#32` PR 2 (publicação das 3 plataformas, `latest.json` com 5 chaves, corpo da release,
 README), issue de follow-up do PDF, e qualquer código novo que monte paths (usar `normalizePath`
 em tudo que vier do Rust/diálogos).
+
+## #32 (PR 2) — Release das 3 plataformas e updater multiplataforma
+
+- **`release.yml` com matriz + job `publish`**: o job `build` (5 plataformas, builds nativos) só sobe
+  os instaladores como artefatos (`scrible-<plataforma>`); o job `publish` (`needs: build`, pulado em
+  `dry_run`) baixa tudo, roda `scripts/build-release-assets.sh` e publica com
+  `softprops/action-gh-release`. Sem `tauri-action` — decisão da sabatina, mantém o controle do
+  `latest.json` e do `SHA256SUMS.txt` (um único, cobrindo todos os arquivos).
+- **`scripts/build-release-assets.sh`** (bash + jq, testado com uma árvore falsa de artefatos): acha
+  exatamente um pacote do updater por plataforma e o `.sig` correspondente (falha se achar 0 ou >1),
+  recusa nomes de asset repetidos entre plataformas (o bundler já diferencia arquitetura no nome:
+  `x64`/`arm64`, `amd64`/`arm64`, `aarch64`) e gera o `latest.json` com as 5 chaves: `darwin-aarch64`,
+  `windows-x86_64`, `windows-aarch64`, `linux-x86_64`, `linux-aarch64`.
+- Pacote do updater por plataforma: macOS `scrible.app.tar.gz` (inalterado), Windows `*-setup.exe`,
+  Linux `*.AppImage`, cada um com `.sig`. O `.deb` não se atualiza pelo app — o corpo da release diz
+  isso. A chave `darwin-aarch64` continua igual, então clientes antigos não percebem a mudança.
+- Corpo da release com seções por plataforma (Gatekeeper, SmartScreen, `chmod +x`/`apt install`).
+  README e descrição da task `build` atualizados.
+- **Validação**: depois do merge, uma tag `vX.Y.Z-rc.1` (mesmo precedente da `#63`) e o teste do
+  updater de uma rc para outra em pelo menos Windows e Linux. Authenticode segue fora de escopo.
+
+**Afeta:** `#28` (notarização) só mexe no passo de build do macOS; qualquer nova plataforma/formato
+entra na lista `platforms` de `build-release-assets.sh` e na matriz do `build`.

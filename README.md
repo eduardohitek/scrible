@@ -3,29 +3,42 @@
 [![CI](https://github.com/eduardohitek/scrible/actions/workflows/ci.yml/badge.svg)](https://github.com/eduardohitek/scrible/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/eduardohitek/scrible?include_prereleases)](https://github.com/eduardohitek/scrible/releases)
 
-Editor de markdown com interface limpa, preview em tempo real (incluindo diagramas [mermaid](https://mermaid.js.org/)) e autosave — feito inicialmente para macOS, com portabilidade planejada para Windows e Linux.
+Editor de markdown com interface limpa, preview em tempo real (incluindo diagramas [mermaid](https://mermaid.js.org/)) e autosave — para macOS, Windows e Linux.
 
 ## Download e instalação
 
-Builds prontos ficam na [página de releases](https://github.com/eduardohitek/scrible/releases) — baixe o `.dmg` mais recente.
+Builds prontos ficam na [página de releases](https://github.com/eduardohitek/scrible/releases). Escolha o arquivo da sua plataforma:
 
-> **Apple Silicon (arm64) apenas**, por enquanto — builds para Intel/Windows/Linux estão no backlog ([#32](https://github.com/eduardohitek/scrible/issues/32)).
+| Plataforma | Arquivo | Atualiza sozinho |
+|---|---|---|
+| macOS (Apple Silicon) | `scrible_*_aarch64.dmg` | sim |
+| Windows 10/11 (x64) | `scrible_*_x64-setup.exe` | sim |
+| Windows 11 (ARM) | `scrible_*_arm64-setup.exe` | sim |
+| Linux x64 / arm64 (Ubuntu 22.04+ e derivadas) | `scrible_*_amd64.AppImage` / `scrible_*_arm64.AppImage` | sim |
+| Linux x64 / arm64 (Debian/Ubuntu) | `scrible_*_amd64.deb` / `scrible_*_arm64.deb` | não — instale o `.deb` novo |
 
-O `.dmg` é assinado apenas com **assinatura ad-hoc** (sem conta de desenvolvedor Apple — assinatura e notarização de verdade estão em [#28](https://github.com/eduardohitek/scrible/issues/28)). Ao abrir o app pela primeira vez, o macOS vai avisar que não foi possível verificar o desenvolvedor:
+macOS continua **só Apple Silicon (arm64)**. Nenhum instalador tem assinatura de código paga, então cada sistema avisa na primeira abertura:
+
+**macOS** — assinatura ad-hoc, sem notarização ([#28](https://github.com/eduardohitek/scrible/issues/28)):
 
 1. Abra o `.dmg` e arraste o `scrible.app` para `Applications`.
 2. Tente abrir o app — o macOS vai bloquear.
 3. Vá em **Ajustes do Sistema → Privacidade e Segurança**, role até a mensagem sobre o scrible e clique em **Abrir Mesmo Assim**.
 
+**Windows** — sem assinatura Authenticode: o SmartScreen avisa; clique em **Mais informações → Executar assim mesmo**.
+
+**Linux** — AppImage: `chmod +x scrible_*.AppImage` e execute. Pacote `.deb`: `sudo apt install ./scrible_*.deb`.
+
 Cada release traz um `SHA256SUMS.txt` para conferir a integridade do download:
 
 ```sh
-shasum -a 256 -c SHA256SUMS.txt
+shasum -a 256 -c SHA256SUMS.txt                # macOS
+sha256sum -c SHA256SUMS.txt --ignore-missing   # Linux
 ```
 
 ### Atualizações
 
-A partir da primeira versão com o updater, o scrible confere sozinho, ao abrir, se há uma versão nova (e também pelo menu **scrible → Procurar atualizações…**). Ao confirmar no aviso, ele salva as abas, baixa, instala e reinicia. Quem está numa versão anterior ao updater precisa instalar o `.dmg` uma última vez.
+A partir da primeira versão com o updater, o scrible confere sozinho, ao abrir, se há uma versão nova (e também pelo menu **scrible → Procurar atualizações…**). Ao confirmar no aviso, ele salva as abas, baixa, instala e reinicia. Quem está numa versão anterior ao updater precisa instalar o pacote da plataforma uma última vez. Instalações via `.deb` não se atualizam pelo app.
 
 ## Stack
 
@@ -41,6 +54,11 @@ A partir da primeira versão com o updater, o scrible confere sozinho, ao abrir,
   ```sh
   xcode-select --install
   ```
+- No Linux (Debian/Ubuntu), as bibliotecas do WebKitGTK:
+  ```sh
+  sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libayatana-appindicator3-dev patchelf
+  ```
+- No Windows, o WebView2 (já vem no Windows 11) e as Build Tools do Visual Studio com "Desenvolvimento para desktop com C++".
 
 ## Como rodar
 
@@ -57,7 +75,7 @@ Rode `mise tasks` para a lista completa. As principais:
 | Task | O que faz |
 |---|---|
 | `mise run dev` | Roda o app em modo desenvolvimento |
-| `mise run build` | Compila e gera o instalável (`.app`/`.dmg`) e o pacote do updater — exige a chave em `TAURI_SIGNING_PRIVATE_KEY` |
+| `mise run build` | Compila e gera os instaladores da plataforma atual (`.app`/`.dmg`, `.exe`, `.AppImage`/`.deb`) e o pacote do updater — exige a chave em `TAURI_SIGNING_PRIVATE_KEY` |
 | `mise run lint` | ESLint no frontend + `cargo clippy` no backend |
 | `mise run typecheck` | Verifica os tipos do TypeScript |
 | `mise run test` | Testes do frontend (Vitest) e do backend (`cargo test`) |

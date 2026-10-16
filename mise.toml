@@ -11,7 +11,7 @@ description = "Roda o scrible em modo desenvolvimento com hot reload"
 run = "npm run tauri dev"
 
 [tasks.build]
-description = "Compila o app e gera o .app/.dmg para macOS"
+description = "Compila o app e gera os instaladores da plataforma atual (.app/.dmg, .exe, .AppImage/.deb)"
 run = "npm run tauri build"
 
 [tasks.lint]

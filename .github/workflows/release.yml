@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
     inputs:
       # Modo de teste (#32): roda em qualquer branch, builda as 5 plataformas e
-      # sobe os instaladores como artefatos do workflow, sem publicar release.
+      # deixa os instaladores como artefatos do workflow, sem publicar release.
       dry_run:
         description: "Só builda e sobe os instaladores como artefatos (não publica release)"
         type: boolean
@@ -102,61 +102,61 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
-      - name: Subir instaladores como artefatos (modo de teste)
-        if: ${{ inputs.dry_run }}
+      # Os instaladores sempre sobem como artefatos: no modo de teste são o
+      # resultado final; numa release real, alimentam o job `publish`.
+      - name: Subir instaladores como artefatos
         uses: actions/upload-artifact@v4
         with:
           name: scrible-${{ matrix.name }}
           path: ${{ matrix.bundle_glob }}
           if-no-files-found: error
 
-      # Até o PR de release das 3 plataformas (#32, PR 2), só o macOS é
-      # publicado, exatamente como antes.
-      - name: Gerar checksum
-        if: ${{ !inputs.dry_run && runner.os == 'macOS' }}
-        working-directory: src-tauri/target/release/bundle/dmg
-        run: shasum -a 256 *.dmg > SHA256SUMS.txt
+  # Junta os instaladores das 5 plataformas, gera um único SHA256SUMS.txt e o
+  # latest.json do updater (5 chaves) e publica tudo na mesma release (#32).
+  # Pre-releases também publicam o manifesto, mas nunca são a "latest" do
+  # GitHub — não são oferecidas pelo updater.
+  publish:
+    if: ${{ !inputs.dry_run }}
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
 
-      # Manifesto que o app consulta em releases/latest/download/latest.json
-      # (plugins.updater.endpoints em tauri.conf.json). Pre-releases também o
-      # publicam, mas nunca são a "latest" do GitHub — não são oferecidas.
-      - name: Gerar latest.json do updater
-        if: ${{ !inputs.dry_run && runner.os == 'macOS' }}
-        working-directory: src-tauri/target/release/bundle/macos
-        run: |
-          jq -n \
-            --arg version "${GITHUB_REF_NAME#v}" \
-            --arg notes "https://github.com/${GITHUB_REPOSITORY}/releases/tag/${GITHUB_REF_NAME}" \
-            --arg pub_date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            --arg signature "$(cat scrible.app.tar.gz.sig)" \
-            --arg url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/scrible.app.tar.gz" \
-            '{version: $version, notes: $notes, pub_date: $pub_date,
-              platforms: {"darwin-aarch64": {signature: $signature, url: $url}}}' \
-            > latest.json
+      - name: Baixar artefatos dos builds
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: scrible-*
+
+      - name: Montar assets (SHA256SUMS.txt + latest.json)
+        run: ./scripts/build-release-assets.sh artifacts "$GITHUB_REF_NAME" "$GITHUB_REPOSITORY"
 
       - name: Publicar release
-        if: ${{ !inputs.dry_run && runner.os == 'macOS' }}
         uses: softprops/action-gh-release@v3
         with:
-          files: |
-            src-tauri/target/release/bundle/dmg/*.dmg
-            src-tauri/target/release/bundle/dmg/SHA256SUMS.txt
-            src-tauri/target/release/bundle/macos/scrible.app.tar.gz
-            src-tauri/target/release/bundle/macos/scrible.app.tar.gz.sig
-            src-tauri/target/release/bundle/macos/latest.json
+          files: artifacts/release/*
           generate_release_notes: true
           prerelease: ${{ contains(github.ref_name, '-') }}
           body: |
-            Build para **macOS Apple Silicon (arm64)** apenas.
+            Builds para **macOS (Apple Silicon)**, **Windows 10/11 (x64 e arm64)** e **Linux (x64 e arm64, Ubuntu 22.04+)**.
+            Nenhum instalador tem assinatura de código paga: o sistema vai avisar na primeira abertura, como explicado abaixo.
 
-            ⚠️ Este `.dmg` não é assinado nem notarizado pela Apple (assinatura ad-hoc,
-            sem conta de desenvolvedor). Ao abrir pela primeira vez, o macOS vai avisar
-            que não foi possível verificar o desenvolvedor — libere em
-            **Ajustes do Sistema → Privacidade e Segurança → Abrir Mesmo Assim**.
+            ### macOS
+            `scrible_*_aarch64.dmg` (Apple Silicon). Assinatura ad-hoc, sem notarização: ao abrir pela
+            primeira vez, libere em **Ajustes do Sistema → Privacidade e Segurança → Abrir Mesmo Assim**.
+
+            ### Windows
+            `scrible_*_x64-setup.exe` (Intel/AMD) ou `scrible_*_arm64-setup.exe` (ARM). Sem assinatura
+            Authenticode: o SmartScreen avisa na primeira vez — clique em **Mais informações → Executar assim mesmo**.
+
+            ### Linux
+            - **AppImage** (`scrible_*_amd64.AppImage` / `scrible_*_arm64.AppImage`): `chmod +x scrible_*.AppImage` e execute. É o único formato que se atualiza sozinho.
+            - **.deb** (`scrible_*_amd64.deb` / `scrible_*_arm64.deb`): `sudo apt install ./scrible_*.deb`. Não se atualiza pelo app; instale o `.deb` da versão nova.
 
             Para conferir a integridade do download:
             ```sh
-            shasum -a 256 -c SHA256SUMS.txt
+            sha256sum -c SHA256SUMS.txt --ignore-missing   # Linux
+            shasum -a 256 -c SHA256SUMS.txt                # macOS
             ```
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
