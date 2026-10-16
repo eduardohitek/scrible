@@ -1,8 +1,43 @@
-use tauri::menu::{Menu, MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
+use tauri::menu::{
+    AboutMetadata, Menu, MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder,
+};
 use tauri::{AppHandle, Wry};
 
+/// Autor usado quando `authors` do `Cargo.toml` estiver vazio.
+const FALLBACK_AUTHOR: &str = "Eduardo Hitek";
+
+/// Autores do `Cargo.toml` (`CARGO_PKG_AUTHORS` vem separado por `:`), com fallback fixo.
+fn authors(raw: &str) -> Vec<String> {
+    let list: Vec<String> = raw
+        .split(':')
+        .map(str::trim)
+        .filter(|a| !a.is_empty())
+        .map(String::from)
+        .collect();
+    if list.is_empty() {
+        vec![FALLBACK_AUTHOR.to_string()]
+    } else {
+        list
+    }
+}
+
+/// Dados do painel "Sobre o scrible": nome e versão vêm do `package_info` (que o Tauri lê do
+/// `package.json` via `tauri.conf.json`), autor do `Cargo.toml`. O painel nativo do macOS ignora
+/// `authors`, então o autor também vai em `credits`, o campo que ele exibe.
+fn about_metadata(app: &AppHandle) -> AboutMetadata<'_> {
+    let info = app.package_info();
+    let authors = authors(env!("CARGO_PKG_AUTHORS"));
+    AboutMetadata {
+        name: Some(info.name.clone()),
+        version: Some(info.version.to_string()),
+        credits: Some(format!("Autor: {}", authors.join(", "))),
+        authors: Some(authors),
+        ..Default::default()
+    }
+}
+
 /// Monta o menu nativo do macOS (#24): Arquivo/Editar/Visualizar/Janela, mais um submenu de app
-/// ("scrible") com "Procurar atualizações…" e Sair. Itens customizados (não-`Predefined*`) disparam eventos JS via
+/// ("scrible") com "Sobre o scrible", "Procurar atualizações…" e Sair. Itens customizados (não-`Predefined*`) disparam eventos JS via
 /// `on_menu_event`, registrado por quem chamar esta função — aqui só a estrutura é montada.
 ///
 /// O submenu de app é o **primeiro** passado ao `MenuBuilder`: no macOS, o primeiro submenu de um
@@ -12,8 +47,11 @@ pub fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
     let quit = MenuItemBuilder::with_id("quit", "Sair")
         .accelerator("CmdOrCtrl+Q")
         .build(app)?;
+    let about = PredefinedMenuItem::about(app, Some("Sobre o scrible"), Some(about_metadata(app)))?;
     let check_updates = MenuItemBuilder::with_id("check_updates", "Procurar atualizações…").build(app)?;
     let app_menu = SubmenuBuilder::new(app, "scrible")
+        .item(&about)
+        .separator()
         .item(&check_updates)
         .separator()
         .item(&quit)
@@ -107,4 +145,21 @@ pub fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
     MenuBuilder::new(app)
         .items(&[&app_menu, &file_menu, &edit_menu, &view_menu, &window_menu])
         .build()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn authors_le_lista_do_cargo() {
+        assert_eq!(authors("Eduardo Hitek"), vec!["Eduardo Hitek"]);
+        assert_eq!(authors("A <a@x>:B"), vec!["A <a@x>", "B"]);
+    }
+
+    #[test]
+    fn authors_vazio_cai_no_fallback() {
+        assert_eq!(authors(""), vec![FALLBACK_AUTHOR]);
+        assert_eq!(authors(" : "), vec![FALLBACK_AUTHOR]);
+    }
 }
