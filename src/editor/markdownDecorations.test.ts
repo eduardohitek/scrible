@@ -79,4 +79,11 @@ describe("markdownDecorations — nível 3 (#29)", () => {
     expect(text(v)).toContain("![alt](img.png)");
     expect(text(v)).toContain("[ref][1]");
   });
+
+  it("título de link multi-linha é escondido por linha, sem desativar o plugin", () => {
+    const multi = '[link](/url "first\nsecond")\n\nfim';
+    const v = mount(multi, true, multi.length);
+    expect(text(v)).not.toMatch(/[[\]()"]|first|second|url/);
+    expect(v.state.doc.toString()).toBe(multi);
+  });
 });

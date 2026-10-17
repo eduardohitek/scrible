@@ -94,7 +94,14 @@ function buildDecorations(view: EditorView, hideMarkers: boolean): Built {
         if (hideMarkers) {
           const range = hiddenRange(node, view);
           if (range && !touchedLines.some((line) => range.from <= line.to && range.to >= line.from)) {
-            hidden.push(HIDDEN.range(range.from, range.to));
+            // Replace de ViewPlugin não pode cruzar quebra de linha (o
+            // CodeMirror desativa o plugin): fatia o intervalo por linha.
+            for (let pos = range.from; pos < range.to; ) {
+              const line = view.state.doc.lineAt(pos);
+              const end = Math.min(range.to, line.to);
+              if (end > pos) hidden.push(HIDDEN.range(pos, end));
+              pos = line.to + 1;
+            }
             return;
           }
         }
