@@ -1,4 +1,4 @@
-import { EditorState, Transaction } from "@codemirror/state";
+import { Compartment, EditorState, Transaction } from "@codemirror/state";
 import { EditorView, keymap, drawSelection } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { searchKeymap } from "@codemirror/search";
@@ -15,6 +15,28 @@ const scrollTops = new Map<string, number>();
 const cursors = new Map<string, number>();
 const positionListeners = new Set<() => void>();
 
+// Nível do preview inline (#12 vs #29) vive num Compartment pra poder ser
+// trocado em runtime sem recriar o estado (undo/redo e seleção preservados).
+const livePreviewCompartment = new Compartment();
+let hideMarkers = false;
+
+/** Efeito que leva um `EditorState` (ou a `EditorView` ativa, via dispatch)
+ * ao nível de preview inline escolhido. */
+export function livePreviewEffect(hide: boolean) {
+  return livePreviewCompartment.reconfigure(markdownDecorations(hide));
+}
+
+/** Define o nível atual para estados criados/reconciliados daqui pra frente;
+ * quem já está montado numa `EditorView` recebe o efeito por dispatch. */
+export function setHideMarkers(hide: boolean): void {
+  hideMarkers = hide;
+}
+
+function withCurrentLivePreview(state: EditorState): EditorState {
+  if (livePreviewCompartment.get(state) === markdownDecorations(hideMarkers)) return state;
+  return state.update({ effects: livePreviewEffect(hideMarkers) }).state;
+}
+
 function notifyPositionChange() {
   positionListeners.forEach((listener) => listener());
 }
@@ -26,7 +48,7 @@ function buildExtensions(tabId: string, onChange: (value: string) => void) {
     EditorView.lineWrapping,
     keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap]),
     markdown({ base: markdownLanguage }),
-    markdownDecorations(),
+    livePreviewCompartment.of(markdownDecorations(hideMarkers)),
     markdownEditingKeymap,
     createEditorCompletion(() => useDocumentStore.getState().documents[tabId]?.path ?? null),
     searchExtensions,
@@ -75,12 +97,16 @@ export function getOrCreateEditorState(
     return state;
   }
   if (cached.doc.toString() === content) {
-    return cached;
+    const synced = withCurrentLivePreview(cached);
+    if (synced !== cached) states.set(tabId, synced);
+    return synced;
   }
 
-  const reconciled = cached.update({
-    changes: { from: 0, to: cached.doc.length, insert: content },
-  }).state;
+  const reconciled = withCurrentLivePreview(
+    cached.update({
+      changes: { from: 0, to: cached.doc.length, insert: content },
+    }).state,
+  );
   states.set(tabId, reconciled);
   return reconciled;
 }

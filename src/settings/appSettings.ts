@@ -21,6 +21,9 @@ export interface AppSettings {
   /** Versão que o usuário mandou pular no aviso de atualização — a checagem
    * da abertura deixa de oferecê-la; a do menu oferece mesmo assim. */
   skippedVersion: string | null;
+  /** Preview inline nível 3 (#29): esconde os marcadores de sintaxe fora da
+   * linha do cursor. Desligado = nível 2 (marcadores sempre visíveis). */
+  hideMarkers: boolean;
 }
 
 interface WorkspacePaths {
@@ -40,6 +43,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   explorer: { visible: true, width: 240 },
   zoom: DEFAULT_ZOOM,
   skippedVersion: null,
+  hideMarkers: false,
 };
 
 // Módulo de infraestrutura (não uma store zustand) usado por themeStore.ts e
@@ -88,12 +92,15 @@ function normalize(parsed: Partial<AppSettings> | null | undefined): AppSettings
   const zoom = snapZoom(parsed?.zoom);
   const skippedVersion =
     typeof parsed?.skippedVersion === "string" ? parsed.skippedVersion : DEFAULT_SETTINGS.skippedVersion;
+  const hideMarkers =
+    typeof parsed?.hideMarkers === "boolean" ? parsed.hideMarkers : DEFAULT_SETTINGS.hideMarkers;
   return {
     theme,
     layout: { splitRatio, viewMode },
     explorer: { visible: explorerVisible, width: explorerWidth },
     zoom,
     skippedVersion,
+    hideMarkers,
   };
 }
 
@@ -120,6 +127,7 @@ async function doLoad(): Promise<AppSettings> {
       explorer: { ...DEFAULT_SETTINGS.explorer },
       zoom: DEFAULT_SETTINGS.zoom,
       skippedVersion: DEFAULT_SETTINGS.skippedVersion,
+      hideMarkers: DEFAULT_SETTINGS.hideMarkers,
     };
     if (fsError.kind === "NotFound") {
       await writeSettings(cache);

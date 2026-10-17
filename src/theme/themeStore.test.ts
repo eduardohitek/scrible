@@ -68,6 +68,7 @@ describe("themeStore", () => {
         explorer: { visible: true, width: 240 },
         zoom: 1,
         skippedVersion: null,
+        hideMarkers: false,
       }),
       expectedMtime: null,
     });
@@ -112,6 +113,7 @@ describe("themeStore", () => {
         explorer: { visible: true, width: 240 },
         zoom: 1,
         skippedVersion: null,
+        hideMarkers: false,
       }),
       expectedMtime: null,
     });

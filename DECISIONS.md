@@ -1445,3 +1445,32 @@ restauradas de outros arquivos não recebem alteração externa em tempo real.
 **Afeta:** fontes futuras de autocomplete devem usar a mesma factory/override. Novos consumidores
 podem reutilizar o índice sem outro watcher; imagens locais fora do workspace continuam fora do
 escopo do protocolo asset desta issue.
+
+## #29 — Live preview nível 3 (ocultar marcadores fora da linha do cursor)
+
+- **Opt-in, default desligado (nível 2)**: a issue pede opção desligável e aponta risco de UX na
+  navegação por teclado; sem verificação manual extensiva ainda, o default continua o comportamento
+  de `#12`. Preferência `hideMarkers: boolean` em `settings.json` (via `patchAppSettings`, `#19`),
+  alternada pelo botão `EyeOff` da toolbar / comando `toggle_hide_markers`. **Não há tela de
+  "Preferências"** no app — o AC "nas preferências" foi atendido com o toggle da toolbar, o mesmo
+  lugar do tema; sem item no menu nativo (exigiria sincronizar estado marcado no Rust).
+- `markdownDecorations(hideMarkers)` devolve uma de duas instâncias fixas de `ViewPlugin`
+  (`level2`/`level3`), trocadas em runtime por um `Compartment` em `editorStateRegistry.ts`
+  (`livePreviewEffect`). `EditorPane` despacha o efeito na view montada; abas em segundo plano são
+  alinhadas em `getOrCreateEditorState` (comparação por identidade da extensão no compartment), sem
+  tocar no doc — undo/redo e seleção por aba preservados (`#21`).
+- Esconder = `Decoration.replace({})` sem widget: o documento nunca muda, então copiar, autosave e
+  preview usam o markdown real. O critério de revelar é a **linha inteira** tocada por qualquer range
+  da seleção (não o nó) — marcadores nunca aparecem/somem sob o cursor enquanto ele anda na mesma
+  linha, e seleção multi-linha revela todas as linhas cobertas. Plugin também provê
+  `EditorView.atomicRanges` com os ranges escondidos.
+- Escondidos: `HeaderMark` (+ espaço seguinte, só no início da linha), `EmphasisMark`,
+  `StrikethroughMark`, `CodeMark` de `InlineCode`, e `LinkMark`/`URL`/`LinkTitle` de `Link` com URL
+  inline. **Sempre visíveis**: fences de código, imagens, links por referência, citação e marcadores de lista.
+- Verificação: testes headless com `EditorView` em jsdom (`markdownDecorations.test.ts`), incluindo
+  percorrer todas as posições do cursor sem alterar o doc. **Teste manual de navegação por setas
+  em `mise run dev` não foi feito nesta sessão** (ambiente de nuvem sem GUI) — recomendado antes de
+  considerar mudar o default.
+
+**Afeta:** qualquer issue que adicione um nó de marcador novo a `markdownDecorations.ts` (decidir se
+entra em `hiddenRange`); a próxima chave de `settings.json` segue usando `patchAppSettings`.

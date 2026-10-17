@@ -1,7 +1,8 @@
-import { PanelLeft, Search, Columns2, Eye, PenLine, type LucideIcon } from "lucide-react";
+import { PanelLeft, Search, Columns2, Eye, PenLine, EyeOff, type LucideIcon } from "lucide-react";
 import { runCommand, getCommand } from "../commands/registry";
 import { useExplorerStore } from "../explorer/explorerStore";
 import { useLayoutStore, VIEW_MODE_LABEL, type ViewMode } from "../layout/layoutStore";
+import { useLivePreviewStore } from "../editor/livePreviewStore";
 import { ThemeToggle } from "../theme/ThemeToggle";
 import { HistoryPanel } from "../history/HistoryPanel";
 import { ExportMenu } from "../export/ExportMenu";
@@ -20,6 +21,7 @@ const VIEW_MODE_ICON: Record<ViewMode, LucideIcon> = {
 export function Toolbar() {
   const explorerVisible = useExplorerStore((state) => state.visible);
   const viewMode = useLayoutStore((state) => state.viewMode);
+  const hideMarkers = useLivePreviewStore((state) => state.hideMarkers);
   const ViewModeIcon = VIEW_MODE_ICON[viewMode];
 
   const findShortcut = getCommand("find")?.shortcut;
@@ -56,6 +58,16 @@ export function Toolbar() {
         onClick={() => runCommand("cycle_view_mode")}
       >
         <ViewModeIcon size={16} aria-hidden="true" />
+      </button>
+      <button
+        type="button"
+        className="icon-button"
+        aria-label="Ocultar marcadores markdown"
+        aria-pressed={hideMarkers}
+        data-tooltip={hideMarkers ? "Marcadores ocultos fora da linha do cursor" : "Ocultar marcadores fora da linha do cursor"}
+        onClick={() => runCommand("toggle_hide_markers")}
+      >
+        <EyeOff size={16} aria-hidden="true" />
       </button>
       <HistoryPanel />
       <div className="toolbar-separator" role="separator" aria-orientation="vertical" />
