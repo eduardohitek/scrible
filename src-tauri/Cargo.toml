@@ -1,6 +1,6 @@
 [package]
 name = "scrible"
-version = "0.8.0"
+version = "0.9.0"
 description = "scrible — editor de markdown com preview em tempo real e mermaid"
 authors = ["Eduardo Hitek"]
 edition = "2021"
