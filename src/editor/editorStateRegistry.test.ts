@@ -8,6 +8,7 @@ import {
   saveEditorState,
   saveScrollTop,
   seedPosition,
+  setHideMarkers,
   subscribePositions,
 } from "./editorStateRegistry";
 
@@ -118,5 +119,20 @@ describe("posição para a sessão (#9)", () => {
     saveScrollTop("tab-seed", 11);
     expect(listener).toHaveBeenCalledTimes(1);
     discard("tab-seed");
+  });
+
+  it("aba em segundo plano acompanha o nível de preview inline escolhido enquanto não estava montada (#29)", () => {
+    setHideMarkers(false);
+    const background = getOrCreateEditorState("tab-1", "**negrito**", () => {});
+    expect(background.doc.toString()).toBe("**negrito**");
+
+    setHideMarkers(true);
+    const synced = getOrCreateEditorState("tab-1", "**negrito**", () => {});
+    // Estado novo (compartment reconfigurado), documento intacto e histórico preservado.
+    expect(synced).not.toBe(background);
+    expect(synced.doc.toString()).toBe("**negrito**");
+    expect(getOrCreateEditorState("tab-1", "**negrito**", () => {})).toBe(synced);
+
+    setHideMarkers(false);
   });
 });

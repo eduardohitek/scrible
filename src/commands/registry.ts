@@ -3,6 +3,7 @@ import { useExplorerStore } from "../explorer/explorerStore";
 import { useThemeStore, type ThemePreference } from "../theme/themeStore";
 import { useTabsStore } from "../store/tabsStore";
 import { useZoomStore } from "../zoom/zoomStore";
+import { useLivePreviewStore } from "../editor/livePreviewStore";
 import { useUpdateStore } from "../updater/updateStore";
 import { formatShortcut } from "../platform/platform";
 import { exportActiveTabAsHtml, exportActiveTabAsPdf } from "../export/exportHtml";
@@ -107,6 +108,12 @@ export const commands: readonly AppCommand[] = [
     shortcut: formatShortcut("⇧⌘E"),
     run: () => useExplorerStore.getState().toggle(),
     isActive: () => useExplorerStore.getState().visible,
+  },
+  {
+    id: "toggle_hide_markers",
+    label: "Ocultar marcadores markdown",
+    run: () => useLivePreviewStore.getState().toggle(),
+    isActive: () => useLivePreviewStore.getState().hideMarkers,
   },
   {
     id: "zoom_in",

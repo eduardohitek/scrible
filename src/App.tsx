@@ -15,6 +15,7 @@ import { useExplorerStore } from "./explorer/explorerStore";
 import { ExplorerPanel } from "./explorer/ExplorerPanel";
 import { useThemeStore } from "./theme/themeStore";
 import { useZoomStore } from "./zoom/zoomStore";
+import { useLivePreviewStore } from "./editor/livePreviewStore";
 import { useZoomShortcuts } from "./zoom/useZoomShortcuts";
 import { runCommand, setEditorBridge } from "./commands/registry";
 import { Toolbar } from "./ui/Toolbar";
@@ -50,6 +51,7 @@ function App() {
   const resolvedTheme = useThemeStore((state) => state.resolved);
   const initLayout = useLayoutStore((state) => state.init);
   const initZoom = useZoomStore((state) => state.init);
+  const initLivePreview = useLivePreviewStore((state) => state.init);
   const splitLayoutRef = useRef<SplitLayoutHandle>(null);
   const sessionRef = useRef<SessionPersistence | null>(null);
   const bootstrappedRef = useRef(false);
@@ -91,6 +93,10 @@ function App() {
   useEffect(() => {
     void initZoom();
   }, [initZoom]);
+
+  useEffect(() => {
+    void initLivePreview();
+  }, [initLivePreview]);
 
   useEffect(() => {
     void useUpdateStore.getState().checkOnStartup();

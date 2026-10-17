@@ -2,7 +2,15 @@ import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { EditorView } from "@codemirror/view";
 import { openSearchPanel } from "@codemirror/search";
 import { useDocumentStore } from "../store/documentStore";
-import { getOrCreateEditorState, getScrollTop, saveEditorState, saveScrollTop } from "./editorStateRegistry";
+import {
+  getOrCreateEditorState,
+  getScrollTop,
+  livePreviewEffect,
+  saveEditorState,
+  saveScrollTop,
+  setHideMarkers,
+} from "./editorStateRegistry";
+import { useLivePreviewStore } from "./livePreviewStore";
 
 interface EditorPaneProps {
   tabId: string;
@@ -52,6 +60,14 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
 
   const content = useDocumentStore((state) => state.documents[tabId]?.content ?? "");
   const setContent = useDocumentStore((state) => state.setContent);
+  const hideMarkers = useLivePreviewStore((state) => state.hideMarkers);
+
+  // Roda antes do efeito de montagem (ordem de declaração), então estados
+  // criados/trocados já saem no nível certo; o dispatch cobre o view montado.
+  useEffect(() => {
+    setHideMarkers(hideMarkers);
+    viewRef.current?.dispatch({ effects: livePreviewEffect(hideMarkers) });
+  }, [hideMarkers]);
 
   useEffect(() => {
     if (!containerRef.current) return;

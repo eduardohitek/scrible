@@ -38,6 +38,7 @@ describe("appSettings", () => {
       explorer: { visible: true, width: 240 },
       zoom: 1,
       skippedVersion: null,
+        hideMarkers: false,
     });
     expect(mockedInvoke).toHaveBeenCalledWith("save_file", {
       path: "/ws/.scrible/settings.json",
@@ -47,6 +48,7 @@ describe("appSettings", () => {
         explorer: { visible: true, width: 240 },
         zoom: 1,
         skippedVersion: null,
+        hideMarkers: false,
       }),
       expectedMtime: null,
     });
@@ -96,6 +98,7 @@ describe("appSettings", () => {
         explorer: { visible: true, width: 240 },
         zoom: 1,
         skippedVersion: null,
+        hideMarkers: false,
       }),
       expectedMtime: null,
     });
@@ -110,6 +113,7 @@ describe("appSettings", () => {
         explorer: { visible: true, width: 240 },
         zoom: 1,
         skippedVersion: null,
+        hideMarkers: false,
       }),
       expectedMtime: null,
     });
@@ -140,6 +144,7 @@ describe("appSettings", () => {
         explorer: { visible: false, width: 240 },
         zoom: 1,
         skippedVersion: null,
+        hideMarkers: false,
       }),
       expectedMtime: null,
     });
@@ -161,6 +166,7 @@ describe("appSettings", () => {
       explorer: { visible: true, width: 240 },
       zoom: 1,
       skippedVersion: null,
+        hideMarkers: false,
     });
     expect(mockedInvoke).not.toHaveBeenCalledWith("save_file", expect.anything());
   });
@@ -195,6 +201,7 @@ describe("appSettings", () => {
           explorer: { visible: true, width: 240 },
           zoom: 1.25,
           skippedVersion: null,
+        hideMarkers: false,
         });
       throw new Error(`unexpected invoke: ${cmd}`);
     });
@@ -215,6 +222,7 @@ describe("appSettings", () => {
           explorer: { visible: true, width: 240 },
           zoom: 3,
           skippedVersion: null,
+        hideMarkers: false,
         });
       throw new Error(`unexpected invoke: ${cmd}`);
     });

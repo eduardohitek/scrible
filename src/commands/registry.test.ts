@@ -5,6 +5,7 @@ import { useExplorerStore } from "../explorer/explorerStore";
 import { useThemeStore } from "../theme/themeStore";
 import { useTabsStore } from "../store/tabsStore";
 import { useZoomStore } from "../zoom/zoomStore";
+import { useLivePreviewStore } from "../editor/livePreviewStore";
 import { exportActiveTabAsHtml, exportActiveTabAsPdf } from "../export/exportHtml";
 import { formatShortcut } from "../platform/platform";
 
@@ -157,6 +158,18 @@ describe("commands registry", () => {
     useLayoutStore.setState({ viewMode: "editor" });
     expect(getCommand("view_editor")?.isActive?.()).toBe(true);
     expect(getCommand("view_preview")?.isActive?.()).toBe(false);
+  });
+
+  it("toggle_hide_markers dispara o toggle e reflete o estado em isActive", () => {
+    const toggle = vi.fn().mockResolvedValue(undefined);
+    useLivePreviewStore.setState({ toggle, hideMarkers: false });
+
+    runCommand("toggle_hide_markers");
+
+    expect(toggle).toHaveBeenCalledOnce();
+    expect(getCommand("toggle_hide_markers")?.isActive?.()).toBe(false);
+    useLivePreviewStore.setState({ hideMarkers: true });
+    expect(getCommand("toggle_hide_markers")?.isActive?.()).toBe(true);
   });
 
   it("todos os comandos têm id único", () => {
