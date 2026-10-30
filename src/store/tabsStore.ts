@@ -26,6 +26,10 @@ interface TabsState {
    * do componente pra cá porque o menu nativo (#24) também precisa disparar a
    * mesma UI de fora da árvore React. */
   editingTabId: string | null;
+  /** Paths vindos de fora do app (#102) que chegaram antes do fim da
+   * restauração da sessão — aplicados por `markExternalOpenReady`. */
+  pendingExternalPaths: string[];
+  externalOpenReady: boolean;
   setWorkspaceRoot: (root: string) => void;
   /** Abre uma aba para `path`; se já houver uma aba aberta com esse path,
    * só a foca em vez de duplicar. */
@@ -37,6 +41,16 @@ interface TabsState {
   /** Abre um seletor nativo de arquivo filtrado por `.md` (#24) e abre a
    * aba correspondente ao path escolhido. No-op se o usuário cancelar. */
   openFileDialog: () => Promise<void>;
+  /** Ponto de entrada único para arquivos vindos de fora do app (SO, linha
+   * de comando, segunda instância — #102). Valida no Rust
+   * (`validate_open_paths`), abre cada path via `openTab` (path já aberto só
+   * foca) e o último aceito vira a aba ativa. Antes de
+   * `markExternalOpenReady`, só enfileira: a restauração da sessão (#9)
+   * sobrescreveria a aba ativa. */
+  openExternalPaths: (paths: string[]) => Promise<void>;
+  /** Chamado no boot depois da restauração da sessão: libera
+   * `openExternalPaths` e aplica os paths enfileirados até aqui. */
+  markExternalOpenReady: () => Promise<void>;
   /** Cria uma aba nova apontando para `untitled-N.md` (primeiro nome livre
    * checado contra o conteúdo real do diretório alvo, não só as abas
    * abertas). `targetDir` default é a raiz do workspace — o explorador (#25)
@@ -86,6 +100,8 @@ export const useTabsStore = create<TabsState>((set, get) => ({
   tabs: [],
   activeTabId: null,
   editingTabId: null,
+  pendingExternalPaths: [],
+  externalOpenReady: false,
 
   setWorkspaceRoot: (root) => set({ workspaceRoot: root }),
 
@@ -131,6 +147,30 @@ export const useTabsStore = create<TabsState>((set, get) => ({
       directory: false,
     });
     if (typeof path === "string") await get().openTab(normalizePath(path));
+  },
+
+  openExternalPaths: async (rawPaths) => {
+    const paths = rawPaths.map(normalizePath);
+    if (paths.length === 0) return;
+    if (!get().externalOpenReady) {
+      set((state) => ({ pendingExternalPaths: [...state.pendingExternalPaths, ...paths] }));
+      return;
+    }
+
+    let accepted: string[];
+    try {
+      accepted = await invoke<string[]>("validate_open_paths", { paths });
+    } catch (err) {
+      console.error("falha ao validar paths externos:", err);
+      return;
+    }
+    for (const path of accepted) await get().openTab(path);
+  },
+
+  markExternalOpenReady: async () => {
+    const pending = get().pendingExternalPaths;
+    set({ externalOpenReady: true, pendingExternalPaths: [] });
+    await get().openExternalPaths(pending);
   },
 
   newTab: async (targetDir) => {

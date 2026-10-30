@@ -1474,3 +1474,25 @@ escopo do protocolo asset desta issue.
 
 **Afeta:** qualquer issue que adicione um nó de marcador novo a `markdownDecorations.ts` (decidir se
 entra em `hiddenRange`); a próxima chave de `settings.json` segue usando `patchAppSettings`.
+
+## #102 — Ponto de entrada para arquivos vindos de fora do app (spec #101)
+
+- **Validação de path vinda do SO** (revisita a ressalva da `#6`): `validate_open_paths`
+  (`src-tauri/src/open_paths.rs`) só aceita arquivo regular existente (`metadata().is_file()`, segue
+  symlink) com extensão `.md`/`.markdown` (sem diferenciar maiúsculas). Rejeitados são descartados
+  com `eprintln!`, sem erro para o frontend. Os commands genéricos da `#6` continuam sem validar —
+  a regra vale só para a fronteira "path vindo de fora do processo", não restringe ao workspace.
+- **Ponto de entrada único** no frontend: `tabsStore.openExternalPaths(paths)` — `normalizePath` na
+  fronteira, valida no Rust e abre cada path via `openTab` (dedup: path já aberto só foca). O último
+  aceito vira a aba ativa. `openFileDialog` não passa por aqui: o path vem de um diálogo do próprio
+  app, já filtrado.
+- **Fila no boot**: até `markExternalOpenReady()`, `openExternalPaths` só enfileira em
+  `pendingExternalPaths` (sem validar). O boot (`App.tsx`) roda `restoreSession()` → consome
+  `take_pending_open_paths` (paths que o Rust guardou em `PendingOpenPaths` antes de o webview estar
+  pronto) → `markExternalOpenReady()` aplica tudo → só então `startSessionPersistence()`. As abas
+  novas entram na sessão pelo `collectSession()` normal.
+- **Contrato com os emissores nativos** (sub-issues de cada SO): com o app aberto, emitir o evento
+  `open-paths` (payload `string[]`); antes de o frontend estar pronto, guardar em `PendingOpenPaths`.
+
+**Afeta:** `#103` (emissor macOS) e as specs de Windows/Linux (linha de comando / segunda instância),
+que só precisam entregar paths por `open-paths`/`PendingOpenPaths`.

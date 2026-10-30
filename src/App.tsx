@@ -42,6 +42,19 @@ interface WorkspaceError {
   message: string;
 }
 
+/** Consome uma única vez os paths que o SO entregou antes de o webview estar
+ * pronto (#102) e libera `openExternalPaths`, aplicando também o que chegou
+ * pelo evento `open-paths` durante o boot. */
+async function openPendingExternalPaths() {
+  const tabs = useTabsStore.getState();
+  try {
+    await tabs.openExternalPaths(await invoke<string[]>("take_pending_open_paths"));
+  } catch (err) {
+    console.error("falha ao ler os arquivos pendentes do SO:", err);
+  }
+  await tabs.markExternalOpenReady();
+}
+
 function App() {
   const [workspaceError, setWorkspaceError] = useState<WorkspaceError | null>(null);
   const activeTabId = useTabsStore((state) => state.activeTabId);
@@ -74,6 +87,10 @@ function App() {
         if (!restored) {
           await useTabsStore.getState().openTab(`${root}/untitled.md`, { fallbackContent: DEFAULT_DOCUMENT });
         }
+        // Arquivos vindos do SO (#102) só depois da restauração, para entrarem
+        // como aba ativa: os que o Rust guardou antes de o webview estar pronto
+        // e os que chegaram pelo evento `open-paths` durante o boot.
+        await openPendingExternalPaths();
         sessionRef.current = startSessionPersistence();
         await useExplorerStore.getState().init(root);
       })
@@ -150,7 +167,14 @@ function App() {
       runCommand(event.payload);
     });
 
+    // Arquivos entregues pelo SO com o app já aberto (#102); antes do fim do
+    // boot o `tabsStore` só os enfileira.
+    const unlistenOpenPaths = listen<string[]>("open-paths", (event) => {
+      void useTabsStore.getState().openExternalPaths(event.payload);
+    });
+
     return () => {
+      void unlistenOpenPaths.then((fn) => fn());
       void unlistenFocus.then((fn) => fn());
       void unlistenClose.then((fn) => fn());
       void unlistenExternalChange.then((fn) => fn());
