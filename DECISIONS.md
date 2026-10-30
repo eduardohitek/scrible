@@ -1496,3 +1496,19 @@ entra em `hiddenRange`); a próxima chave de `settings.json` segue usando `patch
 
 **Afeta:** `#103` (emissor macOS) e as specs de Windows/Linux (linha de comando / segunda instância),
 que só precisam entregar paths por `open-paths`/`PendingOpenPaths`.
+
+## #103 — "Abrir com" no macOS: `RunEvent::Opened` (spec #101)
+
+- `run()` passou de `.run(generate_context!())` para `.build(...).run(handle_run_event)`.
+  `RunEvent::Opened { urls }` (só `cfg(target_os = "macos")`) vira paths via
+  `open_paths::file_urls_to_paths` (só `file://`, decodifica percent-encoding).
+- **Quem decide entre fila e evento é o Rust**: `PendingOpenPaths` guarda `frontend_ready`, que
+  `take_pending_open_paths` liga. Antes disso os paths são enfileirados; depois, são emitidos em
+  `open-paths` e a janela `main` é desminimizada, mostrada e focada. Checar e enfileirar sob o mesmo
+  lock evita perder paths que cheguem durante o `take`. Um reload do webview (dev) não reabre a
+  fila — o frontend novo recebe `[]`, e os próximos paths chegam por evento.
+- `PendingOpenPaths` é gerenciado no `Builder` (não no `setup`): ao abrir o app fechado por
+  "Abrir com", o `Opened` pode chegar antes do `setup`, e `app.state()` entraria em pânico.
+
+**Afeta:** specs de Windows/Linux podem reaproveitar `PendingOpenPaths::enqueue_unless_ready`
+(hoje sob `cfg(macos|test)`, para não gerar código morto no clippy dessas plataformas).

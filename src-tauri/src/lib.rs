@@ -188,9 +188,40 @@ fn quit_app(app: AppHandle) {
     app.exit(0);
 }
 
+/// Arquivos entregues pelo SO ("Abrir com", arrastar para o Dock — #103).
+/// Antes de o frontend consumir a fila no boot, ficam em `PendingOpenPaths`;
+/// depois, vão pelo evento `open-paths` e a janela vem para a frente.
+#[cfg(target_os = "macos")]
+fn deliver_opened_paths(app: &AppHandle, paths: Vec<String>) {
+    if paths.is_empty() {
+        return;
+    }
+    let Some(paths) = app.state::<PendingOpenPaths>().enqueue_unless_ready(paths) else {
+        return;
+    };
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+        let _ = window.emit("open-paths", paths);
+    }
+}
+
+fn handle_run_event(app: &AppHandle, event: tauri::RunEvent) {
+    #[cfg(target_os = "macos")]
+    if let tauri::RunEvent::Opened { urls } = event {
+        deliver_opened_paths(app, open_paths::file_urls_to_paths(&urls));
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = (app, event);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // Gerenciado no Builder (não no `setup`): no macOS, `RunEvent::Opened`
+        // de um app aberto por "Abrir com" pode chegar antes do `setup`.
+        .manage(PendingOpenPaths::default())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -217,7 +248,6 @@ pub fn run() {
 
             app.manage(WorkspaceState(result));
             app.manage(last_save_mtime);
-            app.manage(PendingOpenPaths::default());
 
             app.set_menu(app_menu::build(app.handle())?)?;
             app.on_menu_event(|app, event| {
@@ -258,6 +288,7 @@ pub fn run() {
             validate_open_paths,
             take_pending_open_paths
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while running tauri application")
+        .run(handle_run_event);
 }
