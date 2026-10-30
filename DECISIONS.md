@@ -1530,3 +1530,17 @@ que só precisam entregar paths por `open-paths`/`PendingOpenPaths`.
   `open -a <app> --env HOME=<home temporário> arquivo.md`. O `HOME` falso isola workspace e
   `session.json`, que serve de evidência (abas + `activeTabIndex`). Ao final, `lsregister -u` nos
   bundles de teste. `open -a` entrega o mesmo `kAEOpenDocuments` do "Abrir com" e do Dock.
+
+## CI só no macOS (trabalho de processo, sem issue)
+
+- `ci.yml` passou a rodar só em `macos-latest`. Linux e Windows saíram da matriz por decisão do usuário
+  (só o macOS é publicado). O passo do WebKitGTK (`if: runner.os == 'Linux'`) continua no arquivo, e
+  religar é só voltar a matriz para `[macos-latest, ubuntu-22.04, windows-latest]`.
+- `release.yml` não mudou: o `dry_run` ainda builda as 5 plataformas sob demanda.
+- **Consequência:** regressões só de Windows/Linux não são mais pegas no PR. Exemplos: o código sob
+  `cfg(target_os = ...)`, que o clippy dessas plataformas validava (ex.: `handle_run_event` da `#103`),
+  e os testes Rust restritos a `cfg(unix)`. Antes de religar ou de publicar essas plataformas, rodar
+  um `dry_run` do `release.yml`.
+
+**Afeta:** a `#32` (a matriz de 3 SOs descrita lá deixa de valer no CI de PR) e as specs futuras de
+Windows/Linux, que devem religar a plataforma na matriz.

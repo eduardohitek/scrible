@@ -13,7 +13,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, ubuntu-22.04, windows-latest]
+        # Linux e Windows desligados por ora (só macOS é publicado). Para religar,
+        # volte a matriz para [macos-latest, ubuntu-22.04, windows-latest].
+        os: [macos-latest]
     defaults:
       run:
         shell: bash
