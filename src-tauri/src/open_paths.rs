@@ -29,15 +29,49 @@ fn is_openable_markdown(path: &Path) -> bool {
     has_markdown_ext && path.metadata().is_ok_and(|meta| meta.is_file())
 }
 
+/// Converte as URLs entregues pelo SO (`RunEvent::Opened`, macOS) em paths.
+/// URLs que não são `file://` são ignoradas.
+#[cfg(any(target_os = "macos", test))]
+pub fn file_urls_to_paths(urls: &[tauri::Url]) -> Vec<String> {
+    urls.iter()
+        .filter(|url| url.scheme() == "file")
+        .filter_map(|url| url.to_file_path().ok())
+        .map(|path| path.to_string_lossy().into_owned())
+        .collect()
+}
+
 /// Paths entregues pelo SO antes de o frontend estar pronto para recebê-los
 /// por evento. O frontend os consome uma única vez no boot, depois de
-/// restaurar a sessão (`take_pending_open_paths`).
+/// restaurar a sessão (`take_pending_open_paths`); a partir daí os próximos
+/// vão direto pelo evento `open-paths`.
 #[derive(Default)]
-pub struct PendingOpenPaths(Mutex<Vec<String>>);
+pub struct PendingOpenPaths(Mutex<Pending>);
+
+#[derive(Default)]
+struct Pending {
+    paths: Vec<String>,
+    frontend_ready: bool,
+}
 
 impl PendingOpenPaths {
+    /// Devolve a fila e marca o frontend como pronto.
     pub fn take(&self) -> Vec<String> {
-        std::mem::take(&mut *self.0.lock().unwrap())
+        let mut pending = self.0.lock().unwrap();
+        pending.frontend_ready = true;
+        std::mem::take(&mut pending.paths)
+    }
+
+    /// Enfileira enquanto o frontend não consumiu a fila; depois disso devolve
+    /// os paths para o chamador emitir. Checar e enfileirar sob o mesmo lock
+    /// evita perder paths que cheguem durante o `take`.
+    #[cfg(any(target_os = "macos", test))]
+    pub fn enqueue_unless_ready(&self, paths: Vec<String>) -> Option<Vec<String>> {
+        let mut pending = self.0.lock().unwrap();
+        if pending.frontend_ready {
+            return Some(paths);
+        }
+        pending.paths.extend(paths);
+        None
     }
 }
 
@@ -88,8 +122,41 @@ mod tests {
     #[test]
     fn take_drains_the_queue() {
         let pending = PendingOpenPaths::default();
-        pending.0.lock().unwrap().push("/a.md".into());
-        assert_eq!(pending.take(), vec!["/a.md".to_string()]);
+        assert_eq!(pending.enqueue_unless_ready(vec!["/a.md".into()]), None);
+        assert_eq!(pending.enqueue_unless_ready(vec!["/b.md".into()]), None);
+        assert_eq!(pending.take(), vec!["/a.md".to_string(), "/b.md".to_string()]);
         assert!(pending.take().is_empty());
+    }
+
+    #[test]
+    fn paths_after_take_are_returned_for_emission() {
+        let pending = PendingOpenPaths::default();
+        pending.take();
+        assert_eq!(pending.enqueue_unless_ready(vec!["/a.md".into()]), Some(vec!["/a.md".to_string()]));
+        assert!(pending.take().is_empty());
+    }
+
+    fn url(raw: &str) -> tauri::Url {
+        tauri::Url::parse(raw).unwrap()
+    }
+
+    // Paths POSIX: no Windows `to_file_path` exige letra de drive.
+    #[cfg(unix)]
+    #[test]
+    fn converts_percent_encoded_file_urls() {
+        let urls = [url("file:///Users/eu/Minhas%20Notas/ca%C3%A7%C3%A3o.md")];
+        assert_eq!(file_urls_to_paths(&urls), vec!["/Users/eu/Minhas Notas/cação.md".to_string()]);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn ignores_non_file_urls_and_keeps_order() {
+        let urls = [
+            url("file:///tmp/a.md"),
+            url("https://example.com/b.md"),
+            url("scrible://abrir"),
+            url("file:///tmp/c.markdown"),
+        ];
+        assert_eq!(file_urls_to_paths(&urls), vec!["/tmp/a.md".to_string(), "/tmp/c.markdown".to_string()]);
     }
 }
