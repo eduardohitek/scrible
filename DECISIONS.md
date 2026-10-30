@@ -1491,6 +1491,10 @@ entra em `hiddenRange`); a próxima chave de `settings.json` segue usando `patch
   `take_pending_open_paths` (paths que o Rust guardou em `PendingOpenPaths` antes de o webview estar
   pronto) → `markExternalOpenReady()` aplica tudo → só então `startSessionPersistence()`. As abas
   novas entram na sessão pelo `collectSession()` normal.
+- **Pedidos serializados** (bug achado na validação de ponta a ponta da `#104`): `openExternalPaths`
+  encadeia cada pedido numa fila de promises de módulo. Sem isso, um `open-paths` que chegava
+  enquanto `markExternalOpenReady` ainda aplicava a fila do boot intercalava as aberturas, e a aba
+  ativa terminava num arquivo que não era o do último pedido.
 - **Contrato com os emissores nativos** (sub-issues de cada SO): com o app aberto, emitir o evento
   `open-paths` (payload `string[]`); antes de o frontend estar pronto, guardar em `PendingOpenPaths`.
 
