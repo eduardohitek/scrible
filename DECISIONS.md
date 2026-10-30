@@ -1542,5 +1542,18 @@ que só precisam entregar paths por `open-paths`/`PendingOpenPaths`.
   e os testes Rust restritos a `cfg(unix)`. Antes de religar ou de publicar essas plataformas, rodar
   um `dry_run` do `release.yml`.
 
+- **Tempo do CI** (medido no PR #116; antes cerca de 290–330s por execução, quase tudo compilação do
+  Rust do zero, duas vezes: clippy e `cargo test` usam perfis diferentes):
+  - `Swatinem/rust-cache@v2` (`workspaces: src-tauri`), depois do `mise-action`, porque a chave usa o
+    `rustc` instalado por ele. Com o cache quente a execução caiu para **115s** (clippy 114s → 19s,
+    testes ~90s → 37s). O cache tem ~460 MB; o limite do repositório é 10 GB.
+  - `CARGO_PROFILE_DEV_DEBUG=0` no CI (o perfil `test` herda do `dev`): link mais rápido e cache menor.
+  - `concurrency` cancela a execução anterior do mesmo PR (na `main`, cada push roda até o fim).
+  - `paths-ignore: ["**/*.md"]`: PR que só mexe em Markdown não roda CI. A `main` não tem checks
+    obrigatórios; se passar a ter, isso deixa esses PRs pendurados.
+  - **Armadilha:** a chave do cache inclui a versão do `rustc`. Com `rust = "stable"` no `mise.toml`,
+    toda versão nova do Rust invalida o cache (aconteceu na medição: 1.99.0 → 1.99.1 entre duas
+    execuções).
+
 **Afeta:** a `#32` (a matriz de 3 SOs descrita lá deixa de valer no CI de PR) e as specs futuras de
 Windows/Linux, que devem religar a plataforma na matriz.
