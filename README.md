@@ -29,6 +29,12 @@ macOS continua **só Apple Silicon (arm64)**. Nenhum instalador tem assinatura d
 
 **Linux** — AppImage: `chmod +x scrible_*.AppImage` e execute. Pacote `.deb`: `sudo apt install ./scrible_*.deb`.
 
+#### Abrir arquivos pelo Finder (macOS)
+
+Depois de instalado, o scrible aparece em **Abrir com** (botão direito num `.md` ou `.markdown` no Finder) — também dá para arrastar arquivos para o ícone do scrible no Dock. Com o app fechado, a sessão anterior é restaurada e o arquivo entra como aba ativa; com ele aberto, o arquivo abre numa aba nova (ou foca a aba, se já estiver aberto). Selecionar vários arquivos abre uma aba para cada.
+
+O scrible **não** vira o app padrão de Markdown sozinho. Para torná-lo padrão: selecione um `.md` no Finder → **Arquivo → Obter Informações** (⌘I) → **Abrir com** → escolha o scrible → **Alterar Tudo…**. Se ele não aparecer na lista logo depois de instalar, abra o app uma vez.
+
 Cada release traz um `SHA256SUMS.txt` para conferir a integridade do download:
 
 ```sh
