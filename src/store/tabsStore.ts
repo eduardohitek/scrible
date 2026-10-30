@@ -95,6 +95,11 @@ function dirname(path: string): string {
   return index === -1 ? "" : path.slice(0, index);
 }
 
+/** Serializa `openExternalPaths`: um evento `open-paths` que chega enquanto o
+ * boot ainda aplica a fila (ou enquanto outro pedido valida) não pode
+ * intercalar com ele — a aba ativa tem de ser a do último pedido. */
+let externalOpenQueue: Promise<void> = Promise.resolve();
+
 export const useTabsStore = create<TabsState>((set, get) => ({
   workspaceRoot: null,
   tabs: [],
@@ -157,14 +162,17 @@ export const useTabsStore = create<TabsState>((set, get) => ({
       return;
     }
 
-    let accepted: string[];
-    try {
-      accepted = await invoke<string[]>("validate_open_paths", { paths });
-    } catch (err) {
-      console.error("falha ao validar paths externos:", err);
-      return;
-    }
-    for (const path of accepted) await get().openTab(path);
+    externalOpenQueue = externalOpenQueue.then(async () => {
+      let accepted: string[];
+      try {
+        accepted = await invoke<string[]>("validate_open_paths", { paths });
+      } catch (err) {
+        console.error("falha ao validar paths externos:", err);
+        return;
+      }
+      for (const path of accepted) await get().openTab(path);
+    });
+    await externalOpenQueue;
   },
 
   markExternalOpenReady: async () => {

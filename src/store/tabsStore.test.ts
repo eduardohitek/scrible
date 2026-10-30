@@ -456,6 +456,31 @@ describe("tabsStore", () => {
       expect(pendingExternalPaths).toEqual([]);
     });
 
+    it("pedidos concorrentes não se intercalam: a aba ativa é a do último pedido", async () => {
+      // O primeiro pedido valida devagar; o segundo chega no meio dele (ex.:
+      // evento `open-paths` enquanto o boot aplica a fila).
+      let releaseFirst: () => void = () => {};
+      let validations = 0;
+      mockedInvoke.mockImplementation(async (cmd, args) => {
+        if (cmd === "validate_open_paths") {
+          validations += 1;
+          if (validations === 1) await new Promise<void>((resolve) => (releaseFirst = resolve));
+          return (args as { paths: string[] }).paths;
+        }
+        return "conteúdo";
+      });
+
+      const first = useTabsStore.getState().openExternalPaths(["/fora/a.md", "/fora/b.md"]);
+      const second = useTabsStore.getState().openExternalPaths(["/fora/a.md"]);
+      await vi.waitFor(() => expect(mockedInvoke).toHaveBeenCalledWith("validate_open_paths", expect.anything()));
+      releaseFirst();
+      await Promise.all([first, second]);
+
+      const { tabs, activeTabId } = useTabsStore.getState();
+      expect(tabs.map((t) => t.path)).toEqual(["/fora/a.md", "/fora/b.md"]);
+      expect(activeTabId).toBe(tabs[0].id);
+    });
+
     it("falha de IPC na validação não abre nada", async () => {
       mockedInvoke.mockRejectedValueOnce(new Error("ipc"));
       vi.spyOn(console, "error").mockImplementation(() => {});

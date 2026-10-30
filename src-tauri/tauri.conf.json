@@ -35,6 +35,16 @@
     "macOS": {
       "signingIdentity": "-"
     },
+    "fileAssociations": [
+      {
+        "ext": ["md", "markdown"],
+        "contentTypes": ["net.daringfireball.markdown"],
+        "name": "Markdown",
+        "description": "Documento Markdown",
+        "role": "Editor",
+        "rank": "Alternate"
+      }
+    ],
     "createUpdaterArtifacts": true
   },
   "plugins": {

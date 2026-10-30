@@ -1491,6 +1491,10 @@ entra em `hiddenRange`); a próxima chave de `settings.json` segue usando `patch
   `take_pending_open_paths` (paths que o Rust guardou em `PendingOpenPaths` antes de o webview estar
   pronto) → `markExternalOpenReady()` aplica tudo → só então `startSessionPersistence()`. As abas
   novas entram na sessão pelo `collectSession()` normal.
+- **Pedidos serializados** (bug achado na validação de ponta a ponta da `#104`): `openExternalPaths`
+  encadeia cada pedido numa fila de promises de módulo. Sem isso, um `open-paths` que chegava
+  enquanto `markExternalOpenReady` ainda aplicava a fila do boot intercalava as aberturas, e a aba
+  ativa terminava num arquivo que não era o do último pedido.
 - **Contrato com os emissores nativos** (sub-issues de cada SO): com o app aberto, emitir o evento
   `open-paths` (payload `string[]`); antes de o frontend estar pronto, guardar em `PendingOpenPaths`.
 
@@ -1512,3 +1516,17 @@ que só precisam entregar paths por `open-paths`/`PendingOpenPaths`.
 
 **Afeta:** specs de Windows/Linux podem reaproveitar `PendingOpenPaths::enqueue_unless_ready`
 (hoje sob `cfg(macos|test)`, para não gerar código morto no clippy dessas plataformas).
+
+## #104 — `fileAssociations` no bundle do macOS (spec #101)
+
+- `bundle.fileAssociations`: `ext: ["md", "markdown"]`, `contentTypes: ["net.daringfireball.markdown"]`,
+  `role: "Editor"`, `rank: "Alternate"`. O `Info.plist` gerado sai com `CFBundleDocumentTypes` e
+  `LSHandlerRank = Alternate` — o scrible aparece em "Abrir com", mas nunca vira padrão sozinho.
+  Vale para todas as plataformas no config; Windows/Linux ganham o registro do instalador, mas ainda
+  não têm emissor (linha de comando / segunda instância ficam nas specs deles).
+- **Como validar sem tocar no app instalado nem na sessão real**: buildar o `.app` num worktree limpo
+  com `--config '{"identifier":"com.hitek.scrible.e2e","bundle":{"createUpdaterArtifacts":false}}'`
+  (identificador próprio, então o Launch Services não roteia para o scrible instalado) e abrir com
+  `open -a <app> --env HOME=<home temporário> arquivo.md`. O `HOME` falso isola workspace e
+  `session.json`, que serve de evidência (abas + `activeTabIndex`). Ao final, `lsregister -u` nos
+  bundles de teste. `open -a` entrega o mesmo `kAEOpenDocuments` do "Abrir com" e do Dock.
