@@ -2,6 +2,7 @@ mod app_menu;
 mod file_index;
 mod fs_ops;
 mod history;
+mod open_paths;
 mod pdf_export;
 mod session;
 mod tree_watcher;
@@ -12,6 +13,7 @@ use std::path::PathBuf;
 
 use fs_ops::FsError;
 use history::{HistoryError, RestoreResult, SnapshotInfo};
+use open_paths::PendingOpenPaths;
 use session::{Session, SessionError};
 use tauri::{AppHandle, Emitter, Manager, WindowEvent};
 use tauri_plugin_opener::OpenerExt;
@@ -168,6 +170,19 @@ fn delete_dir(path: String) -> Result<(), FsError> {
     fs_ops::delete_dir(&PathBuf::from(path))
 }
 
+/// Filtra paths vindos de fora do processo (#102) — ver `open_paths::validate`.
+#[tauri::command]
+fn validate_open_paths(paths: Vec<String>) -> Vec<String> {
+    open_paths::validate(paths)
+}
+
+/// Paths que o SO entregou antes de o frontend estar pronto; consumido uma
+/// única vez no boot, depois da restauração da sessão (#102).
+#[tauri::command]
+fn take_pending_open_paths(pending: tauri::State<PendingOpenPaths>) -> Vec<String> {
+    pending.take()
+}
+
 #[tauri::command]
 fn quit_app(app: AppHandle) {
     app.exit(0);
@@ -202,6 +217,7 @@ pub fn run() {
 
             app.manage(WorkspaceState(result));
             app.manage(last_save_mtime);
+            app.manage(PendingOpenPaths::default());
 
             app.set_menu(app_menu::build(app.handle())?)?;
             app.on_menu_event(|app, event| {
@@ -238,7 +254,9 @@ pub fn run() {
             restore_snapshot,
             snapshot_before_discard,
             read_session,
-            write_session
+            write_session,
+            validate_open_paths,
+            take_pending_open_paths
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

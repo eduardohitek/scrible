@@ -31,7 +31,14 @@ describe("tabsStore", () => {
   beforeEach(() => {
     mockedInvoke.mockReset();
     mockedOpen.mockReset();
-    useTabsStore.setState({ workspaceRoot: "/root", tabs: [], activeTabId: null, editingTabId: null });
+    useTabsStore.setState({
+      workspaceRoot: "/root",
+      tabs: [],
+      activeTabId: null,
+      editingTabId: null,
+      pendingExternalPaths: [],
+      externalOpenReady: true,
+    });
     useDocumentStore.setState({ documents: {} });
   });
 
@@ -362,5 +369,100 @@ describe("tabsStore", () => {
 
     useTabsStore.getState().focusPrevTab();
     expect(useTabsStore.getState().activeTabId).toBe("tab-2");
+  });
+
+  describe("openExternalPaths (#102)", () => {
+    /** `validate_open_paths` aceita tudo exceto `rejected`; `read_file`
+     * devolve um conteúdo qualquer. */
+    function mockBackend(rejected: string[] = []) {
+      mockedInvoke.mockImplementation(async (cmd, args) => {
+        if (cmd === "validate_open_paths") {
+          return (args as { paths: string[] }).paths.filter((p) => !rejected.includes(p));
+        }
+        if (cmd === "read_file") return "conteúdo";
+        throw new Error(`comando inesperado: ${cmd}`);
+      });
+    }
+
+    it("um path novo abre uma aba ativa", async () => {
+      mockBackend();
+
+      await useTabsStore.getState().openExternalPaths(["/fora/nota.md"]);
+
+      const { tabs, activeTabId } = useTabsStore.getState();
+      expect(tabs.map((t) => t.path)).toEqual(["/fora/nota.md"]);
+      expect(activeTabId).toBe(tabs[0].id);
+      expect(mockedInvoke).toHaveBeenCalledWith("validate_open_paths", { paths: ["/fora/nota.md"] });
+    });
+
+    it("um path já aberto só foca a aba existente", async () => {
+      mockBackend();
+      useTabsStore.setState({
+        tabs: [
+          { id: "tab-1", path: "/root/a.md", title: "a.md" },
+          { id: "tab-2", path: "/root/b.md", title: "b.md" },
+        ],
+        activeTabId: "tab-2",
+      });
+
+      await useTabsStore.getState().openExternalPaths(["/root/a.md"]);
+
+      expect(useTabsStore.getState().tabs).toHaveLength(2);
+      expect(useTabsStore.getState().activeTabId).toBe("tab-1");
+    });
+
+    it("vários paths abrem uma aba cada e o último fica ativo", async () => {
+      mockBackend();
+
+      await useTabsStore.getState().openExternalPaths(["/fora/a.md", "/fora/b.md", "/fora/c.md"]);
+
+      const { tabs, activeTabId } = useTabsStore.getState();
+      expect(tabs.map((t) => t.path)).toEqual(["/fora/a.md", "/fora/b.md", "/fora/c.md"]);
+      expect(activeTabId).toBe(tabs[2].id);
+    });
+
+    it("paths rejeitados pelo validador são ignorados", async () => {
+      mockBackend(["/fora/pasta"]);
+
+      await useTabsStore.getState().openExternalPaths(["/fora/a.md", "/fora/pasta"]);
+
+      const { tabs, activeTabId } = useTabsStore.getState();
+      expect(tabs.map((t) => t.path)).toEqual(["/fora/a.md"]);
+      expect(activeTabId).toBe(tabs[0].id);
+    });
+
+    it("antes do fim da restauração só enfileira; depois aplica sem duplicar e vira a aba ativa", async () => {
+      mockBackend();
+      useTabsStore.setState({ externalOpenReady: false });
+
+      await useTabsStore.getState().openExternalPaths(["/root/b.md"]);
+      await useTabsStore.getState().openExternalPaths(["/root/c.md"]);
+      expect(useTabsStore.getState().tabs).toHaveLength(0);
+      expect(mockedInvoke).not.toHaveBeenCalled();
+
+      // A restauração da sessão (#9) já reabriu b.md, com a.md ativa.
+      await useTabsStore.getState().restoreTabs(
+        [
+          { path: "/root/a.md", cursorPos: 0, scrollTop: 0 },
+          { path: "/root/b.md", cursorPos: 0, scrollTop: 0 },
+        ],
+        0,
+      );
+      await useTabsStore.getState().markExternalOpenReady();
+
+      const { tabs, activeTabId, pendingExternalPaths } = useTabsStore.getState();
+      expect(tabs.map((t) => t.path)).toEqual(["/root/a.md", "/root/b.md", "/root/c.md"]);
+      expect(activeTabId).toBe(tabs[2].id);
+      expect(pendingExternalPaths).toEqual([]);
+    });
+
+    it("falha de IPC na validação não abre nada", async () => {
+      mockedInvoke.mockRejectedValueOnce(new Error("ipc"));
+      vi.spyOn(console, "error").mockImplementation(() => {});
+
+      await useTabsStore.getState().openExternalPaths(["/fora/a.md"]);
+
+      expect(useTabsStore.getState().tabs).toHaveLength(0);
+    });
   });
 });
