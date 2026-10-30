@@ -33,7 +33,7 @@ macOS continua **só Apple Silicon (arm64)**. Nenhum instalador tem assinatura d
 
 Depois de instalado, o scrible aparece em **Abrir com** (botão direito num `.md` ou `.markdown` no Finder) — também dá para arrastar arquivos para o ícone do scrible no Dock. Com o app fechado, a sessão anterior é restaurada e o arquivo entra como aba ativa; com ele aberto, o arquivo abre numa aba nova (ou foca a aba, se já estiver aberto). Selecionar vários arquivos abre uma aba para cada.
 
-O scrible **não** vira o app padrão de Markdown sozinho. Para torná-lo padrão: selecione um `.md` no Finder → **Arquivo → Obter Informações** (⌘I) → **Abrir com** → escolha o scrible → **Alterar Tudo…**. Se ele não aparecer na lista logo depois de instalar, abra o app uma vez.
+O scrible **não** vira o app padrão de Markdown sozinho. Para torná-lo padrão: selecione um `.md` no Finder → **Arquivo → Obter Informações** (⌘I) → **Abrir com** → escolha o scrible → **Alterar Tudo…**. Se ele não aparecer na lista logo depois de instalar, abra o app uma vez. Se o ícone no Dock não aceitar arquivos arrastados logo depois de instalar ou atualizar, o Dock ainda está com a versão antiga em cache: rode `killall Dock` (ele reabre sozinho).
 
 Cada release traz um `SHA256SUMS.txt` para conferir a integridade do download:
 
