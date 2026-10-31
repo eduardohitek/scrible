@@ -45,6 +45,11 @@ jobs:
         with:
           cache: true
 
+      # Com o cache do mise, o toolchain fixado (mise.toml) pode ser instalado sob demanda pelo
+      # rustup no perfil mínimo, sem clippy — o ~/.rustup não entra em cache nenhum.
+      - name: Componentes do Rust
+        run: rustup component add clippy
+
       # Depois do mise: a chave do cache usa a versão do rustc instalada por ele.
       - name: Cache do Rust (target/ e registro do Cargo)
         uses: Swatinem/rust-cache@v2

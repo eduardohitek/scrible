@@ -1556,6 +1556,12 @@ que só precisam entregar paths por `open-paths`/`PendingOpenPaths`.
     medição: 1.99.0 → 1.99.1 entre duas execuções). Vale para o CI, o `release.yml` e a máquina
     local (todos usam o mise). Atualizar o Rust vira um PR de uma linha, e a primeira execução
     depois dele é fria.
+  - **Armadilha do toolchain fixado:** o cache do `mise-action` guarda o estado do mise ("1.99.1
+    instalado"), mas não o `~/.rustup`. Na execução seguinte o rustup instala o toolchain sob demanda
+    no perfil **mínimo, sem clippy**, e o lint quebra (`'cargo-clippy' is not installed`). Por isso
+    o `ci.yml` tem um passo `rustup component add clippy`. Com `stable` isso não aparecia, porque a
+    imagem do runner já traz o stable com clippy. O `release.yml` não roda clippy, então não precisa
+    do passo.
 
 **Afeta:** a `#32` (a matriz de 3 SOs descrita lá deixa de valer no CI de PR) e as specs futuras de
 Windows/Linux, que devem religar a plataforma na matriz.
