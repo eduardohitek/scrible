@@ -6,6 +6,9 @@ const OPENAPI_BLOCK_SELECTOR = "pre > code.language-openapi, pre > code.language
 export interface RenderOpenApiOptions {
   /** `data-openapi-key` dos `<details>` que devem sair abertos. */
   openKeys?: ReadonlySet<string>;
+  /** Todos os `<details>` saem abertos — export de PDF (#99): papel não
+   * clica, e um `<details>` fechado esconde o conteúdo mesmo na impressão. */
+  expandAll?: boolean;
 }
 
 /**
@@ -30,7 +33,7 @@ export function renderOpenApiBlocks(container: HTMLElement, options: RenderOpenA
       element.innerHTML = renderOpenApiHtml(result.doc, { idPrefix: `openapi-${index}-` });
       element.querySelectorAll<HTMLDetailsElement>("details[data-openapi-key]").forEach((details) => {
         details.dataset.openapiKey = `${index}:${details.dataset.openapiKey}`;
-        if (options.openKeys?.has(details.dataset.openapiKey)) details.open = true;
+        if (options.expandAll || options.openKeys?.has(details.dataset.openapiKey)) details.open = true;
       });
     } else {
       element.className = "openapi-error";

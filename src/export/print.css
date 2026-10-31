@@ -14,8 +14,26 @@
   pre,
   .mermaid-diagram,
   .mermaid-error,
+  .openapi-error,
   table,
   blockquote {
     break-inside: avoid;
+  }
+
+  /* Blocos OpenAPI (#99) saem com todo <details> aberto: o triângulo de
+     expandir não tem função no papel, e o título do endpoint não deve ficar
+     sozinho no pé da página. */
+  .openapi summary {
+    list-style: none;
+    break-after: avoid;
+  }
+
+  .openapi-section-title,
+  .openapi-tag-name {
+    break-after: avoid;
+  }
+
+  .openapi summary::-webkit-details-marker {
+    display: none;
   }
 }

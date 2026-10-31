@@ -57,6 +57,45 @@ describe("renderStaticBodyHtml", () => {
     const html = await renderStaticBodyHtml(source, "light");
     expect(html).toContain('class="mermaid-error"');
   });
+
+  const openapiSource = [
+    "```openapi",
+    "openapi: 3.1.0",
+    "info: {title: Petstore, version: '1'}",
+    "paths:",
+    "  /pets:",
+    "    get: {summary: Lista, responses: {'200': {description: OK}}}",
+    "components:",
+    "  schemas:",
+    "    Pet: {type: object, properties: {id: {type: integer}}}",
+    "```",
+  ].join("\n");
+
+  it("renderiza blocos OpenAPI (#99) sem o código cru, fechados no HTML", async () => {
+    const html = await renderStaticBodyHtml(openapiSource, "light");
+
+    expect(html).toContain('class="openapi"');
+    expect(html).toContain('class="openapi-operation openapi-method-get"');
+    expect(html).toContain('id="openapi-0-schema-Pet"');
+    expect(html).not.toContain("language-openapi");
+    expect(html).not.toContain("openapi: 3.1.0");
+    expect(html).not.toMatch(/<details[^>]*\sopen[\s=>]/);
+  });
+
+  it("abre todos os <details> OpenAPI com expandOpenApi (PDF)", async () => {
+    const container = document.createElement("div");
+    container.innerHTML = await renderStaticBodyHtml(openapiSource, "light", { expandOpenApi: true });
+
+    const details = Array.from(container.querySelectorAll("details"));
+    expect(details.length).toBeGreaterThan(1);
+    expect(details.every((d) => d.open)).toBe(true);
+  });
+
+  it("isola bloco OpenAPI inválido", async () => {
+    const html = await renderStaticBodyHtml(['```swagger', 'swagger: "2.0"', "```"].join("\n"), "light");
+    expect(html).toContain('class="openapi-error"');
+    expect(html).toContain("Swagger 2.0 não suportado");
+  });
 });
 
 describe("buildStandaloneHtml", () => {
@@ -67,6 +106,8 @@ describe("buildStandaloneHtml", () => {
     expect(html).toContain("<title>doc.md</title>");
     expect(html).toContain("--color-bg");
     expect(html).toContain(".mermaid-diagram");
+    expect(html).toContain(".openapi-operation");
+    expect(html).toContain("--color-http-get");
     expect(html).toContain("<p>corpo</p>");
     expect(html).not.toMatch(/https?:\/\//);
     expect(html).not.toContain("<script");
@@ -165,6 +206,25 @@ describe("exportActiveTabAsPdf", () => {
       "export_pdf",
       expect.objectContaining({ html: expect.stringContaining('data-theme="light"') }),
     );
+  });
+
+  it("manda os blocos OpenAPI com todos os <details> abertos (#99)", async () => {
+    mockedSave.mockReset();
+    mockedInvoke.mockReset();
+    mockedSave.mockResolvedValueOnce("/root/doc.pdf");
+    useDocumentStore.setState({
+      documents: {
+        "tab-1": docEntry({
+          content: "```openapi\nopenapi: 3.1.0\ninfo: {title: X, version: '1'}\npaths: {/a: {get: {responses: {'200': {description: OK}}}}}\n```",
+        }),
+      },
+    });
+
+    await exportActiveTabAsPdf();
+
+    const { html } = mockedInvoke.mock.calls[0][1] as { html: string };
+    expect(html).toMatch(/<details[^>]*\sopen[\s=>]/);
+    expect(html).toContain(".openapi summary");
   });
 
   it("no-op se não houver aba ativa", async () => {
