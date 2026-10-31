@@ -1663,3 +1663,22 @@ precisam de `data-openapi-key` próprio para entrar na preservação de estado),
 - O esqueleto evita `{}` de fluxo do YAML, que conflitaria com a sintaxe `${…}` do `snippet()`. O
   teste aplica o snippet e passa o corpo do fence a `parseOpenApi`, tornando "o esqueleto é válido"
   uma garantia automatizada.
+
+## Release só para macOS (trabalho de processo, sem issue)
+
+- `release.yml` passou a buildar e publicar só `macos-arm64`, **inclusive no `dry_run`** (decisão do
+  usuário: simplicidade acima da validação sob demanda). As 4 entradas de Windows/Linux ficam
+  comentadas na matriz, e `scripts/build-release-assets.sh` comenta as linhas correspondentes em
+  `platforms` (chaves do `latest.json`) e os `copy_all` dos `.deb`. O script exige exatamente um
+  arquivo por plataforma listada, então tirar uma plataforma só da matriz quebraria o `publish`.
+- Religar uma plataforma: descomentar a entrada da matriz e as linhas dela no script, e voltar a
+  descrevê-la no corpo da release (`release.yml`) e no README. O passo do WebKitGTK
+  (`if: runner.os == 'Linux'`) continua no YAML, inerte.
+- **Revisa a entrada "CI só no macOS"**: o conselho de rodar um `dry_run` antes de religar não vale
+  mais como está, porque o `dry_run` agora também só builda macOS. Para validar Windows/Linux é
+  preciso descomentar as entradas antes de rodar o `dry_run`.
+- **Usuários de Windows/Linux param na v0.10.0** (aceito e documentado no README e no corpo da
+  release). O `latest.json` novo não tem as chaves dessas plataformas: a checagem automática do
+  updater falha em silêncio (`console.error`), e a manual mostra "Não foi possível atualizar". Não
+  houve mudança no app. O código de Windows/Linux (export de PDF da `#81`, menus) continua no
+  repositório e compila do código-fonte.

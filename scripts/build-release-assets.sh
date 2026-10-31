@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Junta os instaladores baixados dos jobs de build numa pasta única e gera
-# SHA256SUMS.txt + latest.json (manifesto do updater, 5 plataformas) — #32.
+# SHA256SUMS.txt + latest.json (manifesto do updater) — #32. Hoje só macOS é
+# publicado; as outras plataformas ficam comentadas, prontas para religar junto
+# com a matriz de .github/workflows/release.yml.
 #
 # Uso: ./scripts/build-release-assets.sh <pasta-dos-artefatos> <tag> <owner/repo>
 #
@@ -54,10 +56,10 @@ copy_all() {
 # plataforma-do-updater:job:padrão-do-pacote-do-updater
 platforms=(
   "darwin-aarch64:scrible-macos-arm64:scrible.app.tar.gz"
-  "windows-x86_64:scrible-windows-x64:*-setup.exe"
-  "windows-aarch64:scrible-windows-arm64:*-setup.exe"
-  "linux-x86_64:scrible-linux-x64:*.AppImage"
-  "linux-aarch64:scrible-linux-arm64:*.AppImage"
+  # "windows-x86_64:scrible-windows-x64:*-setup.exe"
+  # "windows-aarch64:scrible-windows-arm64:*-setup.exe"
+  # "linux-x86_64:scrible-linux-x64:*.AppImage"
+  # "linux-aarch64:scrible-linux-arm64:*.AppImage"
 )
 
 jq_platforms='{}'
@@ -80,8 +82,8 @@ done
 
 # Instaladores que não são pacote do updater: .dmg (macOS) e .deb (Linux).
 copy_all scrible-macos-arm64 "*.dmg"
-copy_all scrible-linux-x64 "*.deb"
-copy_all scrible-linux-arm64 "*.deb"
+# copy_all scrible-linux-x64 "*.deb"
+# copy_all scrible-linux-arm64 "*.deb"
 
 jq -n \
   --arg version "$version" \
