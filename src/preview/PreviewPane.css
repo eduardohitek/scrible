@@ -444,3 +444,87 @@
   color: var(--color-warning-text);
   font-size: var(--font-size-sm);
 }
+
+/* Seção Schemas dos blocos OpenAPI (#98). */
+.openapi-schema {
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  margin: var(--space-2) 0;
+  scroll-margin-top: var(--space-4);
+}
+
+.openapi-schema > summary {
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+}
+
+.openapi-schema[open] > summary {
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.openapi-schema:target {
+  border-color: var(--color-accent);
+}
+
+.preview-pane .openapi-schema-name,
+.preview-pane .openapi-prop-name {
+  background: none;
+  color: var(--color-text);
+  padding: 0;
+  font-weight: 600;
+}
+
+.preview-pane ul.openapi-props {
+  list-style: none;
+  margin: 0;
+  padding-left: var(--space-4);
+  border-left: 1px solid var(--color-border-subtle);
+}
+
+.preview-pane .openapi-schema > .openapi-operation-body > .openapi-schema-children > ul.openapi-props {
+  padding-left: 0;
+  border-left: none;
+}
+
+.preview-pane li.openapi-prop {
+  margin: var(--space-1) 0;
+  font-size: var(--font-size-sm);
+}
+
+.openapi-prop-details > summary {
+  cursor: pointer;
+}
+
+.openapi-prop-details > .openapi-schema-children {
+  margin-top: var(--space-1);
+}
+
+.openapi-prop-description {
+  color: var(--color-text-secondary);
+  white-space: pre-wrap;
+}
+
+.openapi-enum {
+  color: var(--color-text-secondary);
+}
+
+.openapi-schema-group {
+  margin: var(--space-2) 0;
+}
+
+.openapi-group-label {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-1);
+}
+
+.openapi-circular {
+  font-size: var(--font-size-xs);
+  color: var(--color-warning-text);
+  background: var(--color-warning-bg);
+  border-radius: 4px;
+  padding: 0.05em 0.4em;
+}
