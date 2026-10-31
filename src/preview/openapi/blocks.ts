@@ -25,9 +25,9 @@ export function renderOpenApiBlocks(container: HTMLElement, options: RenderOpenA
     const element = document.createElement("div");
     if (result.ok) {
       element.className = "openapi";
-      element.innerHTML = renderOpenApiHtml(result.doc);
       // Prefixo por bloco: dois blocos no mesmo documento podem ter
-      // operações iguais.
+      // operações e schemas com o mesmo nome.
+      element.innerHTML = renderOpenApiHtml(result.doc, { idPrefix: `openapi-${index}-` });
       element.querySelectorAll<HTMLDetailsElement>("details[data-openapi-key]").forEach((details) => {
         details.dataset.openapiKey = `${index}:${details.dataset.openapiKey}`;
         if (options.openKeys?.has(details.dataset.openapiKey)) details.open = true;

@@ -1617,3 +1617,18 @@ própria), `#100` (o esqueleto do menu `/` é validado com `parseOpenApi`).
 **Afeta:** `#98` (a seção Schemas entra no fim de `renderOpenApiHtml`; os `<details>` de schema
 precisam de `data-openapi-key` próprio para entrar na preservação de estado), `#99` (o export chama
 `renderOpenApiBlocks` no container desanexado).
+
+## #98 — OpenAPI: seção de schemas como árvore expansível (spec #95)
+
+- `renderOpenApiHtml(doc, ctx)` ganhou um `RenderContext { idPrefix }`. O `blocks.ts` passa
+  `openapi-<índice do bloco>-`, para que dois blocos com um schema de mesmo nome não colidam nas
+  âncoras. O id é `<prefixo>schema-<nome>`, com caracteres fora de `[A-Za-z0-9_-]` trocados por `_`.
+- **Referência a schema é sempre link-âncora, nunca expansão inline**, inclusive no requestBody e
+  nas respostas (`schemaLabel`). Por isso um ciclo nunca recursa no render: ele só ganha o
+  marcador `↻ cíclico` (o `circular` vem do parser, `#96`). O link é um `<a href="#…">` comum — o
+  `localLinks` ignora `#`, mesmo caminho das notas de rodapé — e funciona sem JS no export.
+- Só vira `<details>` aninhado o nó com filhos (`properties`, `allOf`/`oneOf`/`anyOf`,
+  `additionalProperties` ou `items` com estrutura). O resto é uma linha com nome, tipo, `obrigatório`,
+  `nullable`, `enum` e descrição. As composições e `items` aparecem como subgrupos rotulados. Todos os
+  `<details>` da árvore têm `data-openapi-key` (`schema:<Nome>/<prop>/…`) e entram na preservação de
+  estado aberto da `#97`.

@@ -328,6 +328,109 @@ describe("PreviewPane", () => {
       expect(operations[1].open).toBe(false);
     });
 
+    describe("seção Schemas (#98)", () => {
+      const schemasBlock = [
+        "```openapi",
+        "openapi: 3.1.0",
+        "info: {title: Zoo, version: '1'}",
+        "paths:",
+        "  /pets:",
+        "    get:",
+        "      responses:",
+        "        '200':",
+        "          description: OK",
+        "          content:",
+        "            application/json:",
+        "              schema: {type: array, items: {$ref: '#/components/schemas/Pet'}}",
+        "components:",
+        "  schemas:",
+        "    Pet:",
+        "      type: object",
+        "      required: [id]",
+        "      properties:",
+        "        id: {type: integer, format: int64, description: Identificador}",
+        "        status: {type: string, enum: [disponível, vendido]}",
+        "        owner:",
+        "          type: object",
+        "          properties:",
+        "            name: {type: string}",
+        "        friends: {type: array, items: {$ref: '#/components/schemas/Pet'}}",
+        "    Dog:",
+        "      allOf:",
+        "        - $ref: '#/components/schemas/Pet'",
+        "        - type: object",
+        "          properties:",
+        "            bark: {type: boolean}",
+        "```",
+      ].join("\n");
+
+      async function renderSchemas() {
+        const view = render(<PreviewPane source={schemasBlock} />);
+        await waitFor(() => expect(view.container.querySelector(".openapi-schemas")).not.toBeNull());
+        return view.container;
+      }
+
+      it("lista cada schema num <details> com âncora, propriedades, required, formato e enum", async () => {
+        const container = await renderSchemas();
+
+        const schemas = Array.from(container.querySelectorAll<HTMLDetailsElement>("details.openapi-schema"));
+        expect(schemas.map((d) => d.id)).toEqual(["openapi-0-schema-Pet", "openapi-0-schema-Dog"]);
+        expect(schemas.every((d) => !d.open)).toBe(true);
+
+        const props = Array.from(schemas[0].querySelectorAll(":scope > div > .openapi-schema-children > ul > li"));
+        expect(props.map((li) => li.querySelector(".openapi-prop-name")?.textContent)).toEqual([
+          "id",
+          "status",
+          "owner",
+          "friends",
+        ]);
+        expect(props[0].textContent).toContain("obrigatório");
+        expect(props[0].textContent).toContain("int64");
+        expect(props[0].textContent).toContain("Identificador");
+        expect(props[1].querySelector(".openapi-enum")?.textContent).toBe("enum: disponível, vendido");
+      });
+
+      it("objeto aninhado vira <details> expansível", async () => {
+        const container = await renderSchemas();
+        const owner = Array.from(container.querySelectorAll("li.openapi-prop")).find(
+          (li) => li.querySelector(":scope > details > summary > .openapi-prop-name")?.textContent === "owner",
+        );
+        const nested = owner?.querySelector<HTMLDetailsElement>(":scope > details.openapi-prop-details");
+        expect(nested).not.toBeNull();
+        expect(nested?.querySelector(".openapi-schema-children")?.textContent).toContain("name");
+      });
+
+      it("array de $ref e $ref do corpo da resposta viram link para a âncora do schema", async () => {
+        const container = await renderSchemas();
+
+        const responseLink = container.querySelector<HTMLAnchorElement>(".openapi-operation a.openapi-schema-ref");
+        expect(responseLink?.getAttribute("href")).toBe("#openapi-0-schema-Pet");
+        expect(responseLink?.closest("li")?.textContent).toContain("array<Pet");
+      });
+
+      it("ciclo aparece como referência marcada, sem expandir de novo", async () => {
+        const container = await renderSchemas();
+        const pet = container.querySelector("#openapi-0-schema-Pet")!;
+        const friends = Array.from(pet.querySelectorAll("li.openapi-prop")).find(
+          (li) => li.querySelector(".openapi-prop-name")?.textContent === "friends",
+        )!;
+
+        expect(friends.querySelector("a.openapi-schema-ref")?.getAttribute("href")).toBe("#openapi-0-schema-Pet");
+        expect(friends.querySelector(".openapi-circular")).not.toBeNull();
+        expect(friends.querySelector("details")).toBeNull();
+      });
+
+      it("allOf aparece como subgrupo rotulado", async () => {
+        const container = await renderSchemas();
+        const dog = container.querySelector("#openapi-0-schema-Dog")!;
+        const group = dog.querySelector(".openapi-schema-group");
+
+        expect(group?.querySelector(".openapi-group-label")?.textContent).toBe("todos de (allOf)");
+        expect(group?.querySelector("a.openapi-schema-ref")?.textContent).toBe("Pet");
+        expect(group?.textContent).toContain("bark");
+      });
+    });
+
     it("preserva data-source-line no bloco renderizado", async () => {
       const { container } = render(<PreviewPane source={`# Título\n\n${openapiBlock("X")}`} />);
       await waitFor(() => expect(container.querySelector(".openapi")).not.toBeNull());
