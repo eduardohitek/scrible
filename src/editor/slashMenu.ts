@@ -26,12 +26,31 @@ import {
  * chamam `startCompletion` para abrir, respectivamente, a lista de
  * linguagens e a lista de tipos de diagrama mermaid.
  */
+
+/** Esqueleto OpenAPI 3.1 mínimo e válido (#100): info, 1 path com 1 operação e
+ * 1 resposta. Os tabstops cobrem os campos que todo documento muda; o teste
+ * garante que o texto inserido passa no parser do preview (#96). */
+export const OPENAPI_SKELETON = `\`\`\`openapi
+openapi: 3.1.0
+info:
+  title: \${Minha API}
+  version: \${1.0.0}
+paths:
+  \${/recursos}:
+    get:
+      summary: \${Lista os recursos}
+      responses:
+        '200':
+          description: \${OK}
+\`\`\``;
+
 const SLASH_COMMANDS: readonly Completion[] = [
   snippetCompletion("| ${Coluna 1} | ${Coluna 2} |\n| --- | --- |\n| ${dado 1} | ${dado 2} |", {
     label: "Tabela",
   }),
   withChainedCompletion({ label: "Bloco de código", apply: "```" }),
   withChainedCompletion(snippetCompletion("```mermaid\n${}\n```", { label: "Diagrama mermaid" })),
+  snippetCompletion(OPENAPI_SKELETON, { label: "Especificação OpenAPI" }),
   snippetCompletion("- [ ] ${tarefa}", { label: "Lista de tarefas" }),
   snippetCompletion("> ${citação}", { label: "Citação" }),
   snippetCompletion("[${texto}](${url})", { label: "Link" }),

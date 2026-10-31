@@ -1650,3 +1650,16 @@ precisam de `data-openapi-key` próprio para entrar na preservação de estado),
   o export real no app nos três SOs.
 
 **Afeta:** qualquer bloco renderizado futuro com `<details>` deve seguir o mesmo `expandAll` no PDF.
+
+## #100 — OpenAPI: autocomplete de fence e item no menu `/` (spec #95)
+
+- `openapi` e `swagger` entram em `FENCE_LANGUAGES` (agora 26), sem 2º nível encadeado: diferente do
+  mermaid, não há "tipo" a escolher. O esqueleto vem do menu `/`.
+- Item "Especificação OpenAPI" no menu `/`, logo depois de "Diagrama mermaid". O `snippetCompletion`
+  de `OPENAPI_SKELETON` (exportado de `slashMenu.ts`) insere o fence **completo** (3.1 mínimo: info,
+  `GET` em 1 path, 1 resposta) com tabstops em título, versão, path, resumo e descrição da resposta.
+  O cursor começa no título. Ao contrário dos esqueletos mermaid (`#15`, texto puro), aqui os tabstops
+  compensam: são poucos campos e todos precisam mudar.
+- O esqueleto evita `{}` de fluxo do YAML, que conflitaria com a sintaxe `${…}` do `snippet()`. O
+  teste aplica o snippet e passa o corpo do fence a `parseOpenApi`, tornando "o esqueleto é válido"
+  uma garantia automatizada.
