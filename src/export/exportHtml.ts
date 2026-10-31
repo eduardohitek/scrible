@@ -3,6 +3,7 @@ import { save } from "@tauri-apps/plugin-dialog";
 import DOMPurify from "dompurify";
 import mermaid from "mermaid";
 import { md, extractFrontMatter, renderFrontMatterTable, escapeHtml } from "../preview/markdownPipeline";
+import { renderOpenApiBlocks } from "../preview/openapi/blocks";
 import { useTabsStore } from "../store/tabsStore";
 import { useDocumentStore } from "../store/documentStore";
 import { useThemeStore } from "../theme/themeStore";
@@ -27,9 +28,15 @@ let exportMermaidIdCounter = 0;
  * pipeline de `PreviewPane.tsx`, resolvendo diagramas mermaid para SVG
  * estático de forma síncrona/aguardada — ao contrário do efeito ao vivo
  * (fire-and-forget), o export precisa que todo `mermaid.render` termine
- * antes de ler o HTML final.
+ * antes de ler o HTML final. Blocos OpenAPI (#99) usam a mesma
+ * `renderOpenApiBlocks` do preview; `expandOpenApi` abre todos os
+ * `<details>` (usado no PDF).
  */
-export async function renderStaticBodyHtml(source: string, theme: "light" | "dark"): Promise<string> {
+export async function renderStaticBodyHtml(
+  source: string,
+  theme: "light" | "dark",
+  { expandOpenApi = false }: { expandOpenApi?: boolean } = {},
+): Promise<string> {
   const { frontMatter, body } = extractFrontMatter(source);
   const bodyHtml = md.render(body);
   const metadataHtml = frontMatter ? renderFrontMatterTable(frontMatter) : "";
@@ -41,6 +48,7 @@ export async function renderStaticBodyHtml(source: string, theme: "light" | "dar
   // replaceWith puros do DOM.
   const container = document.createElement("div");
   container.innerHTML = html;
+  renderOpenApiBlocks(container, { expandAll: expandOpenApi });
 
   mermaid.initialize({ startOnLoad: false, theme: theme === "dark" ? "dark" : "default" });
 
@@ -157,7 +165,7 @@ export async function exportActiveTabAsPdf(): Promise<void> {
 
   const entry = useDocumentStore.getState().documents[tab.id];
 
-  const bodyHtml = await renderStaticBodyHtml(entry?.content ?? "", "light");
+  const bodyHtml = await renderStaticBodyHtml(entry?.content ?? "", "light", { expandOpenApi: true });
   const html = buildStandaloneHtml(bodyHtml, "light", tab.title, printCss);
   await invoke("export_pdf", { html, path });
 }

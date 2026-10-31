@@ -1632,3 +1632,21 @@ precisam de `data-openapi-key` próprio para entrar na preservação de estado),
   `nullable`, `enum` e descrição. As composições e `items` aparecem como subgrupos rotulados. Todos os
   `<details>` da árvore têm `data-openapi-key` (`schema:<Nome>/<prop>/…`) e entram na preservação de
   estado aberto da `#97`.
+
+## #99 — OpenAPI: blocos renderizados no export HTML/PDF (spec #95)
+
+- `renderStaticBodyHtml` chama a mesma `renderOpenApiBlocks` do preview no container desanexado,
+  logo depois do `innerHTML` e antes do mermaid. Não há código de render duplicado. O CSS já chegava
+  ao export, porque vive em `PreviewPane.css`/`tokens.css`, embutidos via `?raw` (`#26`).
+- **PDF com tudo aberto, HTML standalone fechado** (decisão da sabatina): `renderStaticBodyHtml`
+  ganhou o 3º parâmetro opcional `{ expandOpenApi }`, que vira `expandAll` em `renderOpenApiBlocks`
+  (põe `open` em todo `<details>` OpenAPI). Só `exportActiveTabAsPdf` passa `true`. CSS de impressão
+  não resolveria: no WebKit um `<details>` fechado esconde o conteúdo mesmo em `@media print`.
+- `print.css`: esconde o triângulo dos `<summary>` OpenAPI (sem função no papel) e põe
+  `break-after: avoid` no `summary` e nos títulos de seção/tag. Um PDF de teste do Petstore deixava
+  "Respostas" sozinho no pé da página, com a tabela (`break-inside: avoid`) na página seguinte.
+- Verificação: o PDF real sai do WKWebView/WebView2/WebKitGTK e não roda em teste. A paginação foi
+  conferida imprimindo o mesmo payload (HTML + `print.css`) com o Chrome headless. **Falta** conferir
+  o export real no app nos três SOs.
+
+**Afeta:** qualquer bloco renderizado futuro com `<details>` deve seguir o mesmo `expandAll` no PDF.
