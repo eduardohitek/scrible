@@ -1591,3 +1591,29 @@ Windows/Linux, que devem religar a plataforma na matriz.
 
 **Afeta:** `#97`/`#98` (render consome só o modelo; `RefIssue` e `refIssue` precisam de exibição
 própria), `#100` (o esqueleto do menu `/` é validado com `parseOpenApi`).
+
+## #97 — OpenAPI: renderização no preview (spec #95)
+
+- **Duas camadas**: `src/preview/openapi/render.ts` monta o HTML como string a partir do modelo da
+  `#96` (todo texto do documento passa por `escapeHtml`, porque a string entra **depois** do
+  DOMPurify); `src/preview/openapi/blocks.ts` (`renderOpenApiBlocks(container, options)`) troca cada
+  `pre > code.language-openapi|swagger` do container já sanitizado pelo `.openapi` renderizado ou por
+  um `.openapi-error` isolado. É síncrono e roda no efeito do `PreviewPane` logo depois do
+  `innerHTML = html`, antes do mermaid. É a função que o export (`#99`) reaproveita.
+- Sem `<h*>` dentro do bloco (títulos são `div.openapi-*`), para não herdar a tipografia de títulos do
+  preview (borda do `h2`, margens). As tabelas reaproveitam o estilo de `.preview-pane table`.
+- **Estado aberto preservado entre renders** (default declarado na sabatina): o preview reescreve o
+  `innerHTML` a cada edição (debounced) e a cada troca de tema, o que fecharia todo endpoint aberto.
+  Cada `<details>` tem `data-openapi-key` (`<índice do bloco>:op:<tag>:<método>:<path>`), e
+  `collectOpenOpenApiKeys` lê os abertos antes da troca e os reabre no render seguinte.
+- Cores por método em tokens novos `--color-http-*` (`light-dark()`), consumidas via uma custom
+  property local `--openapi-method-color` por classe `.openapi-method-<método>`.
+- `description` é texto puro com `white-space: pre-wrap` (markdown fica fora desta entrega). A
+  mensagem de erro do bloco é `Bloco OpenAPI inválido: <mensagem do parser>`.
+- Verificação visual: o app depende do Tauri, então a checagem foi feita numa página standalone com o
+  CSS real (`buildStandaloneHtml` + `renderOpenApiBlocks`) e o Petstore expandido 3.0, nos temas claro
+  e escuro.
+
+**Afeta:** `#98` (a seção Schemas entra no fim de `renderOpenApiHtml`; os `<details>` de schema
+precisam de `data-openapi-key` próprio para entrar na preservação de estado), `#99` (o export chama
+`renderOpenApiBlocks` no container desanexado).

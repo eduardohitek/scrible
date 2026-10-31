@@ -255,3 +255,192 @@
   font-weight: normal;
   width: 30%;
 }
+
+/* Blocos OpenAPI (#97). `.openapi-error` segue o visual de `.mermaid-error`. */
+.openapi-error {
+  box-sizing: border-box;
+  color: var(--color-danger-text);
+  background: var(--color-danger-bg);
+  border: 1px solid var(--color-danger-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  margin: var(--space-4) auto;
+  white-space: pre-wrap;
+}
+
+.openapi {
+  box-sizing: border-box;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  margin: var(--space-4) auto 1.2em;
+}
+
+.openapi-header {
+  margin-bottom: var(--space-4);
+}
+
+.openapi-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: 1.3em;
+  font-weight: 650;
+  color: var(--color-markdown-heading);
+}
+
+.openapi-badge {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--color-accent);
+  background: var(--color-accent-soft);
+  border-radius: 999px;
+  padding: 0.1em 0.6em;
+}
+
+.openapi-badge-muted {
+  color: var(--color-text-secondary);
+  background: var(--color-surface);
+}
+
+.openapi-description {
+  white-space: pre-wrap;
+  color: var(--color-text-secondary);
+  margin: var(--space-2) 0;
+}
+
+.openapi-servers {
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-5);
+  font-size: var(--font-size-sm);
+}
+
+.openapi-tag + .openapi-tag {
+  margin-top: var(--space-5);
+}
+
+.openapi-tag-name {
+  font-weight: 650;
+  font-size: 1.05em;
+  color: var(--color-markdown-heading);
+  padding-bottom: var(--space-1);
+  margin-bottom: var(--space-2);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.openapi-operation {
+  --openapi-method-color: var(--color-http-other);
+  border: 1px solid var(--color-border-subtle);
+  border-left: 3px solid var(--openapi-method-color);
+  border-radius: var(--radius-sm);
+  margin: var(--space-2) 0;
+}
+
+.openapi-method-get { --openapi-method-color: var(--color-http-get); }
+.openapi-method-post { --openapi-method-color: var(--color-http-post); }
+.openapi-method-put { --openapi-method-color: var(--color-http-put); }
+.openapi-method-patch { --openapi-method-color: var(--color-http-patch); }
+.openapi-method-delete { --openapi-method-color: var(--color-http-delete); }
+
+.openapi-operation > summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+}
+
+.openapi-operation[open] > summary {
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.openapi-method {
+  min-width: 4.2em;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  color: var(--color-bg);
+  background: var(--openapi-method-color);
+  border-radius: 4px;
+  padding: 0.15em 0.5em;
+}
+
+.preview-pane .openapi-path {
+  background: none;
+  color: var(--color-text);
+  padding: 0;
+  font-weight: 600;
+}
+
+.openapi-summary {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.openapi-deprecated {
+  font-size: var(--font-size-xs);
+  color: var(--color-warning-text);
+  background: var(--color-warning-bg);
+  border-radius: 4px;
+  padding: 0.05em 0.4em;
+}
+
+.openapi-operation:has(> summary .openapi-deprecated) .openapi-path {
+  text-decoration: line-through;
+}
+
+.openapi-operation-body {
+  padding: var(--space-2) var(--space-3) var(--space-3);
+}
+
+.openapi-section-title {
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-secondary);
+  margin: var(--space-3) 0 var(--space-1);
+}
+
+.openapi-operation-id {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.preview-pane .openapi-table {
+  margin: var(--space-1) 0 var(--space-2);
+}
+
+.openapi-cell-text {
+  white-space: pre-wrap;
+}
+
+.openapi-media {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.openapi-required {
+  font-size: var(--font-size-xs);
+  color: var(--color-danger-text);
+}
+
+.openapi-format,
+.openapi-empty {
+  color: var(--color-text-secondary);
+}
+
+.preview-pane .openapi-status-2 { color: var(--color-http-post); }
+.preview-pane .openapi-status-4,
+.preview-pane .openapi-status-5 { color: var(--color-http-delete); }
+
+.openapi-ref-issue {
+  color: var(--color-warning-text);
+  font-size: var(--font-size-sm);
+}

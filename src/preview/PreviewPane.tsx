@@ -4,6 +4,7 @@ import mermaid from "mermaid";
 import { useThemeStore } from "../theme/themeStore";
 import { prepareLocalLinks } from "./localLinks";
 import { md, extractFrontMatter, renderFrontMatterTable } from "./markdownPipeline";
+import { collectOpenOpenApiKeys, renderOpenApiBlocks } from "./openapi/blocks";
 
 interface PreviewPaneProps {
   source: string;
@@ -25,8 +26,8 @@ let mermaidIdCounter = 0;
 
 /**
  * Pipeline de preview: markdown-it (GFM completo, front matter, notas de
- * rodapé) com sanitização via DOMPurify, e renderização de blocos
- * ```mermaid``` via mermaid.js.
+ * rodapé) com sanitização via DOMPurify, renderização de blocos
+ * ```mermaid``` via mermaid.js e de blocos ```openapi```/```swagger``` (#97).
  */
 export const PreviewPane = forwardRef<PreviewPaneHandle, PreviewPaneProps>(function PreviewPane(
   { source, documentPath, workspaceRoot },
@@ -86,7 +87,9 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, PreviewPaneProps>(funct
     if (!container) return;
 
     let cancelled = false;
+    const openKeys = collectOpenOpenApiKeys(container);
     container.innerHTML = html;
+    renderOpenApiBlocks(container, { openKeys });
     const cleanupLinks = documentPath && workspaceRoot
       ? prepareLocalLinks(container, documentPath, workspaceRoot)
       : undefined;
