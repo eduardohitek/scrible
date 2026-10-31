@@ -3,8 +3,19 @@ name: CI
 on:
   pull_request:
     branches: [main]
+    paths-ignore: ["**/*.md"]
   push:
     branches: [main]
+    paths-ignore: ["**/*.md"]
+
+# Um push novo no mesmo PR cancela a execução anterior (na main, cada push roda até o fim).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # Sem debuginfo: link mais rápido e cache do target/ menor. O perfil `test` herda do `dev`.
+  CARGO_PROFILE_DEV_DEBUG: 0
 
 jobs:
   check:
@@ -13,7 +24,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, ubuntu-22.04, windows-latest]
+        # Linux e Windows desligados por ora (só macOS é publicado). Para religar,
+        # volte a matriz para [macos-latest, ubuntu-22.04, windows-latest].
+        os: [macos-latest]
     defaults:
       run:
         shell: bash
@@ -31,6 +44,17 @@ jobs:
         uses: jdx/mise-action@v4
         with:
           cache: true
+
+      # Com o cache do mise, o toolchain fixado (mise.toml) pode ser instalado sob demanda pelo
+      # rustup no perfil mínimo, sem clippy — o ~/.rustup não entra em cache nenhum.
+      - name: Componentes do Rust
+        run: rustup component add clippy
+
+      # Depois do mise: a chave do cache usa a versão do rustc instalada por ele.
+      - name: Cache do Rust (target/ e registro do Cargo)
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
 
       - name: Cache node_modules
         uses: actions/cache@v5

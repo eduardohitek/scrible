@@ -1530,3 +1530,38 @@ que só precisam entregar paths por `open-paths`/`PendingOpenPaths`.
   `open -a <app> --env HOME=<home temporário> arquivo.md`. O `HOME` falso isola workspace e
   `session.json`, que serve de evidência (abas + `activeTabIndex`). Ao final, `lsregister -u` nos
   bundles de teste. `open -a` entrega o mesmo `kAEOpenDocuments` do "Abrir com" e do Dock.
+
+## CI só no macOS (trabalho de processo, sem issue)
+
+- `ci.yml` passou a rodar só em `macos-latest`. Linux e Windows saíram da matriz por decisão do usuário
+  (só o macOS é publicado). O passo do WebKitGTK (`if: runner.os == 'Linux'`) continua no arquivo, e
+  religar é só voltar a matriz para `[macos-latest, ubuntu-22.04, windows-latest]`.
+- `release.yml` não mudou: o `dry_run` ainda builda as 5 plataformas sob demanda.
+- **Consequência:** regressões só de Windows/Linux não são mais pegas no PR. Exemplos: o código sob
+  `cfg(target_os = ...)`, que o clippy dessas plataformas validava (ex.: `handle_run_event` da `#103`),
+  e os testes Rust restritos a `cfg(unix)`. Antes de religar ou de publicar essas plataformas, rodar
+  um `dry_run` do `release.yml`.
+
+- **Tempo do CI** (medido no PR #116; antes cerca de 290–330s por execução, quase tudo compilação do
+  Rust do zero, duas vezes: clippy e `cargo test` usam perfis diferentes):
+  - `Swatinem/rust-cache@v2` (`workspaces: src-tauri`), depois do `mise-action`, porque a chave usa o
+    `rustc` instalado por ele. Com o cache quente a execução caiu para **115s** (clippy 114s → 19s,
+    testes ~90s → 37s). O cache tem ~460 MB; o limite do repositório é 10 GB.
+  - `CARGO_PROFILE_DEV_DEBUG=0` no CI (o perfil `test` herda do `dev`): link mais rápido e cache menor.
+  - `concurrency` cancela a execução anterior do mesmo PR (na `main`, cada push roda até o fim).
+  - `paths-ignore: ["**/*.md"]`: PR que só mexe em Markdown não roda CI. A `main` não tem checks
+    obrigatórios; se passar a ter, isso deixa esses PRs pendurados.
+  - **Rust fixado** (`rust = "1.99.1"` no `mise.toml`, antes `"stable"`): a chave do cache inclui a
+    versão do `rustc`, e com `stable` cada versão nova do Rust invalidava o cache (aconteceu na
+    medição: 1.99.0 → 1.99.1 entre duas execuções). Vale para o CI, o `release.yml` e a máquina
+    local (todos usam o mise). Atualizar o Rust vira um PR de uma linha, e a primeira execução
+    depois dele é fria.
+  - **Armadilha do toolchain fixado:** o cache do `mise-action` guarda o estado do mise ("1.99.1
+    instalado"), mas não o `~/.rustup`. Na execução seguinte o rustup instala o toolchain sob demanda
+    no perfil **mínimo, sem clippy**, e o lint quebra (`'cargo-clippy' is not installed`). Por isso
+    o `ci.yml` tem um passo `rustup component add clippy`. Com `stable` isso não aparecia, porque a
+    imagem do runner já traz o stable com clippy. O `release.yml` não roda clippy, então não precisa
+    do passo.
+
+**Afeta:** a `#32` (a matriz de 3 SOs descrita lá deixa de valer no CI de PR) e as specs futuras de
+Windows/Linux, que devem religar a plataforma na matriz.
