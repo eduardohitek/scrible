@@ -1551,9 +1551,11 @@ que só precisam entregar paths por `open-paths`/`PendingOpenPaths`.
   - `concurrency` cancela a execução anterior do mesmo PR (na `main`, cada push roda até o fim).
   - `paths-ignore: ["**/*.md"]`: PR que só mexe em Markdown não roda CI. A `main` não tem checks
     obrigatórios; se passar a ter, isso deixa esses PRs pendurados.
-  - **Armadilha:** a chave do cache inclui a versão do `rustc`. Com `rust = "stable"` no `mise.toml`,
-    toda versão nova do Rust invalida o cache (aconteceu na medição: 1.99.0 → 1.99.1 entre duas
-    execuções).
+  - **Rust fixado** (`rust = "1.99.1"` no `mise.toml`, antes `"stable"`): a chave do cache inclui a
+    versão do `rustc`, e com `stable` cada versão nova do Rust invalidava o cache (aconteceu na
+    medição: 1.99.0 → 1.99.1 entre duas execuções). Vale para o CI, o `release.yml` e a máquina
+    local (todos usam o mise). Atualizar o Rust vira um PR de uma linha, e a primeira execução
+    depois dele é fria.
 
 **Afeta:** a `#32` (a matriz de 3 SOs descrita lá deixa de valer no CI de PR) e as specs futuras de
 Windows/Linux, que devem religar a plataforma na matriz.

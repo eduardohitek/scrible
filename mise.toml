@@ -1,6 +1,6 @@
 [tools]
 node = "22"
-rust = "stable"
+rust = "1.99.1"  # fixa: a chave do cache do CI inclui o rustc (DECISIONS.md, CI só no macOS)
 
 [tasks.setup]
 description = "Instala as dependências npm e do Cargo"
