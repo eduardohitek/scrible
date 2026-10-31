@@ -3,6 +3,7 @@ import { CompletionContext } from "@codemirror/autocomplete";
 import { EditorSelection, EditorState, type Transaction } from "@codemirror/state";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { slashCommandSource } from "./slashMenu";
+import { parseOpenApi } from "../preview/openapi/parse";
 
 function makeState(doc: string, pos: number): EditorState {
   return EditorState.create({
@@ -47,6 +48,7 @@ describe("slashCommandSource", () => {
         "Tabela",
         "Bloco de código",
         "Diagrama mermaid",
+        "Especificação OpenAPI",
         "Lista de tarefas",
         "Citação",
         "Link",
@@ -119,6 +121,31 @@ describe("inserção dos snippets", () => {
     expect(next.doc.toString()).toBe("```mermaid\n\n```");
     expect(next.selection.main.from).toBe(11);
     expect(next.selection.main.to).toBe(11);
+  });
+
+  it("Especificação OpenAPI insere um esqueleto 3.1 com cursor no título", () => {
+    const next = applyCompletion("/", 1, "Especificação OpenAPI");
+    const doc = next.doc.toString();
+
+    expect(doc.startsWith("```openapi\nopenapi: 3.1.0\n")).toBe(true);
+    expect(doc.endsWith("\n```")).toBe(true);
+    expect(doc).not.toContain("${");
+    expect(next.sliceDoc(next.selection.main.from, next.selection.main.to)).toBe("Minha API");
+  });
+
+  it("o esqueleto OpenAPI inserido passa no parser do preview sem erro", () => {
+    const doc = applyCompletion("/", 1, "Especificação OpenAPI").doc.toString();
+    const body = doc.split("\n").slice(1, -1).join("\n");
+
+    const result = parseOpenApi(body);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.doc.openapi).toBe("3.1.0");
+    expect(result.doc.info).toMatchObject({ title: "Minha API", version: "1.0.0" });
+    expect(result.doc.tags[0].operations).toMatchObject([
+      { method: "get", path: "/recursos", summary: "Lista os recursos" },
+    ]);
   });
 
   it("Linha horizontal insere --- com o cursor ao final, sem tabstop", () => {

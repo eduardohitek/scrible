@@ -62,8 +62,9 @@ describe("fenceLanguageSource", () => {
     // `from` incluir o `/`), aqui `from` já exclui as crases — o filtro
     // fuzzy default do CM6 funciona sem ajuda. A filtragem de fato acontece
     // no pipeline completo, coberta pelo teste de integração abaixo.
-    expect(result?.options.length).toBe(24);
+    expect(result?.options.length).toBe(26);
     expect(result?.options.map((o) => o.label)).toContain("python");
+    expect(result?.options.map((o) => o.label)).toEqual(expect.arrayContaining(["openapi", "swagger"]));
   });
 });
 
