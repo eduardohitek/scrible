@@ -220,6 +220,121 @@ describe("PreviewPane", () => {
     }
   });
 
+  describe("blocos OpenAPI (#97)", () => {
+    const openapiBlock = (title: string, extra = "") =>
+      [
+        "```openapi",
+        "openapi: 3.1.0",
+        `info: {title: ${title}, version: '1.0'}`,
+        "servers: [{url: 'https://api.example.com'}]",
+        "paths:",
+        "  /pets:",
+        "    get:",
+        "      tags: [pets]",
+        "      summary: Lista pets",
+        "      parameters:",
+        "        - {name: limit, in: query, schema: {type: integer}}",
+        "      responses:",
+        "        '200': {description: OK}",
+        "    post:",
+        "      tags: [pets]",
+        "      requestBody:",
+        "        content:",
+        "          application/json:",
+        "            schema: {type: object}",
+        "      responses:",
+        "        '201': {description: Criado}",
+        extra,
+        "```",
+      ].join("\n");
+
+    it("renderiza info, servers e endpoints recolhidos agrupados por tag", async () => {
+      const { container } = render(<PreviewPane source={openapiBlock("Petstore")} />);
+
+      await waitFor(() => expect(container.querySelector(".openapi")).not.toBeNull());
+
+      expect(container.querySelector("pre")).toBeNull();
+      expect(container.querySelector(".openapi-title")?.textContent).toContain("Petstore");
+      expect(container.querySelector(".openapi-servers")?.textContent).toContain("https://api.example.com");
+      expect(container.querySelector(".openapi-tag-name")?.textContent).toBe("pets");
+
+      const operations = Array.from(container.querySelectorAll<HTMLDetailsElement>("details.openapi-operation"));
+      expect(operations.map((d) => d.querySelector("summary")?.textContent)).toEqual([
+        "GET/petsLista pets",
+        "POST/pets",
+      ]);
+      expect(operations.every((d) => !d.open)).toBe(true);
+      expect(operations[0].querySelector(".openapi-table")?.textContent).toContain("limit");
+      expect(operations[1].textContent).toContain("application/json");
+    });
+
+    it("isola 1 bloco inválido entre 2 válidos", async () => {
+      const source = [openapiBlock("Primeira"), "", "```openapi", "openapi: 3.1.0\ninfo\n  x: [", "```", "", openapiBlock("Terceira")].join(
+        "\n",
+      );
+
+      const { container } = render(<PreviewPane source={source} />);
+
+      await waitFor(() => expect(container.querySelectorAll(".openapi")).toHaveLength(2));
+      const errors = container.querySelectorAll(".openapi-error");
+      expect(errors).toHaveLength(1);
+      expect(errors[0].textContent).toContain("Erro de sintaxe na linha");
+      const titles = Array.from(container.querySelectorAll(".openapi-title"), (el) => el.textContent);
+      expect(titles[0]).toContain("Primeira");
+      expect(titles[1]).toContain("Terceira");
+    });
+
+    it("mostra erro de Swagger 2.0 não suportado no bloco ```swagger", async () => {
+      const source = ["```swagger", 'swagger: "2.0"', "info: {title: Velha, version: '1'}", "```"].join("\n");
+
+      const { container } = render(<PreviewPane source={source} />);
+
+      await waitFor(() => expect(container.querySelector(".openapi-error")).not.toBeNull());
+      expect(container.querySelector(".openapi-error")?.textContent).toContain("Swagger 2.0 não suportado");
+    });
+
+    it("escapa HTML vindo do documento: <script> em description vira texto", async () => {
+      const source = [
+        "```openapi",
+        "openapi: 3.1.0",
+        "info:",
+        "  title: '<img src=x onerror=\"window.__oaPwned = true\">'",
+        "  version: '1'",
+        "  description: '<script>window.__oaPwned = true</script>'",
+        "```",
+      ].join("\n");
+
+      const { container } = render(<PreviewPane source={source} />);
+
+      await waitFor(() => expect(container.querySelector(".openapi")).not.toBeNull());
+      expect(container.querySelector(".openapi script")).toBeNull();
+      expect(container.querySelector(".openapi img")).toBeNull();
+      expect(container.querySelector(".openapi-description")?.textContent).toBe(
+        "<script>window.__oaPwned = true</script>",
+      );
+      expect((window as unknown as { __oaPwned?: boolean }).__oaPwned).toBeUndefined();
+    });
+
+    it("mantém aberto o endpoint expandido quando o documento é re-renderizado", async () => {
+      const { container, rerender } = render(<PreviewPane source={openapiBlock("v1")} />);
+      await waitFor(() => expect(container.querySelector(".openapi")).not.toBeNull());
+      container.querySelector<HTMLDetailsElement>("details.openapi-operation")!.open = true;
+
+      rerender(<PreviewPane source={openapiBlock("v2")} />);
+
+      await waitFor(() => expect(container.querySelector(".openapi-title")?.textContent).toContain("v2"));
+      const operations = container.querySelectorAll<HTMLDetailsElement>("details.openapi-operation");
+      expect(operations[0].open).toBe(true);
+      expect(operations[1].open).toBe(false);
+    });
+
+    it("preserva data-source-line no bloco renderizado", async () => {
+      const { container } = render(<PreviewPane source={`# Título\n\n${openapiBlock("X")}`} />);
+      await waitFor(() => expect(container.querySelector(".openapi")).not.toBeNull());
+      expect(container.querySelector<HTMLElement>(".openapi")?.dataset.sourceLine).toBe("2");
+    });
+  });
+
   afterEach(() => {
     useThemeStore.setState({ resolved: "light" });
   });

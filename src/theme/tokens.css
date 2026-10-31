@@ -49,6 +49,14 @@
   --color-warning-text: light-dark(#6b4e05, #f3d68a);
   --color-warning-border: light-dark(#f4e1a6, #5c4a14);
 
+  /* Cores: métodos HTTP nos blocos OpenAPI (#97) */
+  --color-http-get: light-dark(#1f6feb, #6ea8ff);
+  --color-http-post: light-dark(#1a7f37, #4cc27a);
+  --color-http-put: light-dark(#b35900, #f0a04b);
+  --color-http-patch: light-dark(#8250df, #b694ff);
+  --color-http-delete: light-dark(#cf222e, #ff7b72);
+  --color-http-other: light-dark(#6b6c72, #9b9ba4);
+
   /* Cores: tooltip da toolbar (#60) */
   --color-tooltip-bg: light-dark(#1f2024, #f2f2f4);
   --color-tooltip-text: light-dark(#ffffff, #1b1b1e);
