@@ -1565,3 +1565,29 @@ que só precisam entregar paths por `open-paths`/`PendingOpenPaths`.
 
 **Afeta:** a `#32` (a matriz de 3 SOs descrita lá deixa de valer no CI de PR) e as specs futuras de
 Windows/Linux, que devem religar a plataforma na matriz.
+
+## #96 — OpenAPI: parser, validação de versão e resolução de `$ref` (spec #95)
+
+- **Módulo puro `src/preview/openapi/parse.ts`** (`parseOpenApi(text)` → `{ ok, doc } | { ok: false, error }`),
+  dependência nova só o `yaml` (JSON é YAML válido, um parser cobre os dois). Erros tipados por
+  `kind` (`syntax` com `line` 1-based / `unsupported-version` / `not-openapi`) com mensagem pronta
+  em pt-BR — o render só exibe `error.message`. Da mensagem do `yaml` fica só a primeira frase (o
+  resto é um trecho de código multilinha).
+- **`$ref` para `#/components/schemas/<Nome>` não é expandido**: vira `{ ref: "Nome" }` (ou
+  `refIssue` `missing` se o schema não existir), para o render ligar a uma âncora na seção Schemas
+  (#98). `circular: true` quando o schema referenciado alcança de volta o schema de
+  `components.schemas` sendo descrito (BFS memoizado no grafo de refs nomeados). Os demais refs
+  internos (parâmetros, respostas, requestBodies, path items, ponteiros arbitrários) são expandidos
+  no lugar com uma pilha de refs; reencontrar um ref da pilha, um alvo inexistente ou um ref externo
+  vira `RefIssue { ref, reason }` em vez de conteúdo.
+- **Aliases YAML (`&a`/`*a`) criam ciclos de objetos reais** sem nenhum `$ref` (`toJS()` devolve um
+  objeto circular) — o normalizador de schema guarda os objetos do caminho atual e marca o ciclo.
+  `maxAliasCount: 100` protege contra expansão exponencial.
+- `openapi: 3.0` sem aspas vira o número `3` no YAML — normalizado para `"3.0"`. Aceito:
+  `^3\.[01](\.\d+)?`. `swagger` sem `openapi` → "Swagger 2.0 não suportado".
+- Parâmetros do path item são mesclados aos da operação (`in`+`name` da operação sobrescreve);
+  `in: path` é sempre obrigatório. Operações sem tag vão para `default`, sempre o último grupo;
+  tags declaradas em `tags` mantêm a ordem do documento, e grupos sem operação somem.
+
+**Afeta:** `#97`/`#98` (render consome só o modelo; `RefIssue` e `refIssue` precisam de exibição
+própria), `#100` (o esqueleto do menu `/` é validado com `parseOpenApi`).
