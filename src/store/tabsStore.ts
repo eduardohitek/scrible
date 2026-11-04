@@ -314,24 +314,34 @@ export const useTabsStore = create<TabsState>((set, get) => ({
   },
 
   writeTabTo: async (tabId, destination) => {
-    const other = get().tabs.find((t) => t.path === destination && t.id !== tabId);
-    if (other) await get().closeTab(other.id, { skipFlush: true });
-
-    const entry = useDocumentStore.getState().documents[tabId];
+    const documents = useDocumentStore.getState();
+    const entry = documents.documents[tabId];
     if (!entry) return;
+    const other = get().tabs.find((t) => t.path === destination && t.id !== tabId);
+
+    // Autosave suspenso durante a gravação: o da aba de origem gravaria no
+    // path antigo, e o da outra aba regravaria o destino por cima da cópia.
+    // A outra aba só é fechada depois de a gravação dar certo — se falhar,
+    // as edições dela continuam lá e o autosave é retomado.
+    documents.pauseAutosave(tabId);
+    if (other) documents.pauseAutosave(other.id);
     const content = entry.content;
     let mtime: number;
     try {
       mtime = await invoke<number>("save_file", { path: destination, content, expectedMtime: null });
     } catch (err) {
       console.error("falha ao salvar em outro arquivo:", err);
+      documents.resumeAutosave(tabId);
+      if (other) documents.resumeAutosave(other.id);
       return;
     }
 
-    useDocumentStore.getState().relocateDocument(tabId, destination, mtime, content);
+    if (other) await get().closeTab(other.id, { skipFlush: true });
+    documents.relocateDocument(tabId, destination, mtime, content);
     set((state) => ({
       tabs: state.tabs.map((t) => (t.id === tabId ? { ...t, path: destination, title: basename(destination) } : t)),
     }));
+    documents.resumeAutosave(tabId);
   },
 
   startRenaming: (tabId) => set({ editingTabId: tabId }),

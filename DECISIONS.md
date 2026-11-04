@@ -1694,9 +1694,15 @@ precisam de `data-openapi-key` próprio para entrar na preservação de estado),
   zera `dirty` se o conteúdo não mudou durante a gravação. O histórico da cópia começa vazio (hash
   do path novo, `#8`); o do original continua com ele.
 - **`tabsStore.writeTabTo(tabId, destino)`** é o núcleo compartilhado com o Salvar de documento
-  novo (`#128`): fecha antes qualquer outra aba que já aponte para o destino (`closeTab` com
-  `skipFlush` — o conteúdo dela acabou de ser substituído e um flush o regravaria por cima), grava
-  e reaponta a aba. Se a gravação falhar, a aba fica no path original.
+  novo (`#128`): grava e reaponta a aba. Se outra aba já apontar para o destino, ela só é fechada
+  (`closeTab` com `skipFlush`) **depois** de a gravação dar certo. Se a gravação falhar, as duas abas
+  ficam como estavam e as edições pendentes da outra aba não se perdem (achado de review no PR #131).
+- **Autosave suspenso durante a cópia** (`documentStore.pauseAutosave`/`resumeAutosave`, achado de
+  review no PR #131). Com a pausa, o debounce da aba de origem não grava no path antigo, nem o da
+  outra aba regrava o destino por cima. Edições feitas durante a pausa só atualizam `content`/`dirty`.
+  O `resume` reagenda o debounce contra o path já reapontado. Além disso, `performSave` descarta o
+  resultado de uma gravação em voo se o `path` do documento mudou nesse meio-tempo, e só zera `dirty`
+  se o conteúdo não mudou desde o início da gravação.
 - Destino sem extensão `.md`/`.markdown` ganha `.md`; destino igual ao path atual é no-op.
 
 **Afeta:** `#128` (Salvar reaproveita `writeTabTo` e o diálogo `pickSaveDestination`).

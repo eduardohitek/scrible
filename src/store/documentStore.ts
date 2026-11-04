@@ -86,9 +86,31 @@ interface DocumentStoreState {
    * continua pendente). */
   relocateDocument: (tabId: string, newPath: string, mtime: number, writtenContent: string) => void;
   removeDocument: (tabId: string) => void;
+  /** Suspende o autosave da aba (Salvar Como, #127): edições continuam
+   * atualizando `content`/`dirty`, mas nada é gravado até `resumeAutosave`
+   * — senão um autosave durante a cópia gravaria no path antigo. */
+  pauseAutosave: (tabId: string) => void;
+  /** Volta a gravar; se houver edição pendente, reagenda o debounce (contra
+   * o path atual do documento, que pode ter mudado durante a pausa). */
+  resumeAutosave: (tabId: string) => void;
 }
 
 const debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const pausedTabs = new Set<string>();
+
+function scheduleSave(
+  tabId: string,
+  get: () => DocumentStoreState,
+  set: (fn: (state: DocumentStoreState) => Partial<DocumentStoreState>) => void,
+) {
+  clearPendingSave(tabId);
+  if (pausedTabs.has(tabId)) return;
+  const timer = setTimeout(() => {
+    debounceTimers.delete(tabId);
+    void performSave(tabId, get, set);
+  }, AUTOSAVE_DEBOUNCE_MS);
+  debounceTimers.set(tabId, timer);
+}
 
 function clearPendingSave(tabId: string) {
   const timer = debounceTimers.get(tabId);
@@ -116,9 +138,13 @@ async function performSave(
   get: () => DocumentStoreState,
   set: (fn: (state: DocumentStoreState) => Partial<DocumentStoreState>) => void,
 ) {
+  if (pausedTabs.has(tabId)) return;
   const entry = get().documents[tabId];
   if (!entry || entry.path === null) return;
   const { path, content, lastSavedMtime } = entry;
+  // O documento pode ser reapontado (Salvar Como) enquanto a gravação está
+  // em voo: o resultado vale para o path antigo e não pode ser aplicado.
+  const stillSamePath = () => get().documents[tabId]?.path === path;
 
   patchDocument(set, tabId, { status: "saving" });
   try {
@@ -127,8 +153,14 @@ async function performSave(
       content,
       expectedMtime: lastSavedMtime,
     });
-    patchDocument(set, tabId, { lastSavedMtime: newMtime, status: "idle", dirty: false });
+    if (!stillSamePath()) return;
+    patchDocument(set, tabId, {
+      lastSavedMtime: newMtime,
+      status: "idle",
+      dirty: get().documents[tabId].content !== content,
+    });
   } catch (err) {
+    if (!stillSamePath()) return;
     const fsError = err as FsError;
     if (fsError.kind === "ExternalChange") {
       patchDocument(set, tabId, {
@@ -206,12 +238,7 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
 
   setContent: (tabId, value) => {
     patchDocument(set, tabId, { content: value, dirty: true });
-    clearPendingSave(tabId);
-    const timer = setTimeout(() => {
-      debounceTimers.delete(tabId);
-      void performSave(tabId, get, set);
-    }, AUTOSAVE_DEBOUNCE_MS);
-    debounceTimers.set(tabId, timer);
+    scheduleSave(tabId, get, set);
   },
 
   flush: async (tabId) => {
@@ -278,7 +305,18 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
     });
   },
 
+  pauseAutosave: (tabId) => {
+    pausedTabs.add(tabId);
+    clearPendingSave(tabId);
+  },
+
+  resumeAutosave: (tabId) => {
+    pausedTabs.delete(tabId);
+    if (get().documents[tabId]?.dirty) scheduleSave(tabId, get, set);
+  },
+
   removeDocument: (tabId) => {
+    pausedTabs.delete(tabId);
     clearPendingSave(tabId);
     set((state) => {
       const documents = { ...state.documents };

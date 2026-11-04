@@ -602,6 +602,90 @@ describe("tabsStore", () => {
       expect(destinationWrites[0][1]).toMatchObject({ content: "novo" });
     });
 
+    it("falha ao gravar o destino preserva a outra aba aberta nele e retoma o autosave dela", async () => {
+      vi.useFakeTimers();
+      try {
+        useTabsStore.setState({
+          tabs: [
+            { id: "tab-1", path: "/root/a.md", title: "a.md" },
+            { id: "tab-2", path: "/root/b.md", title: "b.md" },
+          ],
+          activeTabId: "tab-1",
+        });
+        useDocumentStore.setState({
+          documents: {
+            "tab-1": docEntry({ path: "/root/a.md", content: "novo" }),
+            "tab-2": docEntry({ path: "/root/b.md", content: "antigo" }),
+          },
+        });
+        // Edição pendente na aba do destino (debounce armado).
+        useDocumentStore.getState().setContent("tab-2", "edição não salva");
+        mockedInvoke.mockResolvedValueOnce(1000); // flush de tab-1
+        mockedSave.mockResolvedValueOnce("/root/b.md");
+        mockedInvoke.mockRejectedValueOnce({ kind: "PermissionDenied", path: "/root/b.md" });
+        const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+        await useTabsStore.getState().saveAs("tab-1");
+
+        expect(useTabsStore.getState().tabs.map((t) => t.id)).toEqual(["tab-1", "tab-2"]);
+        expect(useDocumentStore.getState().documents["tab-2"]).toMatchObject({
+          content: "edição não salva",
+          dirty: true,
+        });
+
+        mockedInvoke.mockResolvedValueOnce(3000);
+        await vi.advanceTimersByTimeAsync(800);
+        expect(mockedInvoke).toHaveBeenLastCalledWith("save_file", {
+          path: "/root/b.md",
+          content: "edição não salva",
+          expectedMtime: 1000,
+        });
+        consoleSpy.mockRestore();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("edição durante a gravação lenta não vai para o original e é salva na cópia depois", async () => {
+      vi.useFakeTimers();
+      try {
+        setupSavedTab("texto");
+        let finishWrite: (mtime: number) => void = () => {};
+        mockedInvoke.mockResolvedValueOnce(1000); // flush do original
+        mockedSave.mockResolvedValueOnce("/outro/b.md");
+        mockedInvoke.mockImplementationOnce(() => new Promise((resolve) => (finishWrite = resolve)));
+
+        const pending = useTabsStore.getState().saveAs("tab-1");
+        await vi.advanceTimersByTimeAsync(0);
+        useDocumentStore.getState().setContent("tab-1", "texto editado");
+        await vi.advanceTimersByTimeAsync(2000);
+        // Nenhum autosave no meio da cópia.
+        expect(mockedInvoke).toHaveBeenCalledTimes(2);
+
+        finishWrite(2000);
+        await pending;
+        expect(useDocumentStore.getState().documents["tab-1"]).toMatchObject({
+          path: "/outro/b.md",
+          lastSavedMtime: 2000,
+          dirty: true,
+        });
+
+        mockedInvoke.mockResolvedValueOnce(2500);
+        await vi.advanceTimersByTimeAsync(800);
+        expect(mockedInvoke).toHaveBeenLastCalledWith("save_file", {
+          path: "/outro/b.md",
+          content: "texto editado",
+          expectedMtime: 2000,
+        });
+        const originalWrites = mockedInvoke.mock.calls.filter(
+          ([cmd, args]) => cmd === "save_file" && (args as { path: string }).path === "/root/a.md",
+        );
+        expect(originalWrites).toHaveLength(1); // só o flush antes do diálogo
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it("falha ao gravar o destino mantém a aba no original", async () => {
       setupSavedTab();
       mockedInvoke.mockResolvedValueOnce(1000); // flush
