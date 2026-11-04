@@ -63,6 +63,9 @@ pub fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
     let open_file = MenuItemBuilder::with_id("open_file", "Abrir arquivo…")
         .accelerator("CmdOrCtrl+O")
         .build(app)?;
+    let save = MenuItemBuilder::with_id("save", "Salvar")
+        .accelerator("CmdOrCtrl+S")
+        .build(app)?;
     let save_as = MenuItemBuilder::with_id("save_as", "Salvar Como…")
         .accelerator("CmdOrCtrl+Shift+S")
         .build(app)?;
@@ -75,6 +78,7 @@ pub fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
     let file_menu = SubmenuBuilder::new(app, "Arquivo")
         .item(&new_tab)
         .item(&open_file)
+        .item(&save)
         .item(&save_as)
         .separator()
         .item(&close_tab)

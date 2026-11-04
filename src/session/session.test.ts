@@ -146,6 +146,27 @@ describe("startSessionPersistence", () => {
     persistence.stop();
   });
 
+  it("grava isNew só nas abas novas (#128)", async () => {
+    useTabsStore.setState({
+      tabs: [
+        { id: "t1", path: "/root/untitled.md", title: "untitled.md", isNew: true },
+        { id: "t2", path: "/root/b.md", title: "b.md" },
+      ],
+    });
+    const persistence = startSessionPersistence();
+    await persistence.flush();
+    expect(mockedInvoke).toHaveBeenCalledWith("write_session", {
+      session: {
+        tabs: [
+          { path: "/root/untitled.md", cursorPos: 0, scrollTop: 0, isNew: true },
+          { path: "/root/b.md", cursorPos: 0, scrollTop: 0 },
+        ],
+        activeTabIndex: 1,
+      },
+    });
+    persistence.stop();
+  });
+
   it("flush grava imediatamente, sem esperar o debounce", async () => {
     const persistence = startSessionPersistence();
     await persistence.flush();

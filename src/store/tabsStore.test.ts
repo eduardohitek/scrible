@@ -700,4 +700,122 @@ describe("tabsStore", () => {
       consoleSpy.mockRestore();
     });
   });
+  describe("save (#128)", () => {
+    function setupTab(isNew: boolean, path = "/root/untitled-1.md") {
+      const title = path.split("/").pop() ?? path;
+      useTabsStore.setState({
+        tabs: [isNew ? { id: "tab-1", path, title, isNew: true } : { id: "tab-1", path, title }],
+        activeTabId: "tab-1",
+      });
+      useDocumentStore.setState({ documents: { "tab-1": docEntry({ path, content: "rascunho" }) } });
+    }
+
+    it("newTab marca a aba como nova; openTab não", async () => {
+      mockedInvoke.mockResolvedValueOnce([]); // list_dir
+      mockedInvoke.mockResolvedValueOnce(""); // read_file
+      await useTabsStore.getState().newTab();
+      mockedInvoke.mockResolvedValueOnce("x");
+      await useTabsStore.getState().openTab("/root/existente.md");
+
+      const [created, opened] = useTabsStore.getState().tabs;
+      expect(created.isNew).toBe(true);
+      expect(opened.isNew).toBeFalsy();
+    });
+
+    it("aba já salva: só faz o flush, sem diálogo", async () => {
+      setupTab(false, "/root/a.md");
+      mockedInvoke.mockResolvedValueOnce(1000); // flush
+
+      await useTabsStore.getState().save("tab-1");
+
+      expect(mockedSave).not.toHaveBeenCalled();
+      expect(mockedInvoke).toHaveBeenCalledTimes(1);
+      expect(mockedInvoke).toHaveBeenCalledWith("save_file", expect.objectContaining({ path: "/root/a.md" }));
+    });
+
+    it("aba nova: grava no destino, apaga o original, reaponta e zera isNew", async () => {
+      setupTab(true);
+      mockedInvoke.mockResolvedValueOnce(1000); // flush
+      mockedSave.mockResolvedValueOnce("/Users/eu/notas.md");
+      mockedInvoke.mockResolvedValueOnce(2000); // save_file no destino
+      mockedInvoke.mockResolvedValueOnce(undefined); // delete_file
+
+      await useTabsStore.getState().save("tab-1");
+
+      expect(mockedSave).toHaveBeenCalledWith(expect.objectContaining({ defaultPath: "/root/untitled-1.md" }));
+      expect(mockedInvoke).toHaveBeenNthCalledWith(2, "save_file", {
+        path: "/Users/eu/notas.md",
+        content: "rascunho",
+        expectedMtime: null,
+      });
+      expect(mockedInvoke).toHaveBeenNthCalledWith(3, "delete_file", { path: "/root/untitled-1.md" });
+      expect(mockedInvoke.mock.calls.map(([cmd]) => cmd)).not.toContain("rename_file");
+      const tab = useTabsStore.getState().tabs[0];
+      expect(tab).toEqual({ id: "tab-1", path: "/Users/eu/notas.md", title: "notas.md" });
+      expect(useDocumentStore.getState().documents["tab-1"].path).toBe("/Users/eu/notas.md");
+    });
+
+    it("aba nova: cancelar o diálogo não altera nada", async () => {
+      setupTab(true);
+      mockedInvoke.mockResolvedValueOnce(1000); // flush
+      mockedSave.mockResolvedValueOnce(null);
+
+      await useTabsStore.getState().save("tab-1");
+
+      expect(mockedInvoke).toHaveBeenCalledTimes(1);
+      expect(useTabsStore.getState().tabs[0]).toMatchObject({ path: "/root/untitled-1.md", isNew: true });
+    });
+
+    it("aba nova: escolher o próprio path só confirma o lugar", async () => {
+      setupTab(true);
+      mockedInvoke.mockResolvedValueOnce(1000); // flush
+      mockedSave.mockResolvedValueOnce("/root/untitled-1.md");
+
+      await useTabsStore.getState().save("tab-1");
+
+      expect(mockedInvoke).toHaveBeenCalledTimes(1);
+      expect(useTabsStore.getState().tabs[0].isNew).toBeFalsy();
+    });
+
+    it("aba nova: falha ao gravar o destino não apaga o original", async () => {
+      setupTab(true);
+      mockedInvoke.mockResolvedValueOnce(1000); // flush
+      mockedSave.mockResolvedValueOnce("/protegido/notas.md");
+      mockedInvoke.mockRejectedValueOnce({ kind: "PermissionDenied", path: "/protegido/notas.md" });
+      const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+      await useTabsStore.getState().save("tab-1");
+
+      expect(mockedInvoke.mock.calls.map(([cmd]) => cmd)).not.toContain("delete_file");
+      expect(useTabsStore.getState().tabs[0]).toMatchObject({ path: "/root/untitled-1.md", isNew: true });
+      consoleSpy.mockRestore();
+    });
+
+    it("saveAs numa aba nova move (apaga o original) em vez de copiar", async () => {
+      setupTab(true);
+      mockedInvoke.mockResolvedValueOnce(1000); // flush
+      mockedSave.mockResolvedValueOnce("/root/ideias.md");
+      mockedInvoke.mockResolvedValueOnce(2000); // save_file
+      mockedInvoke.mockResolvedValueOnce(undefined); // delete_file
+
+      await useTabsStore.getState().saveAs("tab-1");
+
+      expect(mockedInvoke).toHaveBeenCalledWith("delete_file", { path: "/root/untitled-1.md" });
+      expect(useTabsStore.getState().tabs[0]).toEqual({ id: "tab-1", path: "/root/ideias.md", title: "ideias.md" });
+    });
+
+    it("restoreTabs preserva isNew da sessão e trata ausência como já salva", async () => {
+      mockedInvoke.mockResolvedValue("x");
+      await useTabsStore.getState().restoreTabs(
+        [
+          { path: "/root/untitled.md", cursorPos: 0, scrollTop: 0, isNew: true },
+          { path: "/root/a.md", cursorPos: 0, scrollTop: 0 },
+        ],
+        0,
+      );
+      const [first, second] = useTabsStore.getState().tabs;
+      expect(first.isNew).toBe(true);
+      expect(second.isNew).toBeFalsy();
+    });
+  });
 });

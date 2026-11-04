@@ -1706,3 +1706,28 @@ precisam de `data-openapi-key` próprio para entrar na preservação de estado),
 - Destino sem extensão `.md`/`.markdown` ganha `.md`; destino igual ao path atual é no-op.
 
 **Afeta:** `#128` (Salvar reaproveita `writeTabTo` e o diálogo `pickSaveDestination`).
+
+## #128 — Salvar (⌘S) e documento novo (spec #125)
+
+- **"Documento novo" é uma flag `isNew` opcional na `Tab`**, e não uma heurística de nome
+  (`untitled-N.md`). Ausente vale `false`, o que mantém os literais de `Tab` já existentes válidos
+  sem mudança. Só `newTab` marca a aba (inclusive com `targetDir`, vindo do explorador). O
+  `untitled.md` de boas-vindas aberto no boot sem sessão **não** é marcado: pode ser um arquivo
+  antigo de antes da `#9`.
+- **Sessão**: `SessionTab.is_new` (`#[serde(default, skip_serializing_if = "Not::not")]`) e
+  `collectSession` só gravam `isNew: true` quando há flag. Sessões antigas carregam como `false`, e
+  o JSON das abas já salvas não muda.
+- **Salvar numa aba nova** = diálogo → `writeTabTo` (`#127`) → `delete_file` do untitled original →
+  remove `isNew`. Não usa `rename_file`, que falha entre volumes diferentes. Se a gravação no destino
+  falhar, o original não é apagado. Uma falha no `delete_file` só é logada: o conteúdo já está no
+  destino.
+- **Escolher o próprio path no Salvar só confirma o lugar** (tira `isNew` sem gravar nada além do
+  flush). Desvio consciente do texto da issue ("mesmo path = no-op"): sem isso, quem quer manter o
+  `untitled.md` onde está seria perguntado a cada ⌘S. No Salvar Como (`#127`), o mesmo path continua
+  sendo no-op.
+- **Salvar numa aba já salva** = só `flush`, sem diálogo. **Salvar Como numa aba nova** delega para o
+  Salvar (move, não copia).
+- Renomear uma aba nova (`#21`) não tira o `isNew`: o arquivo continua no lugar criado pelo app.
+
+**Afeta:** qualquer mudança no shape de `Tab`/sessão precisa preservar `isNew` em `collectSession`
+e `restoreTabs`.

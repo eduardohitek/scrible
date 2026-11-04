@@ -27,6 +27,10 @@ pub struct SessionTab {
     pub cursor_pos: usize,
     #[serde(default)]
     pub scroll_top: f64,
+    /// Documento novo ainda não salvo pelo usuário (#128): o Salvar abre o diálogo. Ausente
+    /// (sessões antigas) vale `false`, e só é gravado quando `true`.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub is_new: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -101,7 +105,7 @@ mod tests {
     use super::*;
 
     fn tab(path: &Path, cursor_pos: usize, scroll_top: f64) -> SessionTab {
-        SessionTab { path: path.to_string_lossy().into_owned(), cursor_pos, scroll_top }
+        SessionTab { path: path.to_string_lossy().into_owned(), cursor_pos, scroll_top, is_new: false }
     }
 
     #[test]
@@ -135,6 +139,30 @@ mod tests {
         save(dir.path(), &session).unwrap();
         assert_eq!(load(dir.path()), session);
         assert!(!dir.path().join("session.json.scrible-tmp").exists());
+    }
+
+    #[test]
+    fn is_new_roundtrips_and_defaults_to_false_for_old_sessions() {
+        let dir = tempfile::tempdir().unwrap();
+        let a = dir.path().join("untitled.md");
+        let b = dir.path().join("b.md");
+        fs::write(&a, "x").unwrap();
+        fs::write(&b, "x").unwrap();
+        let session = Session {
+            tabs: vec![SessionTab { is_new: true, ..tab(&a, 0, 0.0) }, tab(&b, 0, 0.0)],
+            active_tab_index: 0,
+        };
+        save(dir.path(), &session).unwrap();
+        assert_eq!(load(dir.path()), session);
+        let raw = fs::read_to_string(dir.path().join(SESSION_FILE)).unwrap();
+        assert_eq!(raw.matches("isNew").count(), 1);
+
+        let old = format!(
+            r#"{{"tabs":[{{"path":{}}}],"activeTabIndex":0}}"#,
+            serde_json::to_string(&b.to_string_lossy()).unwrap()
+        );
+        fs::write(dir.path().join(SESSION_FILE), old).unwrap();
+        assert!(!load(dir.path()).tabs[0].is_new);
     }
 
     #[test]
