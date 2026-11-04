@@ -1,5 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { useDocumentStore } from "../store/documentStore";
 import { TabBar } from "./TabBar";
 import { useTabsStore } from "../store/tabsStore";
 
@@ -16,7 +17,26 @@ function threeTabs() {
 }
 
 describe("TabBar", () => {
+  let resize: () => void;
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+  function overflowBar() {
+    vi.spyOn(HTMLElement.prototype, "scrollWidth", "get").mockReturnValue(600);
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(200);
+  }
   beforeEach(() => {
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(callback: () => void) {
+          resize = callback;
+        }
+        observe() {}
+        disconnect() {}
+      },
+    );
     useTabsStore.setState({
       workspaceRoot: "/root",
       tabs: threeTabs(),
@@ -90,5 +110,86 @@ describe("TabBar", () => {
     fireEvent.click(screen.getByLabelText("Nova aba"));
 
     expect(useTabsStore.getState().newTab).toHaveBeenCalled();
+  });
+  it("mostra o botão somente com overflow e atualiza ao redimensionar", () => {
+    render(<TabBar />);
+    expect(screen.queryByLabelText("Todas as abas")).toBeNull();
+    overflowBar();
+    act(() => resize());
+    expect(screen.getByLabelText("Todas as abas")).not.toBeNull();
+    vi.restoreAllMocks();
+    act(() => resize());
+    expect(screen.queryByLabelText("Todas as abas")).toBeNull();
+  });
+
+  it("converte roda vertical e preserva o gesto horizontal", () => {
+    overflowBar();
+    const { container } = render(<TabBar />);
+    const bar = container.querySelector(".tab-bar")!;
+    fireEvent.wheel(bar, { deltaY: 80 });
+    expect(bar.scrollLeft).toBe(80);
+    fireEvent.wheel(bar, { deltaX: 60, deltaY: 5 });
+    expect(bar.scrollLeft).toBe(80);
+  });
+
+  it("revela a aba ativa quando o store muda, inclusive na restauração", () => {
+    overflowBar();
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      const left = this.dataset.tabId === "tab-3" ? 350 : 0;
+      return { left, right: left + 200 } as DOMRect;
+    });
+    const { container } = render(<TabBar />);
+    const bar = container.querySelector(".tab-bar")!;
+    act(() => useTabsStore.setState({ activeTabId: "tab-3" }));
+    expect(bar.scrollLeft).toBe(350);
+  });
+
+  it("lista nome e pasta, marca a ativa, seleciona e fecha", () => {
+    overflowBar();
+    render(<TabBar />);
+    fireEvent.click(screen.getByLabelText("Todas as abas"));
+    expect(screen.getAllByText("/root")).toHaveLength(3);
+    expect(screen.getByRole("button", { name: /✓ a.md/ }).getAttribute("aria-current")).toBe(
+      "page",
+    );
+    fireEvent.click(screen.getByRole("button", { name: /c.md.*root/ }));
+    expect(useTabsStore.getState().activeTabId).toBe("tab-3");
+    expect(screen.queryByLabelText("Abas abertas")).toBeNull();
+  });
+
+  it("fecha com Escape e clique fora", () => {
+    overflowBar();
+    render(<TabBar />);
+    fireEvent.click(screen.getByLabelText("Todas as abas"));
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByLabelText("Abas abertas")).toBeNull();
+    fireEvent.click(screen.getByLabelText("Todas as abas"));
+    fireEvent.pointerDown(document.body);
+    expect(screen.queryByLabelText("Abas abertas")).toBeNull();
+  });
+  it("atualiza a marca dirty enquanto a lista está aberta", () => {
+    overflowBar();
+    useDocumentStore.setState({ documents: {} });
+    render(<TabBar />);
+    fireEvent.click(screen.getByLabelText("Todas as abas"));
+    act(() =>
+      useDocumentStore.setState({
+        documents: {
+          "tab-2": {
+            path: "/root/b.md",
+            content: "",
+            lastSavedMtime: null,
+            status: "idle",
+            dirty: true,
+            conflict: null,
+          },
+        },
+      }),
+    );
+    expect(screen.getByRole("button", { name: /b.md •/ })).not.toBeNull();
+    act(() => useDocumentStore.setState({ documents: {} }));
+    expect(screen.queryByRole("button", { name: /b.md •/ })).toBeNull();
   });
 });
