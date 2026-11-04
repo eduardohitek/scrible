@@ -17,7 +17,7 @@ use open_paths::PendingOpenPaths;
 use session::{Session, SessionError};
 use tauri::{AppHandle, Emitter, Manager, WindowEvent};
 use tauri_plugin_opener::OpenerExt;
-use watcher::LastSaveMtime;
+use watcher::FileWatcher;
 use workspace::{WorkspaceError, WorkspacePaths};
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
@@ -44,11 +44,11 @@ fn save_file(
     content: String,
     expected_mtime: Option<i64>,
     state: tauri::State<WorkspaceState>,
-    last_save_mtime: tauri::State<LastSaveMtime>,
+    watcher: tauri::State<FileWatcher>,
 ) -> Result<i64, FsError> {
-    let file_path = PathBuf::from(path);
+    let file_path = PathBuf::from(&path);
     let new_mtime = fs_ops::save_file(&file_path, &content, expected_mtime)?;
-    last_save_mtime.record(new_mtime);
+    watcher.record_save(&path, new_mtime);
 
     if let Ok(workspace) = &state.0 {
         if let Err(err) = history::maybe_snapshot(&workspace.hidden, &file_path, &content) {
@@ -84,11 +84,21 @@ fn restore_snapshot(
     path: String,
     timestamp: i64,
     state: tauri::State<WorkspaceState>,
+    watcher: tauri::State<FileWatcher>,
 ) -> Result<RestoreResult, HistoryError> {
     let workspace = state.0.as_ref().map_err(|err| HistoryError::Io {
         message: err.to_string(),
     })?;
-    history::restore_snapshot(&workspace.hidden, &PathBuf::from(path), timestamp)
+    let result = history::restore_snapshot(&workspace.hidden, &PathBuf::from(&path), timestamp)?;
+    watcher.record_save(&path, result.mtime);
+    Ok(result)
+}
+
+/// Lista completa dos paths abertos em abas (#140); substitui o conjunto
+/// observado pelo watcher de alteração externa.
+#[tauri::command]
+fn set_watched_paths(paths: Vec<String>, watcher: tauri::State<FileWatcher>) {
+    watcher.set_paths(paths);
 }
 
 #[tauri::command]
@@ -243,16 +253,17 @@ pub fn run() {
                 eprintln!("falha ao inicializar o workspace: {err}");
             }
 
-            let last_save_mtime = LastSaveMtime::default();
+            let handle = app.handle().clone();
+            let file_watcher = FileWatcher::start(move |change| {
+                let _ = handle.emit("external-file-changed", change);
+            });
             if let Ok(paths) = &result {
                 app.asset_protocol_scope().allow_directory(&paths.root, true)?;
-                let target = paths.root.join("untitled.md");
-                watcher::start_watching(app.handle().clone(), target, last_save_mtime.clone());
                 tree_watcher::start_watching(app.handle().clone(), paths.root.clone(), paths.hidden.clone());
             }
 
             app.manage(WorkspaceState(result));
-            app.manage(last_save_mtime);
+            app.manage(file_watcher);
 
             app.set_menu(app_menu::build(app.handle())?)?;
             app.on_menu_event(|app, event| {
@@ -292,7 +303,8 @@ pub fn run() {
             read_session,
             write_session,
             validate_open_paths,
-            take_pending_open_paths
+            take_pending_open_paths,
+            set_watched_paths
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application")

@@ -1,10 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { EditorView } from "@codemirror/view";
+import { EditorState } from "@codemirror/state";
+import { undo } from "@codemirror/commands";
 import {
   discard,
   getOrCreateEditorState,
   getPosition,
   getScrollTop,
+  replaceDocSpec,
   saveEditorState,
   saveScrollTop,
   seedPosition,
@@ -134,5 +137,38 @@ describe("posição para a sessão (#9)", () => {
     expect(getOrCreateEditorState("tab-1", "**negrito**", () => {})).toBe(synced);
 
     setHideMarkers(false);
+  });
+
+  it("replaceDocSpec troca o documento mantendo a seleção nos mesmos offsets", () => {
+    const state = EditorState.create({ doc: "abcdefghij", selection: { anchor: 3, head: 6 } });
+
+    const next = state.update(replaceDocSpec(state, "0123456789xyz")).state;
+
+    expect(next.doc.toString()).toBe("0123456789xyz");
+    expect(next.selection.main.anchor).toBe(3);
+    expect(next.selection.main.head).toBe(6);
+  });
+
+  it("replaceDocSpec limita a seleção ao tamanho do texto novo", () => {
+    const state = EditorState.create({ doc: "abcdefghij", selection: { anchor: 9 } });
+
+    const next = state.update(replaceDocSpec(state, "abc")).state;
+
+    expect(next.selection.main.head).toBe(3);
+  });
+
+  it("reconciliar uma aba em segundo plano mantém o cursor e permite desfazer o reload", () => {
+    const view = new EditorView({ state: getOrCreateEditorState("tab-1", "linha um\nlinha dois", () => {}) });
+    view.dispatch({ selection: { anchor: 5 } });
+    saveEditorState("tab-1", view.state);
+    view.destroy();
+
+    const reloaded = getOrCreateEditorState("tab-1", "linha um\nlinha dois\nlinha três", () => {});
+    expect(reloaded.selection.main.head).toBe(5);
+
+    const undone = new EditorView({ state: reloaded });
+    expect(undo(undone)).toBe(true);
+    expect(undone.state.doc.toString()).toBe("linha um\nlinha dois");
+    undone.destroy();
   });
 });

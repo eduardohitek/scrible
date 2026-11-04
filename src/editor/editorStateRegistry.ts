@@ -1,4 +1,4 @@
-import { Compartment, EditorState, Transaction } from "@codemirror/state";
+import { Compartment, EditorSelection, EditorState, Transaction, type TransactionSpec } from "@codemirror/state";
 import { EditorView, keymap, drawSelection } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { searchKeymap } from "@codemirror/search";
@@ -70,6 +70,18 @@ function buildExtensions(tabId: string, onChange: (value: string) => void) {
   ];
 }
 
+/** Substitui o documento inteiro (reload externo, restauração de histórico,
+ * resolução de conflito) mantendo a seleção nos mesmos offsets, limitados ao
+ * tamanho do texto novo — sem isso o CodeMirror mapeia o cursor para o início
+ * ou o fim da substituição. A transação entra no undo normalmente. */
+export function replaceDocSpec(state: EditorState, content: string): TransactionSpec {
+  const { anchor, head } = state.selection.main;
+  return {
+    changes: { from: 0, to: state.doc.length, insert: content },
+    selection: EditorSelection.single(Math.min(anchor, content.length), Math.min(head, content.length)),
+  };
+}
+
 /**
  * Devolve o `EditorState` de uma aba: cria na primeira vez, ou reconcilia o
  * estado cacheado com `content` (fonte da verdade em `documentStore`) se
@@ -103,9 +115,7 @@ export function getOrCreateEditorState(
   }
 
   const reconciled = withCurrentLivePreview(
-    cached.update({
-      changes: { from: 0, to: cached.doc.length, insert: content },
-    }).state,
+    cached.update(replaceDocSpec(cached, content)).state,
   );
   states.set(tabId, reconciled);
   return reconciled;

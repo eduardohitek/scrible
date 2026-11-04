@@ -1753,3 +1753,41 @@ e `restoreTabs`.
   `latest.json` volta a ter as chaves `linux-*`.
 - O AppImage arm64 sai como `scrible_*_aarch64.AppImage` (conferido nos assets da v0.10.0); o `.deb`
   arm64 sai como `scrible_*_arm64.deb`.
+
+## #140 — Watcher de alteração externa para todas as abas abertas (spec #139)
+
+- **Encerra a dívida do watcher** registrada na `#21` e na `#9`. O path fixo `untitled.md` saiu do
+  `setup()`. `watcher.rs` virou `FileWatcher` (gerenciado via `app.manage`), com um conjunto
+  dinâmico de arquivos. O frontend manda a **lista completa** de paths abertos pelo command
+  `set_watched_paths` (`src/fs/externalChanges.ts::startWatchedPathsSync`, assinatura do
+  `tabsStore`). Só chama quando o conjunto ordenado e sem repetição muda, e não tem debounce: cada
+  chamada só faz `stat` dos paths novos.
+- **Um watch por diretório pai** (`NonRecursive`), compartilhado entre os arquivos abertos da mesma
+  pasta. Isso mantém a resistência a rename atômico da `#10` e cobre arquivos fora do workspace.
+  Um diretório cujo watch falha fica de fora e é tentado de novo no próximo `set_watched_paths`.
+- **Supressão de eco por path**: `LastSaveMtime` (valor global único) foi substituído por um mapa
+  `path → último mtime conhecido` dentro do `FileWatcher`. "Conhecido" é o save do próprio scrible
+  (`save_file` e agora também `restore_snapshot`, que antes passava sem registro), o mtime em
+  disco quando o path entrou no conjunto (baseline, então abrir ou renomear uma aba não gera
+  evento) ou uma alteração já emitida (então eventos de outros arquivos da pasta não reemitem a
+  mesma mudança, como acontecia com o valor global).
+- **Checagem por rajada**: a cada rajada assentada (300ms, como na `#10`), o watcher confere o mtime
+  de **todos** os arquivos observados, e não só dos que aparecem nos eventos. Assim não depende de
+  o path do evento bater com o path enviado pelo frontend (FSEvents pode devolver `/private/var`,
+  outra caixa etc.). Arquivo ausente é pulado sem mexer no mtime conhecido, e quando volta com
+  outro mtime vira alteração normal. O evento de remoção fica para a `#141`.
+- **Payload** `external-file-changed { path, mtime, content }`. `path` é o mesmo texto recebido em
+  `set_watched_paths`, então o frontend roteia por igualdade exata para **todas** as abas com
+  aquele path (`handleExternalFileChanged`).
+- **`handleExternalChange` com o mesmo texto local** (inclusive com edição pendente) só adota o
+  mtime e limpa `dirty`/autosave pendente, sem reload nem conflito.
+- **Cursor no reload**: `replaceDocSpec` (`editorStateRegistry.ts`) substitui o doc inteiro mantendo
+  anchor/head nos mesmos offsets, limitados ao tamanho do texto novo. É usado pelo `EditorPane`
+  (aba ativa) e pela reconciliação de aba em segundo plano. Antes, o CodeMirror mapeava o cursor
+  para a borda da substituição. A transação continua entrando no undo (decisão da spec).
+
+**Afeta:** `#141` (remoção: detectar a transição existe → não existe no `collect_changes` e emitir
+`external-file-removed`), `#142` (a mensagem "Recarregado do disco" deve sair do caminho de reload
+de `handleExternalChange`, e não do evento), `#143` (a checagem no foco reaproveita
+`handleExternalChange` e compara com `lastSavedMtime`. Atenção: `initDocument` não preenche
+`lastSavedMtime` ao abrir um arquivo existente, porque `read_file` não devolve mtime).

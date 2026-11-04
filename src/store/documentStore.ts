@@ -69,9 +69,11 @@ interface DocumentStoreState {
    * blur da janela e fechamento do app, onde não dá pra esperar por tabId. */
   flushAll: () => Promise<void>;
   applyExternalContent: (tabId: string, content: string, mtime: number) => void;
-  /** Chamado ao receber o evento `external-file-changed` do watcher (#10):
-   * reload silencioso se não há edição local pendente, ou expõe o conflito
-   * pra `ConflictBanner` se houver. */
+  /** Chamado ao receber o evento `external-file-changed` do watcher (#10,
+   * #140): reload silencioso se não há edição local pendente, ou expõe o
+   * conflito pra `ConflictBanner` se houver. Conteúdo em disco igual ao local
+   * só adota o mtime novo (ex.: `touch`, ou o outro programa gravou o mesmo
+   * texto) — sem reload nem conflito. */
   handleExternalChange: (tabId: string, content: string, mtime: number) => void;
   /** Resolve um conflito ativo: "mine" sobrescreve o disco com o conteúdo
    * local; "disk" descarta o conteúdo local (preservado antes via snapshot
@@ -264,7 +266,7 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
   handleExternalChange: (tabId, content, mtime) => {
     const entry = get().documents[tabId];
     if (!entry) return;
-    if (!entry.dirty) {
+    if (!entry.dirty || content === entry.content) {
       get().applyExternalContent(tabId, content, mtime);
       return;
     }
