@@ -56,6 +56,15 @@ export const commands: readonly AppCommand[] = [
     run: () => useTabsStore.getState().openFileDialog(),
   },
   {
+    id: "save_as",
+    label: "Salvar Como…",
+    shortcut: formatShortcut("⇧⌘S"),
+    run: () => {
+      const { activeTabId, saveAs } = useTabsStore.getState();
+      if (activeTabId) return saveAs(activeTabId);
+    },
+  },
+  {
     id: "close_tab",
     label: "Fechar aba",
     shortcut: formatShortcut("⌘W"),

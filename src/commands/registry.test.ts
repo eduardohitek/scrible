@@ -117,6 +117,18 @@ describe("commands registry", () => {
     expect(openFileDialog).toHaveBeenCalledOnce();
   });
 
+  it("save_as só age quando há aba ativa e chama saveAs com ela", () => {
+    const saveAs = vi.fn().mockResolvedValue(undefined);
+    useTabsStore.setState({ activeTabId: null, saveAs });
+
+    runCommand("save_as");
+    expect(saveAs).not.toHaveBeenCalled();
+
+    useTabsStore.setState({ activeTabId: "tab-1" });
+    runCommand("save_as");
+    expect(saveAs).toHaveBeenCalledWith("tab-1");
+  });
+
   it("close_tab e rename_tab só agem quando há aba ativa", () => {
     const closeTab = vi.fn().mockResolvedValue(undefined);
     const startRenaming = vi.fn();

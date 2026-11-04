@@ -80,6 +80,11 @@ interface DocumentStoreState {
   /** Só atualiza o path após um rename bem-sucedido em disco — não mexe em
    * content/lastSavedMtime, que continuam válidos (mesmo arquivo, novo nome). */
   renameDocument: (tabId: string, newPath: string) => void;
+  /** Reaponta o documento para um arquivo recém-gravado em outro path
+   * (Salvar Como, #127): adota `newPath`/`mtime` e só fica limpo se o
+   * conteúdo não mudou desde `writtenContent` (edição durante a gravação
+   * continua pendente). */
+  relocateDocument: (tabId: string, newPath: string, mtime: number, writtenContent: string) => void;
   removeDocument: (tabId: string) => void;
 }
 
@@ -259,6 +264,18 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
 
   renameDocument: (tabId, newPath) => {
     patchDocument(set, tabId, { path: newPath });
+  },
+
+  relocateDocument: (tabId, newPath, mtime, writtenContent) => {
+    const entry = get().documents[tabId];
+    if (!entry) return;
+    patchDocument(set, tabId, {
+      path: newPath,
+      lastSavedMtime: mtime,
+      status: "idle",
+      conflict: null,
+      dirty: entry.content !== writtenContent,
+    });
   },
 
   removeDocument: (tabId) => {

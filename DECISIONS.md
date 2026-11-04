@@ -1682,3 +1682,21 @@ precisam de `data-openapi-key` próprio para entrar na preservação de estado),
   updater falha em silêncio (`console.error`), e a manual mostra "Não foi possível atualizar". Não
   houve mudança no app. O código de Windows/Linux (export de PDF da `#81`, menus) continua no
   repositório e compila do código-fonte.
+
+## #127 — Salvar Como… (⇧⌘S) (spec #125)
+
+- **Sem mudança no Rust além do item de menu** (`save_as`, `CmdOrCtrl+Shift+S`, logo depois de
+  "Abrir arquivo…"). A cópia é um `save_file(destino, conteúdo, expectedMtime: null)`: a
+  confirmação de substituir um arquivo existente já foi feita pelo diálogo nativo (`save()` do
+  `tauri-plugin-dialog`, coberto por `dialog:default`), então não há mtime para comparar.
+- **A aba passa a editar a cópia; o original não é tocado** depois do flush que antecede o diálogo.
+  `documentStore.relocateDocument(tabId, path, mtime, writtenContent)` adota o novo path/mtime e só
+  zera `dirty` se o conteúdo não mudou durante a gravação. O histórico da cópia começa vazio (hash
+  do path novo, `#8`); o do original continua com ele.
+- **`tabsStore.writeTabTo(tabId, destino)`** é o núcleo compartilhado com o Salvar de documento
+  novo (`#128`): fecha antes qualquer outra aba que já aponte para o destino (`closeTab` com
+  `skipFlush` — o conteúdo dela acabou de ser substituído e um flush o regravaria por cima), grava
+  e reaponta a aba. Se a gravação falhar, a aba fica no path original.
+- Destino sem extensão `.md`/`.markdown` ganha `.md`; destino igual ao path atual é no-op.
+
+**Afeta:** `#128` (Salvar reaproveita `writeTabTo` e o diálogo `pickSaveDestination`).
