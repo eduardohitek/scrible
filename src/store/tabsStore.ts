@@ -135,6 +135,19 @@ async function pickSaveDestination(defaultPath: string): Promise<string | null> 
   return typeof chosen === "string" ? withMarkdownExtension(normalizePath(chosen)) : null;
 }
 
+/** Apaga o `original` de um "mover" (#128) só se ele não for a mesma
+ * entrada do `destination` com outra grafia (symlink, caixa diferente no
+ * APFS) — senão apagaria a cópia recém-gravada. Na dúvida (erro ao
+ * comparar), não apaga: sobra um arquivo a mais, nunca um a menos. */
+async function deleteIfDistinct(original: string, destination: string): Promise<void> {
+  try {
+    if (await invoke<boolean>("same_file", { a: original, b: destination })) return;
+    await invoke("delete_file", { path: original });
+  } catch (err) {
+    console.error("falha ao apagar o documento novo original:", err);
+  }
+}
+
 /** Serializa `openExternalPaths`: um evento `open-paths` que chega enquanto o
  * boot ainda aplica a fila (ou enquanto outro pedido valida) não pode
  * intercalar com ele — a aba ativa tem de ser a do último pedido. */
@@ -323,17 +336,16 @@ export const useTabsStore = create<TabsState>((set, get) => ({
 
     await useDocumentStore.getState().flush(tabId);
     if (!tab.isNew) return;
+    // Mover com um conflito externo aberto apagaria a versão do disco sem
+    // passar pela escolha explícita do `ConflictBanner` (#10).
+    if (useDocumentStore.getState().documents[tabId]?.status === "conflict") return;
 
     const destination = await pickSaveDestination(tab.path);
     if (destination === null) return;
     if (destination !== tab.path) {
       const original = tab.path;
       if (!(await get().writeTabTo(tabId, destination))) return;
-      try {
-        await invoke("delete_file", { path: original });
-      } catch (err) {
-        console.error("falha ao apagar o documento novo original:", err);
-      }
+      await deleteIfDistinct(original, destination);
     }
     set((state) => ({
       tabs: state.tabs.map((t) => (t.id === tabId ? { id: t.id, path: t.path, title: t.title } : t)),

@@ -1717,10 +1717,18 @@ precisam de `data-openapi-key` próprio para entrar na preservação de estado),
 - **Sessão**: `SessionTab.is_new` (`#[serde(default, skip_serializing_if = "Not::not")]`) e
   `collectSession` só gravam `isNew: true` quando há flag. Sessões antigas carregam como `false`, e
   o JSON das abas já salvas não muda.
-- **Salvar numa aba nova** = diálogo → `writeTabTo` (`#127`) → `delete_file` do untitled original →
-  remove `isNew`. Não usa `rename_file`, que falha entre volumes diferentes. Se a gravação no destino
-  falhar, o original não é apagado. Uma falha no `delete_file` só é logada: o conteúdo já está no
-  destino.
+- **Salvar numa aba nova** = diálogo → `writeTabTo` (`#127`) → apaga o untitled original → remove
+  `isNew`. Não usa `rename_file`, que falha entre volumes diferentes. Se a gravação no destino falhar,
+  o original não é apagado. Uma falha ao apagar só é logada: o conteúdo já está no destino.
+- **O original só é apagado se não for a mesma entrada do destino** (novo command `same_file`,
+  `fs_ops::same_file`: `dev`+`ino` no Unix, `canonicalize` nos outros SOs). Comparar strings apagaria
+  a cópia recém-gravada quando o destino é o mesmo arquivo com outra grafia: caixa diferente no APFS,
+  que não diferencia maiúsculas, ou symlink no caminho (achado de review no PR #133). Se a
+  comparação falhar, o original não é apagado: sobra um arquivo a mais, nunca um a menos.
+- **Conflito externo bloqueia o Salvar de aba nova**: se o flush antes do diálogo deixar o documento
+  em `status: "conflict"` (`#10`), o Salvar para ali. Mover descartaria a versão do disco sem a
+  escolha explícita do `ConflictBanner`. O Salvar Como de aba já salva continua permitido, porque é
+  uma cópia e não apaga nada (achado de review no PR #133).
 - **Escolher o próprio path no Salvar só confirma o lugar** (tira `isNew` sem gravar nada além do
   flush). Desvio consciente do texto da issue ("mesmo path = no-op"): sem isso, quem quer manter o
   `untitled.md` onde está seria perguntado a cada ⌘S. No Salvar Como (`#127`), o mesmo path continua

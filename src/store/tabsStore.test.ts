@@ -738,6 +738,7 @@ describe("tabsStore", () => {
       mockedInvoke.mockResolvedValueOnce(1000); // flush
       mockedSave.mockResolvedValueOnce("/Users/eu/notas.md");
       mockedInvoke.mockResolvedValueOnce(2000); // save_file no destino
+      mockedInvoke.mockResolvedValueOnce(false); // same_file
       mockedInvoke.mockResolvedValueOnce(undefined); // delete_file
 
       await useTabsStore.getState().save("tab-1");
@@ -748,11 +749,55 @@ describe("tabsStore", () => {
         content: "rascunho",
         expectedMtime: null,
       });
-      expect(mockedInvoke).toHaveBeenNthCalledWith(3, "delete_file", { path: "/root/untitled-1.md" });
+      expect(mockedInvoke).toHaveBeenNthCalledWith(3, "same_file", {
+        a: "/root/untitled-1.md",
+        b: "/Users/eu/notas.md",
+      });
+      expect(mockedInvoke).toHaveBeenNthCalledWith(4, "delete_file", { path: "/root/untitled-1.md" });
       expect(mockedInvoke.mock.calls.map(([cmd]) => cmd)).not.toContain("rename_file");
       const tab = useTabsStore.getState().tabs[0];
       expect(tab).toEqual({ id: "tab-1", path: "/Users/eu/notas.md", title: "notas.md" });
       expect(useDocumentStore.getState().documents["tab-1"].path).toBe("/Users/eu/notas.md");
+    });
+
+    it("aba nova: destino é o mesmo arquivo com outra grafia — não apaga", async () => {
+      setupTab(true);
+      mockedInvoke.mockResolvedValueOnce(1000); // flush
+      mockedSave.mockResolvedValueOnce("/root/Untitled-1.md");
+      mockedInvoke.mockResolvedValueOnce(2000); // save_file
+      mockedInvoke.mockResolvedValueOnce(true); // same_file
+
+      await useTabsStore.getState().save("tab-1");
+
+      expect(mockedInvoke.mock.calls.map(([cmd]) => cmd)).not.toContain("delete_file");
+      expect(useTabsStore.getState().tabs[0]).toEqual({ id: "tab-1", path: "/root/Untitled-1.md", title: "Untitled-1.md" });
+    });
+
+    it("aba nova: erro ao comparar os paths — não apaga", async () => {
+      setupTab(true);
+      mockedInvoke.mockResolvedValueOnce(1000); // flush
+      mockedSave.mockResolvedValueOnce("/outro/notas.md");
+      mockedInvoke.mockResolvedValueOnce(2000); // save_file
+      mockedInvoke.mockRejectedValueOnce({ kind: "Io", message: "falhou" }); // same_file
+      const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+      await useTabsStore.getState().save("tab-1");
+
+      expect(mockedInvoke.mock.calls.map(([cmd]) => cmd)).not.toContain("delete_file");
+      expect(useTabsStore.getState().tabs[0].path).toBe("/outro/notas.md");
+      consoleSpy.mockRestore();
+    });
+
+    it("aba nova com conflito externo após o flush: não abre diálogo nem move", async () => {
+      setupTab(true);
+      mockedInvoke.mockRejectedValueOnce({ kind: "ExternalChange", current_mtime: 1500, current_content: "do disco" });
+
+      await useTabsStore.getState().save("tab-1");
+
+      expect(mockedSave).not.toHaveBeenCalled();
+      expect(mockedInvoke).toHaveBeenCalledTimes(1);
+      expect(useTabsStore.getState().tabs[0]).toMatchObject({ path: "/root/untitled-1.md", isNew: true });
+      expect(useDocumentStore.getState().documents["tab-1"].status).toBe("conflict");
     });
 
     it("aba nova: cancelar o diálogo não altera nada", async () => {
@@ -796,6 +841,7 @@ describe("tabsStore", () => {
       mockedInvoke.mockResolvedValueOnce(1000); // flush
       mockedSave.mockResolvedValueOnce("/root/ideias.md");
       mockedInvoke.mockResolvedValueOnce(2000); // save_file
+      mockedInvoke.mockResolvedValueOnce(false); // same_file
       mockedInvoke.mockResolvedValueOnce(undefined); // delete_file
 
       await useTabsStore.getState().saveAs("tab-1");
