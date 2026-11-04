@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import { normalizePath } from "../fs/paths";
 import { useDocumentStore } from "./documentStore";
 import { discard as discardEditorState, seedPosition } from "../editor/editorStateRegistry";
@@ -72,6 +72,16 @@ interface TabsState {
    * aba/documento — snapshots de histórico anteriores ao rename ficam sob
    * o hash do path antigo, sem migração (ver DECISIONS.md #21). */
   renameTab: (tabId: string, newTitle: string) => Promise<void>;
+  /** Salvar Como (#127): flush da aba, diálogo nativo de salvar e grava
+   * uma cópia do conteúdo atual no destino; a aba passa a editar a cópia e
+   * o original fica intacto. Cancelar ou escolher o próprio path é no-op.
+   * Se o destino estiver aberto em outra aba, essa aba é fechada (sem
+   * flush — o conteúdo dela acabou de ser substituído). */
+  saveAs: (tabId: string) => Promise<void>;
+  /** Grava o conteúdo atual da aba em `destination` e reaponta a aba para
+   * lá, fechando antes outra aba que já aponte para o destino. Base do
+   * Salvar Como (#127) e do Salvar de documento novo (#128). */
+  writeTabTo: (tabId: string, destination: string) => Promise<void>;
   /** Entra em modo de edição inline do título da aba (duplo-clique na
    * `TabBar` ou item "Renomear" do menu nativo). */
   startRenaming: (tabId: string) => void;
@@ -93,6 +103,23 @@ function basename(path: string): string {
 function dirname(path: string): string {
   const index = path.lastIndexOf("/");
   return index === -1 ? "" : path.slice(0, index);
+}
+
+/** Garante extensão markdown no path escolhido no diálogo de salvar. */
+function withMarkdownExtension(path: string): string {
+  return /\.(md|markdown)$/i.test(path) ? path : `${path}.md`;
+}
+
+/** Abre o diálogo nativo de salvar e devolve o destino normalizado, ou
+ * `null` se o usuário cancelou. A confirmação de substituir um arquivo
+ * existente fica com o próprio diálogo. */
+async function pickSaveDestination(defaultPath: string): Promise<string | null> {
+  const chosen = await save({
+    title: "Salvar como",
+    defaultPath,
+    filters: [{ name: "Markdown", extensions: ["md", "markdown"] }],
+  });
+  return typeof chosen === "string" ? withMarkdownExtension(normalizePath(chosen)) : null;
 }
 
 /** Serializa `openExternalPaths`: um evento `open-paths` que chega enquanto o
@@ -274,6 +301,47 @@ export const useTabsStore = create<TabsState>((set, get) => ({
         return tab;
       }),
     }));
+  },
+
+  saveAs: async (tabId) => {
+    const tab = get().tabs.find((t) => t.id === tabId);
+    if (!tab) return;
+
+    await useDocumentStore.getState().flush(tabId);
+    const destination = await pickSaveDestination(tab.path);
+    if (destination === null || destination === tab.path) return;
+    await get().writeTabTo(tabId, destination);
+  },
+
+  writeTabTo: async (tabId, destination) => {
+    const documents = useDocumentStore.getState();
+    const entry = documents.documents[tabId];
+    if (!entry) return;
+    const other = get().tabs.find((t) => t.path === destination && t.id !== tabId);
+
+    // Autosave suspenso durante a gravação: o da aba de origem gravaria no
+    // path antigo, e o da outra aba regravaria o destino por cima da cópia.
+    // A outra aba só é fechada depois de a gravação dar certo — se falhar,
+    // as edições dela continuam lá e o autosave é retomado.
+    documents.pauseAutosave(tabId);
+    if (other) documents.pauseAutosave(other.id);
+    const content = entry.content;
+    let mtime: number;
+    try {
+      mtime = await invoke<number>("save_file", { path: destination, content, expectedMtime: null });
+    } catch (err) {
+      console.error("falha ao salvar em outro arquivo:", err);
+      documents.resumeAutosave(tabId);
+      if (other) documents.resumeAutosave(other.id);
+      return;
+    }
+
+    if (other) await get().closeTab(other.id, { skipFlush: true });
+    documents.relocateDocument(tabId, destination, mtime, content);
+    set((state) => ({
+      tabs: state.tabs.map((t) => (t.id === tabId ? { ...t, path: destination, title: basename(destination) } : t)),
+    }));
+    documents.resumeAutosave(tabId);
   },
 
   startRenaming: (tabId) => set({ editingTabId: tabId }),

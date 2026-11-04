@@ -1682,3 +1682,27 @@ precisam de `data-openapi-key` próprio para entrar na preservação de estado),
   updater falha em silêncio (`console.error`), e a manual mostra "Não foi possível atualizar". Não
   houve mudança no app. O código de Windows/Linux (export de PDF da `#81`, menus) continua no
   repositório e compila do código-fonte.
+
+## #127 — Salvar Como… (⇧⌘S) (spec #125)
+
+- **Sem mudança no Rust além do item de menu** (`save_as`, `CmdOrCtrl+Shift+S`, logo depois de
+  "Abrir arquivo…"). A cópia é um `save_file(destino, conteúdo, expectedMtime: null)`: a
+  confirmação de substituir um arquivo existente já foi feita pelo diálogo nativo (`save()` do
+  `tauri-plugin-dialog`, coberto por `dialog:default`), então não há mtime para comparar.
+- **A aba passa a editar a cópia; o original não é tocado** depois do flush que antecede o diálogo.
+  `documentStore.relocateDocument(tabId, path, mtime, writtenContent)` adota o novo path/mtime e só
+  zera `dirty` se o conteúdo não mudou durante a gravação. O histórico da cópia começa vazio (hash
+  do path novo, `#8`); o do original continua com ele.
+- **`tabsStore.writeTabTo(tabId, destino)`** é o núcleo compartilhado com o Salvar de documento
+  novo (`#128`): grava e reaponta a aba. Se outra aba já apontar para o destino, ela só é fechada
+  (`closeTab` com `skipFlush`) **depois** de a gravação dar certo. Se a gravação falhar, as duas abas
+  ficam como estavam e as edições pendentes da outra aba não se perdem (achado de review no PR #131).
+- **Autosave suspenso durante a cópia** (`documentStore.pauseAutosave`/`resumeAutosave`, achado de
+  review no PR #131). Com a pausa, o debounce da aba de origem não grava no path antigo, nem o da
+  outra aba regrava o destino por cima. Edições feitas durante a pausa só atualizam `content`/`dirty`.
+  O `resume` reagenda o debounce contra o path já reapontado. Além disso, `performSave` descarta o
+  resultado de uma gravação em voo se o `path` do documento mudou nesse meio-tempo, e só zera `dirty`
+  se o conteúdo não mudou desde o início da gravação.
+- Destino sem extensão `.md`/`.markdown` ganha `.md`; destino igual ao path atual é no-op.
+
+**Afeta:** `#128` (Salvar reaproveita `writeTabTo` e o diálogo `pickSaveDestination`).

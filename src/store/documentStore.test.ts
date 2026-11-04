@@ -302,4 +302,37 @@ describe("documentStore", () => {
     await vi.advanceTimersByTimeAsync(800);
     expect(mockedInvoke).toHaveBeenCalledTimes(2);
   });
+  describe("pauseAutosave / reapontamento (#127)", () => {
+    it("pausado não grava; resume reagenda a edição pendente", async () => {
+      useDocumentStore.getState().pauseAutosave("tab-1");
+      useDocumentStore.getState().setContent("tab-1", "editado");
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(mockedInvoke).not.toHaveBeenCalled();
+
+      mockedInvoke.mockResolvedValueOnce(2000);
+      useDocumentStore.getState().resumeAutosave("tab-1");
+      await vi.advanceTimersByTimeAsync(800);
+      expect(mockedInvoke).toHaveBeenCalledWith("save_file", {
+        path: "/tmp/doc.md",
+        content: "editado",
+        expectedMtime: 1000,
+      });
+    });
+
+    it("resultado de um save em voo é ignorado se o documento foi reapontado", async () => {
+      let finish: (mtime: number) => void = () => {};
+      mockedInvoke.mockImplementationOnce(() => new Promise((resolve) => (finish = resolve)));
+      useDocumentStore.getState().setContent("tab-1", "x");
+      await vi.advanceTimersByTimeAsync(800);
+
+      useDocumentStore.getState().relocateDocument("tab-1", "/tmp/copia.md", 5000, "x");
+      finish(4000);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(useDocumentStore.getState().documents["tab-1"]).toMatchObject({
+        path: "/tmp/copia.md",
+        lastSavedMtime: 5000,
+      });
+    });
+  });
 });

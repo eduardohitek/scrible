@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import { useTabsStore } from "./tabsStore";
 import { useDocumentStore, type DocumentEntry } from "./documentStore";
 
@@ -10,10 +10,12 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({
   open: vi.fn(),
+  save: vi.fn(),
 }));
 
 const mockedInvoke = vi.mocked(invoke);
 const mockedOpen = vi.mocked(open);
+const mockedSave = vi.mocked(save);
 
 function docEntry(overrides: Partial<DocumentEntry> = {}): DocumentEntry {
   return {
@@ -31,6 +33,7 @@ describe("tabsStore", () => {
   beforeEach(() => {
     mockedInvoke.mockReset();
     mockedOpen.mockReset();
+    mockedSave.mockReset();
     useTabsStore.setState({
       workspaceRoot: "/root",
       tabs: [],
@@ -488,6 +491,213 @@ describe("tabsStore", () => {
       await useTabsStore.getState().openExternalPaths(["/fora/a.md"]);
 
       expect(useTabsStore.getState().tabs).toHaveLength(0);
+    });
+  });
+  describe("saveAs (#127)", () => {
+    function setupSavedTab(content = "texto") {
+      useTabsStore.setState({
+        tabs: [{ id: "tab-1", path: "/root/a.md", title: "a.md" }],
+        activeTabId: "tab-1",
+      });
+      useDocumentStore.setState({
+        documents: { "tab-1": docEntry({ path: "/root/a.md", content }) },
+      });
+    }
+
+    it("grava a cópia no destino e reaponta a aba, sem tocar no original", async () => {
+      setupSavedTab("texto");
+      mockedInvoke.mockResolvedValueOnce(1000); // flush do original
+      mockedSave.mockResolvedValueOnce("/outro/b.md");
+      mockedInvoke.mockResolvedValueOnce(2000); // save_file no destino
+
+      await useTabsStore.getState().saveAs("tab-1");
+
+      expect(mockedSave).toHaveBeenCalledWith(expect.objectContaining({ defaultPath: "/root/a.md" }));
+      expect(mockedInvoke).toHaveBeenNthCalledWith(1, "save_file", {
+        path: "/root/a.md",
+        content: "texto",
+        expectedMtime: 1000,
+      });
+      expect(mockedInvoke).toHaveBeenNthCalledWith(2, "save_file", {
+        path: "/outro/b.md",
+        content: "texto",
+        expectedMtime: null,
+      });
+      const calledCommands = mockedInvoke.mock.calls.map(([cmd]) => cmd);
+      expect(calledCommands).not.toContain("delete_file");
+      expect(calledCommands).not.toContain("rename_file");
+
+      const tab = useTabsStore.getState().tabs[0];
+      expect(tab.path).toBe("/outro/b.md");
+      expect(tab.title).toBe("b.md");
+      const doc = useDocumentStore.getState().documents["tab-1"];
+      expect(doc.path).toBe("/outro/b.md");
+      expect(doc.lastSavedMtime).toBe(2000);
+      expect(doc.dirty).toBe(false);
+    });
+
+    it("acrescenta .md quando o nome escolhido não tem extensão", async () => {
+      setupSavedTab();
+      mockedInvoke.mockResolvedValueOnce(1000);
+      mockedSave.mockResolvedValueOnce("/outro/notas");
+      mockedInvoke.mockResolvedValueOnce(2000);
+
+      await useTabsStore.getState().saveAs("tab-1");
+
+      expect(useTabsStore.getState().tabs[0].path).toBe("/outro/notas.md");
+    });
+
+    it("cancelar o diálogo não altera nada", async () => {
+      setupSavedTab();
+      mockedInvoke.mockResolvedValueOnce(1000); // flush
+      mockedSave.mockResolvedValueOnce(null);
+
+      await useTabsStore.getState().saveAs("tab-1");
+
+      expect(mockedInvoke).toHaveBeenCalledTimes(1);
+      expect(useTabsStore.getState().tabs[0].path).toBe("/root/a.md");
+    });
+
+    it("escolher o próprio path é no-op", async () => {
+      setupSavedTab();
+      mockedInvoke.mockResolvedValueOnce(1000); // flush
+      mockedSave.mockResolvedValueOnce("/root/a.md");
+
+      await useTabsStore.getState().saveAs("tab-1");
+
+      expect(mockedInvoke).toHaveBeenCalledTimes(1);
+      expect(useTabsStore.getState().tabs[0].path).toBe("/root/a.md");
+    });
+
+    it("destino aberto em outra aba: fecha a outra sem flush e sobra uma aba para o path", async () => {
+      useTabsStore.setState({
+        tabs: [
+          { id: "tab-1", path: "/root/a.md", title: "a.md" },
+          { id: "tab-2", path: "/root/b.md", title: "b.md" },
+        ],
+        activeTabId: "tab-1",
+      });
+      useDocumentStore.setState({
+        documents: {
+          "tab-1": docEntry({ path: "/root/a.md", content: "novo" }),
+          "tab-2": docEntry({ path: "/root/b.md", content: "antigo", dirty: true }),
+        },
+      });
+      mockedInvoke.mockResolvedValueOnce(1000); // flush de tab-1
+      mockedSave.mockResolvedValueOnce("/root/b.md");
+      mockedInvoke.mockResolvedValueOnce(2000); // save_file no destino
+
+      await useTabsStore.getState().saveAs("tab-1");
+
+      const state = useTabsStore.getState();
+      expect(state.tabs).toHaveLength(1);
+      expect(state.tabs[0].id).toBe("tab-1");
+      expect(state.tabs[0].path).toBe("/root/b.md");
+      expect(state.activeTabId).toBe("tab-1");
+      expect(useDocumentStore.getState().documents["tab-2"]).toBeUndefined();
+      const destinationWrites = mockedInvoke.mock.calls.filter(
+        ([cmd, args]) => cmd === "save_file" && (args as { path: string }).path === "/root/b.md",
+      );
+      expect(destinationWrites).toHaveLength(1);
+      expect(destinationWrites[0][1]).toMatchObject({ content: "novo" });
+    });
+
+    it("falha ao gravar o destino preserva a outra aba aberta nele e retoma o autosave dela", async () => {
+      vi.useFakeTimers();
+      try {
+        useTabsStore.setState({
+          tabs: [
+            { id: "tab-1", path: "/root/a.md", title: "a.md" },
+            { id: "tab-2", path: "/root/b.md", title: "b.md" },
+          ],
+          activeTabId: "tab-1",
+        });
+        useDocumentStore.setState({
+          documents: {
+            "tab-1": docEntry({ path: "/root/a.md", content: "novo" }),
+            "tab-2": docEntry({ path: "/root/b.md", content: "antigo" }),
+          },
+        });
+        // Edição pendente na aba do destino (debounce armado).
+        useDocumentStore.getState().setContent("tab-2", "edição não salva");
+        mockedInvoke.mockResolvedValueOnce(1000); // flush de tab-1
+        mockedSave.mockResolvedValueOnce("/root/b.md");
+        mockedInvoke.mockRejectedValueOnce({ kind: "PermissionDenied", path: "/root/b.md" });
+        const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+        await useTabsStore.getState().saveAs("tab-1");
+
+        expect(useTabsStore.getState().tabs.map((t) => t.id)).toEqual(["tab-1", "tab-2"]);
+        expect(useDocumentStore.getState().documents["tab-2"]).toMatchObject({
+          content: "edição não salva",
+          dirty: true,
+        });
+
+        mockedInvoke.mockResolvedValueOnce(3000);
+        await vi.advanceTimersByTimeAsync(800);
+        expect(mockedInvoke).toHaveBeenLastCalledWith("save_file", {
+          path: "/root/b.md",
+          content: "edição não salva",
+          expectedMtime: 1000,
+        });
+        consoleSpy.mockRestore();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("edição durante a gravação lenta não vai para o original e é salva na cópia depois", async () => {
+      vi.useFakeTimers();
+      try {
+        setupSavedTab("texto");
+        let finishWrite: (mtime: number) => void = () => {};
+        mockedInvoke.mockResolvedValueOnce(1000); // flush do original
+        mockedSave.mockResolvedValueOnce("/outro/b.md");
+        mockedInvoke.mockImplementationOnce(() => new Promise((resolve) => (finishWrite = resolve)));
+
+        const pending = useTabsStore.getState().saveAs("tab-1");
+        await vi.advanceTimersByTimeAsync(0);
+        useDocumentStore.getState().setContent("tab-1", "texto editado");
+        await vi.advanceTimersByTimeAsync(2000);
+        // Nenhum autosave no meio da cópia.
+        expect(mockedInvoke).toHaveBeenCalledTimes(2);
+
+        finishWrite(2000);
+        await pending;
+        expect(useDocumentStore.getState().documents["tab-1"]).toMatchObject({
+          path: "/outro/b.md",
+          lastSavedMtime: 2000,
+          dirty: true,
+        });
+
+        mockedInvoke.mockResolvedValueOnce(2500);
+        await vi.advanceTimersByTimeAsync(800);
+        expect(mockedInvoke).toHaveBeenLastCalledWith("save_file", {
+          path: "/outro/b.md",
+          content: "texto editado",
+          expectedMtime: 2000,
+        });
+        const originalWrites = mockedInvoke.mock.calls.filter(
+          ([cmd, args]) => cmd === "save_file" && (args as { path: string }).path === "/root/a.md",
+        );
+        expect(originalWrites).toHaveLength(1); // só o flush antes do diálogo
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("falha ao gravar o destino mantém a aba no original", async () => {
+      setupSavedTab();
+      mockedInvoke.mockResolvedValueOnce(1000); // flush
+      mockedSave.mockResolvedValueOnce("/outro/b.md");
+      mockedInvoke.mockRejectedValueOnce({ kind: "PermissionDenied", path: "/outro/b.md" });
+      const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+      await useTabsStore.getState().saveAs("tab-1");
+
+      expect(useTabsStore.getState().tabs[0].path).toBe("/root/a.md");
+      expect(useDocumentStore.getState().documents["tab-1"].path).toBe("/root/a.md");
+      consoleSpy.mockRestore();
     });
   });
 });
