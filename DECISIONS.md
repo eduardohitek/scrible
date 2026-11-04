@@ -1739,3 +1739,17 @@ precisam de `data-openapi-key` próprio para entrar na preservação de estado),
 
 **Afeta:** qualquer mudança no shape de `Tab`/sessão precisa preservar `isNew` em `collectSession`
 e `restoreTabs`.
+
+## Release volta a publicar Linux (trabalho de processo, sem issue)
+
+- Revisa "Release só para macOS": `linux-x64` e `linux-arm64` voltaram à matriz do `release.yml`
+  (inclusive no `dry_run`), junto com as chaves `linux-*` do `latest.json` e os `copy_all` dos `.deb`
+  em `scripts/build-release-assets.sh`. README e corpo da release voltam a descrever Linux.
+- **Windows continua desligado** (entradas comentadas, para religar do mesmo jeito). Usuários de
+  Windows seguem parados na v0.10.0.
+- **CI dos PRs continua só macOS** (decisão do usuário): regressões só de Linux aparecem apenas no
+  build do release. Para validar antes de uma release, rodar o `release.yml` com `dry_run`.
+- Quem ficou na v0.10.0 no Linux (AppImage) volta a receber a atualização pelo updater, já que o
+  `latest.json` volta a ter as chaves `linux-*`.
+- O AppImage arm64 sai como `scrible_*_aarch64.AppImage` (conferido nos assets da v0.10.0); o `.deb`
+  arm64 sai como `scrible_*_arm64.deb`.

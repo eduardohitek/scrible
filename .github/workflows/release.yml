@@ -28,10 +28,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Só macOS é publicado (Windows e Linux pararam na v0.10.0). Para religar
-        # uma plataforma, descomente a entrada dela aqui e a linha correspondente
-        # em `platforms`/`copy_all` de scripts/build-release-assets.sh, e volte a
-        # descrevê-la no corpo da release abaixo.
+        # macOS e Linux são publicados; Windows parou na v0.10.0. Para religar
+        # Windows, descomente as entradas dele aqui e as linhas correspondentes
+        # em `platforms` de scripts/build-release-assets.sh, e volte a
+        # descrevê-lo no corpo da release abaixo.
         include:
           - name: macos-arm64
             runner: macos-latest
@@ -52,20 +52,20 @@ jobs:
           #   bundle_glob: |
           #     src-tauri/target/release/bundle/nsis/*-setup.exe
           #     src-tauri/target/release/bundle/nsis/*-setup.exe.sig
-          # - name: linux-x64
-          #   runner: ubuntu-22.04
-          #   build_args: "--bundles appimage,deb"
-          #   bundle_glob: |
-          #     src-tauri/target/release/bundle/appimage/*.AppImage
-          #     src-tauri/target/release/bundle/appimage/*.AppImage.sig
-          #     src-tauri/target/release/bundle/deb/*.deb
-          # - name: linux-arm64
-          #   runner: ubuntu-22.04-arm
-          #   build_args: "--bundles appimage,deb"
-          #   bundle_glob: |
-          #     src-tauri/target/release/bundle/appimage/*.AppImage
-          #     src-tauri/target/release/bundle/appimage/*.AppImage.sig
-          #     src-tauri/target/release/bundle/deb/*.deb
+          - name: linux-x64
+            runner: ubuntu-22.04
+            build_args: "--bundles appimage,deb"
+            bundle_glob: |
+              src-tauri/target/release/bundle/appimage/*.AppImage
+              src-tauri/target/release/bundle/appimage/*.AppImage.sig
+              src-tauri/target/release/bundle/deb/*.deb
+          - name: linux-arm64
+            runner: ubuntu-22.04-arm
+            build_args: "--bundles appimage,deb"
+            bundle_glob: |
+              src-tauri/target/release/bundle/appimage/*.AppImage
+              src-tauri/target/release/bundle/appimage/*.AppImage.sig
+              src-tauri/target/release/bundle/deb/*.deb
     defaults:
       run:
         shell: bash
@@ -116,7 +116,7 @@ jobs:
           path: ${{ matrix.bundle_glob }}
           if-no-files-found: error
 
-  # Junta os instaladores das plataformas da matriz (hoje só macOS), gera um
+  # Junta os instaladores das plataformas da matriz (macOS e Linux), gera um
   # único SHA256SUMS.txt e o latest.json do updater e publica tudo na mesma
   # release (#32).
   # Pre-releases também publicam o manifesto, mas nunca são a "latest" do
@@ -144,15 +144,21 @@ jobs:
           generate_release_notes: true
           prerelease: ${{ contains(github.ref_name, '-') }}
           body: |
-            Build para **macOS (Apple Silicon)**: `scrible_*_aarch64.dmg`. Windows e Linux não são mais
-            publicados; a última versão para eles é a v0.10.0.
+            Builds para **macOS (Apple Silicon)** e **Linux (x64 e arm64, Ubuntu 22.04+)**. Windows não é
+            mais publicado; a última versão para ele é a v0.10.0.
 
-            Assinatura ad-hoc, sem notarização: ao abrir pela primeira vez, libere em
-            **Ajustes do Sistema → Privacidade e Segurança → Abrir Mesmo Assim**.
+            ### macOS
+            `scrible_*_aarch64.dmg` (Apple Silicon). Assinatura ad-hoc, sem notarização: ao abrir pela
+            primeira vez, libere em **Ajustes do Sistema → Privacidade e Segurança → Abrir Mesmo Assim**.
+
+            ### Linux
+            - **AppImage** (`scrible_*_amd64.AppImage` / `scrible_*_aarch64.AppImage`): `chmod +x scrible_*.AppImage` e execute. É o único formato que se atualiza sozinho.
+            - **.deb** (`scrible_*_amd64.deb` / `scrible_*_arm64.deb`): `sudo apt install ./scrible_*.deb`. Não se atualiza pelo app; instale o `.deb` da versão nova.
 
             Para conferir a integridade do download:
             ```sh
-            shasum -a 256 -c SHA256SUMS.txt
+            sha256sum -c SHA256SUMS.txt --ignore-missing   # Linux
+            shasum -a 256 -c SHA256SUMS.txt                # macOS
             ```
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

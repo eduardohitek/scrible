@@ -3,19 +3,27 @@
 [![CI](https://github.com/eduardohitek/scrible/actions/workflows/ci.yml/badge.svg)](https://github.com/eduardohitek/scrible/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/eduardohitek/scrible?include_prereleases)](https://github.com/eduardohitek/scrible/releases)
 
-Editor de markdown com interface limpa, preview em tempo real (incluindo diagramas [mermaid](https://mermaid.js.org/)) e autosave — para macOS.
+Editor de markdown com interface limpa, preview em tempo real (incluindo diagramas [mermaid](https://mermaid.js.org/)) e autosave — para macOS e Linux.
 
 ## Download e instalação
 
-Builds prontos ficam na [página de releases](https://github.com/eduardohitek/scrible/releases): baixe o `scrible_*_aarch64.dmg`. Só **macOS com Apple Silicon (arm64)** é publicado.
+Builds prontos ficam na [página de releases](https://github.com/eduardohitek/scrible/releases). Escolha o arquivo da sua plataforma:
 
-Windows e Linux não são mais publicados: a última versão para eles é a [v0.10.0](https://github.com/eduardohitek/scrible/releases/tag/v0.10.0), e quem a instalou não recebe atualizações novas. Ainda dá para buildar o app nessas plataformas a partir do código-fonte (ver [Pré-requisitos](#pré-requisitos)).
+| Plataforma | Arquivo | Atualiza sozinho |
+|---|---|---|
+| macOS (Apple Silicon) | `scrible_*_aarch64.dmg` | sim |
+| Linux x64 / arm64 (Ubuntu 22.04+ e derivadas) | `scrible_*_amd64.AppImage` / `scrible_*_aarch64.AppImage` | sim |
+| Linux x64 / arm64 (Debian/Ubuntu) | `scrible_*_amd64.deb` / `scrible_*_arm64.deb` | não — instale o `.deb` novo |
 
-O instalador tem assinatura ad-hoc, sem notarização ([#28](https://github.com/eduardohitek/scrible/issues/28)), então o macOS avisa na primeira abertura:
+macOS continua **só Apple Silicon (arm64)**. Windows não é mais publicado: a última versão para ele é a [v0.10.0](https://github.com/eduardohitek/scrible/releases/tag/v0.10.0), e quem a instalou não recebe atualizações novas. Ainda dá para buildar o app no Windows a partir do código-fonte (ver [Pré-requisitos](#pré-requisitos)).
+
+**macOS** — assinatura ad-hoc, sem notarização ([#28](https://github.com/eduardohitek/scrible/issues/28)), então o sistema avisa na primeira abertura:
 
 1. Abra o `.dmg` e arraste o `scrible.app` para `Applications`.
 2. Tente abrir o app — o macOS vai bloquear.
 3. Vá em **Ajustes do Sistema → Privacidade e Segurança**, role até a mensagem sobre o scrible e clique em **Abrir Mesmo Assim**.
+
+**Linux** — AppImage: `chmod +x scrible_*.AppImage` e execute. Pacote `.deb`: `sudo apt install ./scrible_*.deb`.
 
 #### Abrir arquivos pelo Finder (macOS)
 
@@ -26,12 +34,13 @@ O scrible **não** vira o app padrão de Markdown sozinho. Para torná-lo padrã
 Cada release traz um `SHA256SUMS.txt` para conferir a integridade do download:
 
 ```sh
-shasum -a 256 -c SHA256SUMS.txt
+shasum -a 256 -c SHA256SUMS.txt                # macOS
+sha256sum -c SHA256SUMS.txt --ignore-missing   # Linux
 ```
 
 ### Atualizações
 
-A partir da primeira versão com o updater, o scrible confere sozinho, ao abrir, se há uma versão nova (e também pelo menu **scrible → Procurar atualizações…**). Ao confirmar no aviso, ele salva as abas, baixa, instala e reinicia. Quem está numa versão anterior ao updater precisa instalar o `.dmg` uma última vez.
+A partir da primeira versão com o updater, o scrible confere sozinho, ao abrir, se há uma versão nova (e também pelo menu **scrible → Procurar atualizações…**). Ao confirmar no aviso, ele salva as abas, baixa, instala e reinicia. Quem está numa versão anterior ao updater precisa instalar o pacote da plataforma uma última vez. Instalações via `.deb` não se atualizam pelo app.
 
 ## Stack
 
