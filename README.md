@@ -40,7 +40,7 @@ Os builds ficam na [página de releases](https://github.com/eduardohitek/scrible
 | Linux x64 / arm64 (Debian/Ubuntu) | `scrible_*_amd64.deb` / `scrible_*_arm64.deb` | não, instale o `.deb` novo |
 
 - **macOS**: só Apple Silicon (arm64).
-- **Linux**: a v0.12.0 saiu só para macOS. Os builds de Linux voltam na release seguinte; até lá, a última versão para Linux é a [v0.11.0](https://github.com/eduardohitek/scrible/releases/tag/v0.11.0).
+- **Linux**: x64 e arm64. A v0.12.0 saiu sem builds de Linux, que voltaram na v0.12.1. Quem ficou na v0.11.0 pelo AppImage recebe a atualização pelo próprio app.
 - **Windows** não é mais publicado. A última versão para ele é a [v0.11.0](https://github.com/eduardohitek/scrible/releases/tag/v0.11.0), e quem a instalou não recebe atualizações novas. Ainda dá para buildar o app no Windows a partir do código-fonte (ver [Pré-requisitos](#pré-requisitos)).
 
 **macOS**: o app tem assinatura ad-hoc, sem notarização ([#28](https://github.com/eduardohitek/scrible/issues/28)), então o sistema avisa na primeira abertura:
