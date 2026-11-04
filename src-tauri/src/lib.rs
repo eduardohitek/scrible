@@ -123,6 +123,11 @@ fn rename_file(from: String, to: String) -> Result<(), FsError> {
 }
 
 #[tauri::command]
+fn same_file(a: String, b: String) -> Result<bool, FsError> {
+    fs_ops::same_file(&PathBuf::from(a), &PathBuf::from(b))
+}
+
+#[tauri::command]
 fn delete_file(path: String) -> Result<(), FsError> {
     fs_ops::delete_file(&PathBuf::from(path))
 }
@@ -272,6 +277,7 @@ pub fn run() {
             export_pdf,
             rename_file,
             delete_file,
+            same_file,
             list_dir,
             list_dir_entries,
             list_workspace_files,

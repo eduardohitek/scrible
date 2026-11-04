@@ -10,12 +10,18 @@ export interface SessionTabEntry {
   path: string;
   cursorPos: number;
   scrollTop: number;
+  /** Ausente em sessões anteriores à #128 — vale `false`. */
+  isNew?: boolean;
 }
 
 export interface Tab {
   id: string;
   path: string;
   title: string;
+  /** Documento novo criado pelo app (`newTab`) e ainda não salvo pelo
+   * usuário (#128): o Salvar abre o diálogo e move o arquivo. Ausente vale
+   * `false`. Persistido na sessão. */
+  isNew?: boolean;
 }
 
 interface TabsState {
@@ -33,7 +39,7 @@ interface TabsState {
   setWorkspaceRoot: (root: string) => void;
   /** Abre uma aba para `path`; se já houver uma aba aberta com esse path,
    * só a foca em vez de duplicar. */
-  openTab: (path: string, opts?: { fallbackContent?: string }) => Promise<void>;
+  openTab: (path: string, opts?: { fallbackContent?: string; isNew?: boolean }) => Promise<void>;
   /** Reidrata as abas de uma sessão salva (#9): carrega todos os documentos
    * *antes* de ativar a aba, para o editor já montar com o conteúdo final e
    * conseguir aplicar cursor/scroll. Paths duplicados são ignorados. */
@@ -72,16 +78,23 @@ interface TabsState {
    * aba/documento — snapshots de histórico anteriores ao rename ficam sob
    * o hash do path antigo, sem migração (ver DECISIONS.md #21). */
   renameTab: (tabId: string, newTitle: string) => Promise<void>;
+  /** Salvar (#128): numa aba nova (`isNew`), abre o diálogo de salvar e
+   * move o arquivo para o destino (grava lá e apaga o `untitled` original);
+   * escolher o próprio path só confirma o lugar (`isNew = false`). Numa aba
+   * já salva, só força o flush do autosave. */
+  save: (tabId: string) => Promise<void>;
   /** Salvar Como (#127): flush da aba, diálogo nativo de salvar e grava
    * uma cópia do conteúdo atual no destino; a aba passa a editar a cópia e
    * o original fica intacto. Cancelar ou escolher o próprio path é no-op.
    * Se o destino estiver aberto em outra aba, essa aba é fechada (sem
-   * flush — o conteúdo dela acabou de ser substituído). */
+   * flush — o conteúdo dela acabou de ser substituído). Numa aba nova,
+   * delega para `save` (move em vez de copiar). */
   saveAs: (tabId: string) => Promise<void>;
   /** Grava o conteúdo atual da aba em `destination` e reaponta a aba para
    * lá, fechando antes outra aba que já aponte para o destino. Base do
-   * Salvar Como (#127) e do Salvar de documento novo (#128). */
-  writeTabTo: (tabId: string, destination: string) => Promise<void>;
+   * Salvar Como (#127) e do Salvar de documento novo (#128). Devolve `true`
+   * se gravou e reapontou a aba. */
+  writeTabTo: (tabId: string, destination: string) => Promise<boolean>;
   /** Entra em modo de edição inline do título da aba (duplo-clique na
    * `TabBar` ou item "Renomear" do menu nativo). */
   startRenaming: (tabId: string) => void;
@@ -122,6 +135,19 @@ async function pickSaveDestination(defaultPath: string): Promise<string | null> 
   return typeof chosen === "string" ? withMarkdownExtension(normalizePath(chosen)) : null;
 }
 
+/** Apaga o `original` de um "mover" (#128) só se ele não for a mesma
+ * entrada do `destination` com outra grafia (symlink, caixa diferente no
+ * APFS) — senão apagaria a cópia recém-gravada. Na dúvida (erro ao
+ * comparar), não apaga: sobra um arquivo a mais, nunca um a menos. */
+async function deleteIfDistinct(original: string, destination: string): Promise<void> {
+  try {
+    if (await invoke<boolean>("same_file", { a: original, b: destination })) return;
+    await invoke("delete_file", { path: original });
+  } catch (err) {
+    console.error("falha ao apagar o documento novo original:", err);
+  }
+}
+
 /** Serializa `openExternalPaths`: um evento `open-paths` que chega enquanto o
  * boot ainda aplica a fila (ou enquanto outro pedido valida) não pode
  * intercalar com ele — a aba ativa tem de ser a do último pedido. */
@@ -146,7 +172,8 @@ export const useTabsStore = create<TabsState>((set, get) => ({
 
     const id = crypto.randomUUID();
     const title = basename(path);
-    set((state) => ({ tabs: [...state.tabs, { id, path, title }], activeTabId: id }));
+    const tab: Tab = opts?.isNew ? { id, path, title, isNew: true } : { id, path, title };
+    set((state) => ({ tabs: [...state.tabs, tab], activeTabId: id }));
     await useDocumentStore.getState().initDocument(id, path, opts?.fallbackContent);
   },
 
@@ -159,7 +186,7 @@ export const useTabsStore = create<TabsState>((set, get) => ({
       if (seen.has(path)) return;
       seen.add(path);
       const id = crypto.randomUUID();
-      tabs.push({ id, path, title: basename(path) });
+      tabs.push(entry.isNew ? { id, path, title: basename(path), isNew: true } : { id, path, title: basename(path) });
       seedPosition(id, entry.cursorPos, entry.scrollTop);
       if (index === activeIndex) activeId = id;
     });
@@ -222,7 +249,7 @@ export const useTabsStore = create<TabsState>((set, get) => ({
       n += 1;
     }
 
-    await get().openTab(`${dir}/${candidate}`);
+    await get().openTab(`${dir}/${candidate}`, { isNew: true });
   },
 
   closeTab: async (tabId, opts) => {
@@ -303,9 +330,32 @@ export const useTabsStore = create<TabsState>((set, get) => ({
     }));
   },
 
+  save: async (tabId) => {
+    const tab = get().tabs.find((t) => t.id === tabId);
+    if (!tab) return;
+
+    await useDocumentStore.getState().flush(tabId);
+    if (!tab.isNew) return;
+    // Mover com um conflito externo aberto apagaria a versão do disco sem
+    // passar pela escolha explícita do `ConflictBanner` (#10).
+    if (useDocumentStore.getState().documents[tabId]?.status === "conflict") return;
+
+    const destination = await pickSaveDestination(tab.path);
+    if (destination === null) return;
+    if (destination !== tab.path) {
+      const original = tab.path;
+      if (!(await get().writeTabTo(tabId, destination))) return;
+      await deleteIfDistinct(original, destination);
+    }
+    set((state) => ({
+      tabs: state.tabs.map((t) => (t.id === tabId ? { id: t.id, path: t.path, title: t.title } : t)),
+    }));
+  },
+
   saveAs: async (tabId) => {
     const tab = get().tabs.find((t) => t.id === tabId);
     if (!tab) return;
+    if (tab.isNew) return get().save(tabId);
 
     await useDocumentStore.getState().flush(tabId);
     const destination = await pickSaveDestination(tab.path);
@@ -316,7 +366,7 @@ export const useTabsStore = create<TabsState>((set, get) => ({
   writeTabTo: async (tabId, destination) => {
     const documents = useDocumentStore.getState();
     const entry = documents.documents[tabId];
-    if (!entry) return;
+    if (!entry) return false;
     const other = get().tabs.find((t) => t.path === destination && t.id !== tabId);
 
     // Autosave suspenso durante a gravação: o da aba de origem gravaria no
@@ -333,7 +383,7 @@ export const useTabsStore = create<TabsState>((set, get) => ({
       console.error("falha ao salvar em outro arquivo:", err);
       documents.resumeAutosave(tabId);
       if (other) documents.resumeAutosave(other.id);
-      return;
+      return false;
     }
 
     if (other) await get().closeTab(other.id, { skipFlush: true });
@@ -342,6 +392,7 @@ export const useTabsStore = create<TabsState>((set, get) => ({
       tabs: state.tabs.map((t) => (t.id === tabId ? { ...t, path: destination, title: basename(destination) } : t)),
     }));
     documents.resumeAutosave(tabId);
+    return true;
   },
 
   startRenaming: (tabId) => set({ editingTabId: tabId }),

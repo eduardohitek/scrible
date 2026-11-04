@@ -118,6 +118,26 @@ pub fn delete_file(path: &Path) -> Result<(), FsError> {
     fs::remove_file(path).map_err(|err| FsError::from_io(err, path))
 }
 
+/// `true` se `a` e `b` são a mesma entrada no sistema de arquivos, mesmo com grafias diferentes
+/// (symlink no caminho, caixa diferente num volume que não diferencia maiúsculas). Usado antes de
+/// apagar o original num "mover" (#128): comparar strings apagaria o próprio destino.
+pub fn same_file(a: &Path, b: &Path) -> Result<bool, FsError> {
+    let meta_a = fs::metadata(a).map_err(|err| FsError::from_io(err, a))?;
+    let meta_b = fs::metadata(b).map_err(|err| FsError::from_io(err, b))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        Ok(meta_a.dev() == meta_b.dev() && meta_a.ino() == meta_b.ino())
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = (meta_a, meta_b);
+        let canon_a = fs::canonicalize(a).map_err(|err| FsError::from_io(err, a))?;
+        let canon_b = fs::canonicalize(b).map_err(|err| FsError::from_io(err, b))?;
+        Ok(canon_a == canon_b)
+    }
+}
+
 pub fn list_dir(path: &Path) -> Result<Vec<String>, FsError> {
     let entries = fs::read_dir(path).map_err(|err| FsError::from_io(err, path))?;
     let mut names = Vec::new();
@@ -407,5 +427,23 @@ mod tests {
         delete_dir(&path).unwrap();
 
         assert!(!path.exists());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn same_file_detects_symlinked_spelling_and_distinct_files() {
+        let tmp = tempfile::tempdir().unwrap();
+        let real_dir = tmp.path().join("real");
+        fs::create_dir(&real_dir).unwrap();
+        let file = real_dir.join("doc.md");
+        fs::write(&file, "x").unwrap();
+        let other = real_dir.join("outro.md");
+        fs::write(&other, "y").unwrap();
+        let link_dir = tmp.path().join("link");
+        std::os::unix::fs::symlink(&real_dir, &link_dir).unwrap();
+
+        assert!(same_file(&file, &link_dir.join("doc.md")).unwrap());
+        assert!(!same_file(&file, &other).unwrap());
+        assert!(same_file(&file, &tmp.path().join("missing.md")).is_err());
     }
 }

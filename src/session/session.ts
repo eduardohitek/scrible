@@ -27,7 +27,11 @@ export async function restoreSession(): Promise<boolean> {
 function collectSession(): SessionData {
   const { tabs, activeTabId } = useTabsStore.getState();
   return {
-    tabs: tabs.map((tab) => ({ path: tab.path, ...getPosition(tab.id) })),
+    tabs: tabs.map((tab) => ({
+      path: tab.path,
+      ...getPosition(tab.id),
+      ...(tab.isNew ? { isNew: true } : {}),
+    })),
     activeTabIndex: Math.max(
       0,
       tabs.findIndex((tab) => tab.id === activeTabId),
