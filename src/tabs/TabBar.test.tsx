@@ -192,4 +192,53 @@ describe("TabBar", () => {
     act(() => useDocumentStore.setState({ documents: {} }));
     expect(screen.queryByRole("button", { name: /b.md •/ })).toBeNull();
   });
+
+  describe("marcador de alteração externa (#142)", () => {
+    function setStatus(tabId: string, status: "idle" | "conflict" | "missing") {
+      useDocumentStore.setState({
+        documents: {
+          [tabId]: {
+            path: "/root/b.md",
+            content: "",
+            lastSavedMtime: null,
+            status,
+            dirty: status === "conflict",
+            conflict: status === "conflict" ? { currentMtime: 2, currentContent: "disco" } : null,
+          },
+        },
+      });
+    }
+
+    it.each([
+      ["conflict", "Conflito: o arquivo foi alterado por outro programa"],
+      ["missing", "Arquivo removido do disco"],
+    ] as const)("aba com %s mostra o marcador, que some ao resolver", (status, title) => {
+      setStatus("tab-2", status);
+      render(<TabBar />);
+
+      const marker = screen.getByTitle(title);
+      expect(marker.closest("[data-tab-id]")?.getAttribute("data-tab-id")).toBe("tab-2");
+
+      act(() => setStatus("tab-2", "idle"));
+      expect(screen.queryByTitle(title)).toBeNull();
+    });
+
+    it("aba ativa também recebe o marcador", () => {
+      setStatus("tab-1", "missing");
+      render(<TabBar />);
+
+      const marker = screen.getByTitle("Arquivo removido do disco");
+      expect(marker.closest("[data-tab-id]")?.getAttribute("data-tab-id")).toBe("tab-1");
+    });
+
+    it("lista de overflow mostra o marcador", () => {
+      overflowBar();
+      setStatus("tab-2", "conflict");
+      render(<TabBar />);
+      fireEvent.click(screen.getByLabelText("Todas as abas"));
+
+      const list = screen.getByLabelText("Abas abertas");
+      expect(list.querySelector('[title="Conflito: o arquivo foi alterado por outro programa"]')).not.toBeNull();
+    });
+  });
 });

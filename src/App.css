@@ -179,6 +179,19 @@ button {
   text-overflow: ellipsis;
 }
 
+/* Aviso de conflito ou arquivo removido (#142). */
+.tab-warning {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  color: var(--color-warning);
+}
+
+.tab-list-item .tab-warning {
+  margin-right: 4px;
+  vertical-align: -2px;
+}
+
 .tab-title-input {
   width: 100%;
   font: inherit;
