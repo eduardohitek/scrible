@@ -11,6 +11,7 @@ import { useDocumentStore, DEFAULT_DOCUMENT } from "./store/documentStore";
 import { useTabsStore } from "./store/tabsStore";
 import { initFileIndex, refreshFileIndex } from "./workspace/fileIndex";
 import { normalizePath } from "./fs/paths";
+import { handleExternalFileChanged, startWatchedPathsSync, type ExternalChangePayload } from "./fs/externalChanges";
 import { useExplorerStore } from "./explorer/explorerStore";
 import { ExplorerPanel } from "./explorer/ExplorerPanel";
 import { useThemeStore } from "./theme/themeStore";
@@ -26,11 +27,6 @@ import { restoreSession, startSessionPersistence, type SessionPersistence } from
 import "./theme/tokens.css";
 import "./App.css";
 import "./preview/PreviewPane.css";
-
-interface ExternalChangePayload {
-  mtime: number;
-  content: string;
-}
 
 interface WorkspacePaths {
   root: string;
@@ -142,16 +138,11 @@ function App() {
         await invoke("quit_app");
       })();
     });
+    // Watcher de alteração externa (#10, #140): observa os paths de todas as
+    // abas abertas, mantidos em sincronia por `startWatchedPathsSync`.
+    const stopWatchedPathsSync = startWatchedPathsSync();
     const unlistenExternalChange = listen<ExternalChangePayload>("external-file-changed", (event) => {
-      // O watcher (#10) só observa o path fixo original (dívida documentada
-      // em DECISIONS.md #21) — roteia o evento só se alguma aba aberta tiver
-      // exatamente esse path; se nenhuma bater (renomeada, ou nunca aberta),
-      // é ignorado.
-      const { workspaceRoot, tabs } = useTabsStore.getState();
-      const watchedPath = workspaceRoot ? `${workspaceRoot}/untitled.md` : null;
-      const tab = tabs.find((t) => t.path === watchedPath);
-      if (!tab) return;
-      useDocumentStore.getState().handleExternalChange(tab.id, event.payload.content, event.payload.mtime);
+      handleExternalFileChanged(event.payload);
     });
     // Watcher recursivo dedicado ao explorador (#25, tree_watcher.rs) — evento
     // sem payload, o frontend decide o que re-buscar (raiz + pastas expandidas).
@@ -177,6 +168,7 @@ function App() {
       void unlistenOpenPaths.then((fn) => fn());
       void unlistenFocus.then((fn) => fn());
       void unlistenClose.then((fn) => fn());
+      stopWatchedPathsSync();
       void unlistenExternalChange.then((fn) => fn());
       void unlistenTreeChange.then((fn) => fn());
       void unlistenMenu.then((fn) => fn());

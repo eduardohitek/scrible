@@ -6,6 +6,7 @@ import {
   getOrCreateEditorState,
   getScrollTop,
   livePreviewEffect,
+  replaceDocSpec,
   saveEditorState,
   saveScrollTop,
   setHideMarkers,
@@ -136,9 +137,7 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
     if (!view || mountedTabIdRef.current !== tabId) return;
     if (content === view.state.doc.toString()) return;
 
-    view.dispatch({
-      changes: { from: 0, to: view.state.doc.length, insert: content },
-    });
+    view.dispatch(replaceDocSpec(view.state, content));
   }, [content, tabId]);
 
   useImperativeHandle(

@@ -146,6 +146,20 @@ describe("documentStore", () => {
     expect(entry.conflict).toEqual({ currentMtime: 3000, currentContent: "versão do disco" });
   });
 
+  it("handleExternalChange com o mesmo texto da edição pendente só adota o mtime, sem conflito", async () => {
+    useDocumentStore.getState().setContent("tab-1", "texto igual");
+
+    useDocumentStore.getState().handleExternalChange("tab-1", "texto igual", 3000);
+
+    const entry = useDocumentStore.getState().documents["tab-1"];
+    expect(entry.status).toBe("idle");
+    expect(entry.conflict).toBeNull();
+    expect(entry.dirty).toBe(false);
+    expect(entry.lastSavedMtime).toBe(3000);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(mockedInvoke).not.toHaveBeenCalled();
+  });
+
   it('resolveConflict("disk") tira snapshot da versão local antes de descartá-la', async () => {
     useDocumentStore.setState({
       documents: {
