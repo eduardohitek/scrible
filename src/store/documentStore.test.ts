@@ -35,6 +35,17 @@ describe("documentStore", () => {
     vi.useRealTimers();
   });
 
+  it("initDocument de arquivo existente guarda o mtime lido (#143)", async () => {
+    mockedInvoke.mockResolvedValueOnce({ content: "do disco", mtime: 4242 });
+
+    await useDocumentStore.getState().initDocument("tab-2", "/tmp/outro.md");
+
+    expect(mockedInvoke).toHaveBeenCalledWith("read_file_with_mtime", { path: "/tmp/outro.md" });
+    const entry = useDocumentStore.getState().documents["tab-2"];
+    expect(entry.content).toBe("do disco");
+    expect(entry.lastSavedMtime).toBe(4242);
+  });
+
   it("dispara save_file só depois de 800ms de inatividade", async () => {
     mockedInvoke.mockResolvedValueOnce(2000);
 

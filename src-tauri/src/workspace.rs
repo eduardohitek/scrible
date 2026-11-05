@@ -51,10 +51,8 @@ pub fn ensure_workspace(base: &Path) -> Result<WorkspacePaths, WorkspaceError> {
 /// Resolve o diretório Documents do usuário via API do Tauri e delega a
 /// criação idempotente para `ensure_workspace`.
 pub fn bootstrap(app: &AppHandle) -> Result<WorkspacePaths, WorkspaceError> {
-    let documents = resolve_documents_dir(
-        app.path().document_dir().ok(),
-        app.path().home_dir().ok(),
-    )?;
+    let documents =
+        resolve_documents_dir(app.path().document_dir().ok(), app.path().home_dir().ok())?;
 
     ensure_workspace(&documents)
 }
@@ -68,7 +66,9 @@ fn resolve_documents_dir(
 ) -> Result<PathBuf, WorkspaceError> {
     documents
         .or_else(|| home.map(|h| h.join("Documents")))
-        .ok_or_else(|| WorkspaceError::Io("não foi possível resolver a pasta Documents".to_string()))
+        .ok_or_else(|| {
+            WorkspaceError::Io("não foi possível resolver a pasta Documents".to_string())
+        })
 }
 
 #[cfg(test)]
@@ -79,7 +79,11 @@ mod tests {
 
     #[test]
     fn documents_dir_prefers_xdg_over_home_fallback() {
-        let docs = resolve_documents_dir(Some(PathBuf::from("/h/Documentos")), Some(PathBuf::from("/h"))).unwrap();
+        let docs = resolve_documents_dir(
+            Some(PathBuf::from("/h/Documentos")),
+            Some(PathBuf::from("/h")),
+        )
+        .unwrap();
         assert_eq!(docs, PathBuf::from("/h/Documentos"));
     }
 

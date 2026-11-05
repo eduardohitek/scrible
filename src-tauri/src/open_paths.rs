@@ -25,7 +25,11 @@ fn is_openable_markdown(path: &Path) -> bool {
     let has_markdown_ext = path
         .extension()
         .and_then(|ext| ext.to_str())
-        .is_some_and(|ext| MARKDOWN_EXTENSIONS.iter().any(|md| ext.eq_ignore_ascii_case(md)));
+        .is_some_and(|ext| {
+            MARKDOWN_EXTENSIONS
+                .iter()
+                .any(|md| ext.eq_ignore_ascii_case(md))
+        });
     has_markdown_ext && path.metadata().is_ok_and(|meta| meta.is_file())
 }
 
@@ -124,7 +128,10 @@ mod tests {
         let pending = PendingOpenPaths::default();
         assert_eq!(pending.enqueue_unless_ready(vec!["/a.md".into()]), None);
         assert_eq!(pending.enqueue_unless_ready(vec!["/b.md".into()]), None);
-        assert_eq!(pending.take(), vec!["/a.md".to_string(), "/b.md".to_string()]);
+        assert_eq!(
+            pending.take(),
+            vec!["/a.md".to_string(), "/b.md".to_string()]
+        );
         assert!(pending.take().is_empty());
     }
 
@@ -132,7 +139,10 @@ mod tests {
     fn paths_after_take_are_returned_for_emission() {
         let pending = PendingOpenPaths::default();
         pending.take();
-        assert_eq!(pending.enqueue_unless_ready(vec!["/a.md".into()]), Some(vec!["/a.md".to_string()]));
+        assert_eq!(
+            pending.enqueue_unless_ready(vec!["/a.md".into()]),
+            Some(vec!["/a.md".to_string()])
+        );
         assert!(pending.take().is_empty());
     }
 
@@ -145,7 +155,10 @@ mod tests {
     #[test]
     fn converts_percent_encoded_file_urls() {
         let urls = [url("file:///Users/eu/Minhas%20Notas/ca%C3%A7%C3%A3o.md")];
-        assert_eq!(file_urls_to_paths(&urls), vec!["/Users/eu/Minhas Notas/cação.md".to_string()]);
+        assert_eq!(
+            file_urls_to_paths(&urls),
+            vec!["/Users/eu/Minhas Notas/cação.md".to_string()]
+        );
     }
 
     #[cfg(unix)]
@@ -157,6 +170,9 @@ mod tests {
             url("scrible://abrir"),
             url("file:///tmp/c.markdown"),
         ];
-        assert_eq!(file_urls_to_paths(&urls), vec!["/tmp/a.md".to_string(), "/tmp/c.markdown".to_string()]);
+        assert_eq!(
+            file_urls_to_paths(&urls),
+            vec!["/tmp/a.md".to_string(), "/tmp/c.markdown".to_string()]
+        );
     }
 }

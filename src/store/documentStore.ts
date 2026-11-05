@@ -122,6 +122,12 @@ let externalReloadSeq = 0;
 const debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const pausedTabs = new Set<string>();
 
+/** `true` enquanto a aba está com o autosave suspenso (Salvar Como em
+ * andamento, #127). A checagem por foco (#143) não mexe nessas abas. */
+export function isAutosavePaused(tabId: string): boolean {
+  return pausedTabs.has(tabId);
+}
+
 function scheduleSave(
   tabId: string,
   get: () => DocumentStoreState,
@@ -207,14 +213,18 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
 
   initDocument: async (tabId, path, fallbackContent = "") => {
     try {
-      const content = await invoke<string>("read_file", { path });
+      // O mtime da leitura vira `lastSavedMtime` (#143): sem ele, a checagem
+      // por foco e o primeiro autosave não teriam com o que comparar.
+      const { content, mtime } = await invoke<{ content: string; mtime: number }>("read_file_with_mtime", {
+        path,
+      });
       set((state) => ({
         documents: {
           ...state.documents,
           [tabId]: {
             path,
             content,
-            lastSavedMtime: state.documents[tabId]?.lastSavedMtime ?? null,
+            lastSavedMtime: mtime,
             status: "idle",
             conflict: null,
             dirty: false,

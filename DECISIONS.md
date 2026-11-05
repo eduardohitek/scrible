@@ -1848,3 +1848,34 @@ próprio).
 **Afeta:** `#143`. Se a checagem no foco reaproveitar `handleExternalChange`, a mensagem aparece
 também no reload por foco. Se isso não for desejado, ela precisa de um caminho que não preencha
 `lastExternalReload`.
+
+## #143 — Checagem das abas quando a janela ganha foco (spec #139)
+
+- **Abrir um arquivo guarda o mtime**: o `initDocument` passou a usar o command novo
+  `read_file_with_mtime` (`fs_ops::read_file_with_mtime`) e preenche `lastSavedMtime`. O mtime vem
+  do mesmo handle que foi lido, então conteúdo e mtime descrevem a mesma versão. Isso fecha a
+  lacuna anotada na `#140`. **Efeito colateral desejado**: o primeiro autosave de um arquivo recém-aberto
+  agora manda `expectedMtime` e detecta conflito, coisa que antes não acontecia. O `read_file` simples
+  continua servindo as configurações (`appSettings`).
+- **Command em lote `check_files([{ path, knownMtime }])`** → `Unchanged` / `Changed { mtime,
+  content }` / `Missing` por path. O conteúdo só é lido quando o mtime diverge. Um erro que não
+  seja "não existe" conta como `Unchanged`. O que sai como `Changed`/`Missing` é registrado no
+  `FileWatcher` (`record_known`), e a rajada seguinte do watcher não reemite a mesma mudança.
+- **`checkOpenTabsOnFocus`** (`src/fs/externalChanges.ts`) roda no `onFocusChanged(true)`.
+  `Changed` → `handleExternalChange`; `Missing` → `handleExternalRemoval` (se a aba ainda não
+  estava `missing`). São os mesmos caminhos do watcher, então o reload da aba ativa também mostra
+  "Recarregado do disco" (`#142`, decisão da sabatina).
+- **O que fica de fora**:
+  - abas `saving`;
+  - Salvar Como em andamento (`isAutosavePaused`, exportado do `documentStore`);
+  - abas sem documento carregado no path da aba.
+- **Abas `isNew` entram na checagem** (decisão da sabatina, desvio do texto da issue). O untitled já é
+  gravado em disco na criação e o watcher já o trata como qualquer outro arquivo.
+- **Em conflito**, o mtime conhecido é o `conflict.currentMtime`, ou seja, a versão do disco já
+  exposta no banner. Sem isso, todo foco reentregaria o mesmo conflito.
+- **Corrida**: o resultado é descartado se, durante a checagem, o path, o mtime conhecido ou o
+  status da aba mudou (ex.: um autosave terminou). Uma checagem por vez: um foco com outra em voo
+  é ignorado. Não há throttle.
+
+**Afeta:** qualquer novo caminho que abra documento precisa preencher `lastSavedMtime`, senão a
+checagem por foco entrega um `Changed` na primeira vez (inofensivo: mesmo texto só adota o mtime).

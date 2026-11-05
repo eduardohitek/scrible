@@ -30,13 +30,17 @@ fn wait_for_settled_relevant_event(
     hidden_dir: &Path,
 ) -> Option<bool> {
     let first = rx.recv().ok()?;
-    let mut relevant = first.map(|e| touches_visible_tree(&e, hidden_dir)).unwrap_or(true);
+    let mut relevant = first
+        .map(|e| touches_visible_tree(&e, hidden_dir))
+        .unwrap_or(true);
 
     loop {
         match rx.recv_timeout(debounce) {
             Ok(result) => {
                 if !relevant {
-                    relevant = result.map(|e| touches_visible_tree(&e, hidden_dir)).unwrap_or(true);
+                    relevant = result
+                        .map(|e| touches_visible_tree(&e, hidden_dir))
+                        .unwrap_or(true);
                 }
             }
             Err(RecvTimeoutError::Timeout) => return Some(relevant),
@@ -63,7 +67,10 @@ pub fn start_watching(app: AppHandle, workspace_root: PathBuf, hidden_dir: PathB
         };
 
         if let Err(err) = watcher.watch(&workspace_root, RecursiveMode::Recursive) {
-            eprintln!("tree_watcher: falha ao observar {}: {err}", workspace_root.display());
+            eprintln!(
+                "tree_watcher: falha ao observar {}: {err}",
+                workspace_root.display()
+            );
             return;
         }
 
@@ -97,7 +104,10 @@ mod tests {
     #[test]
     fn touches_visible_tree_false_for_path_inside_hidden_dir() {
         let hidden = PathBuf::from("/root/.scrible");
-        assert!(!touches_visible_tree(&event_for("/root/.scrible/settings.json"), &hidden));
+        assert!(!touches_visible_tree(
+            &event_for("/root/.scrible/settings.json"),
+            &hidden
+        ));
     }
 
     #[test]
@@ -106,7 +116,10 @@ mod tests {
         drop(tx);
 
         let hidden = PathBuf::from("/root/.scrible");
-        assert_eq!(wait_for_settled_relevant_event(&rx, Duration::from_millis(20), &hidden), None);
+        assert_eq!(
+            wait_for_settled_relevant_event(&rx, Duration::from_millis(20), &hidden),
+            None
+        );
     }
 
     #[test]

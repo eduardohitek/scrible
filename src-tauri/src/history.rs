@@ -127,7 +127,11 @@ fn write_snapshot(dir: &Path, content: &str) -> Result<(), HistoryError> {
 
 /// Chamado a cada `save_file` bem-sucedido. Só cria um snapshot novo se já
 /// passaram 5 minutos desde o último E o conteúdo mudou desde então.
-pub fn maybe_snapshot(hidden_dir: &Path, file_path: &Path, content: &str) -> Result<(), HistoryError> {
+pub fn maybe_snapshot(
+    hidden_dir: &Path,
+    file_path: &Path,
+    content: &str,
+) -> Result<(), HistoryError> {
     let dir = history_dir(hidden_dir, file_path);
 
     let should_snapshot = match latest_snapshot(&dir)? {
@@ -151,12 +155,19 @@ pub fn maybe_snapshot(hidden_dir: &Path, file_path: &Path, content: &str) -> Res
 /// (preserva a versão local antes de descartá-la num conflito, #10) — em
 /// ambos os casos a versão prestes a ser perdida não pode depender de ter
 /// passado o throttle de 5min.
-pub fn force_snapshot(hidden_dir: &Path, file_path: &Path, content: &str) -> Result<(), HistoryError> {
+pub fn force_snapshot(
+    hidden_dir: &Path,
+    file_path: &Path,
+    content: &str,
+) -> Result<(), HistoryError> {
     let dir = history_dir(hidden_dir, file_path);
     write_snapshot(&dir, content)
 }
 
-pub fn list_snapshots(hidden_dir: &Path, file_path: &Path) -> Result<Vec<SnapshotInfo>, HistoryError> {
+pub fn list_snapshots(
+    hidden_dir: &Path,
+    file_path: &Path,
+) -> Result<Vec<SnapshotInfo>, HistoryError> {
     let dir = history_dir(hidden_dir, file_path);
     let mut entries = snapshot_entries(&dir)?;
     entries.sort_by_key(|(timestamp, _)| std::cmp::Reverse(*timestamp));
@@ -324,7 +335,10 @@ mod tests {
         let result = restore_snapshot(&hidden, &file_path, target_ts).unwrap();
 
         assert_eq!(result.content, "versão antiga restaurada");
-        assert_eq!(fs::read_to_string(&file_path).unwrap(), "versão antiga restaurada");
+        assert_eq!(
+            fs::read_to_string(&file_path).unwrap(),
+            "versão antiga restaurada"
+        );
 
         let snapshots = list_snapshots(&hidden, &file_path).unwrap();
         // A versão descartada foi preservada como um snapshot novo.

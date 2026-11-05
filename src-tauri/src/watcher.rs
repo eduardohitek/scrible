@@ -80,8 +80,13 @@ impl WatchSet {
     }
 
     fn record_save(&mut self, path: &str, mtime: i64) {
+        self.record_known(path, Some(mtime));
+    }
+
+    /// Marca um estado de disco como já visto (`None` = arquivo ausente).
+    fn record_known(&mut self, path: &str, mtime: Option<i64>) {
         if let Some(known) = self.files.get_mut(path) {
-            *known = Some(mtime);
+            *known = mtime;
         }
     }
 
@@ -95,7 +100,9 @@ impl WatchSet {
         for (path, known) in self.files.iter_mut() {
             let Some(mtime) = disk_mtime(Path::new(path)) else {
                 if known.take().is_some() {
-                    changes.push(WatchEvent::Removed(ExternalRemovalPayload { path: path.clone() }));
+                    changes.push(WatchEvent::Removed(ExternalRemovalPayload {
+                        path: path.clone(),
+                    }));
                 }
                 continue;
             };
@@ -198,6 +205,13 @@ impl FileWatcher {
     pub fn record_save(&self, path: &str, mtime: i64) {
         self.0.lock().unwrap().set.record_save(path, mtime);
     }
+
+    /// Registra o que a checagem por foco (#143) já entregou ao frontend
+    /// (`None` = arquivo ausente), para a próxima rajada não reemitir a mesma
+    /// alteração ou remoção.
+    pub fn record_known(&self, path: &str, mtime: Option<i64>) {
+        self.0.lock().unwrap().set.record_known(path, mtime);
+    }
 }
 
 /// Bloqueia até o primeiro evento chegar, depois drena qualquer rajada de
@@ -244,16 +258,24 @@ mod tests {
     fn write_with_mtime(path: &Path, content: &str, millis: u64) {
         fs::write(path, content).unwrap();
         let file = fs::File::options().write(true).open(path).unwrap();
-        file.set_modified(UNIX_EPOCH + Duration::from_millis(millis)).unwrap();
+        file.set_modified(UNIX_EPOCH + Duration::from_millis(millis))
+            .unwrap();
     }
 
     #[test]
     fn parent_dirs_dedups_files_of_the_same_folder() {
-        let paths = vec!["/a/x.md".to_string(), "/a/y.md".to_string(), "/b/z.md".to_string()];
+        let paths = vec![
+            "/a/x.md".to_string(),
+            "/a/y.md".to_string(),
+            "/b/z.md".to_string(),
+        ];
 
         let dirs = parent_dirs(&paths);
 
-        assert_eq!(dirs, HashSet::from([PathBuf::from("/a"), PathBuf::from("/b")]));
+        assert_eq!(
+            dirs,
+            HashSet::from([PathBuf::from("/a"), PathBuf::from("/b")])
+        );
     }
 
     #[test]
@@ -333,7 +355,9 @@ mod tests {
         fs::remove_file(&file).unwrap();
         assert_eq!(
             set.collect_changes(),
-            vec![WatchEvent::Removed(ExternalRemovalPayload { path: path_string(&file) })]
+            vec![WatchEvent::Removed(ExternalRemovalPayload {
+                path: path_string(&file)
+            })]
         );
         assert!(set.collect_changes().is_empty());
 
@@ -372,7 +396,10 @@ mod tests {
         write_with_mtime(&tmp, "dois", 2_000_000);
         fs::rename(&tmp, &file).unwrap();
 
-        assert_eq!(changed_paths(set.collect_changes()), vec![path_string(&file)]);
+        assert_eq!(
+            changed_paths(set.collect_changes()),
+            vec![path_string(&file)]
+        );
     }
 
     #[test]
@@ -405,11 +432,16 @@ mod tests {
         // FSEvents só entrega eventos a partir de quando o stream começa.
         std::thread::sleep(Duration::from_millis(200));
 
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
         write_with_mtime(&other, "alterado", now);
         write_with_mtime(&watched, "alterado por fora", now);
 
-        let change = rx.recv_timeout(Duration::from_secs(10)).expect("evento do arquivo observado");
+        let change = rx
+            .recv_timeout(Duration::from_secs(10))
+            .expect("evento do arquivo observado");
         assert_eq!(
             change,
             WatchEvent::Changed(ExternalChangePayload {
@@ -422,10 +454,14 @@ mod tests {
 
         fs::remove_file(&other).unwrap();
         fs::remove_file(&watched).unwrap();
-        let removal = rx.recv_timeout(Duration::from_secs(10)).expect("remoção do arquivo observado");
+        let removal = rx
+            .recv_timeout(Duration::from_secs(10))
+            .expect("remoção do arquivo observado");
         assert_eq!(
             removal,
-            WatchEvent::Removed(ExternalRemovalPayload { path: path_string(&watched) })
+            WatchEvent::Removed(ExternalRemovalPayload {
+                path: path_string(&watched)
+            })
         );
         assert!(rx.recv_timeout(Duration::from_millis(800)).is_err());
     }

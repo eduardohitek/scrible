@@ -1,9 +1,9 @@
 use std::fs;
-use std::io;
+use std::io::{self, Read as _};
 use std::path::Path;
 use std::time::UNIX_EPOCH;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, thiserror::Error, Serialize)]
 #[serde(tag = "kind")]
@@ -54,17 +54,74 @@ pub fn read_file(path: &Path) -> Result<String, FsError> {
     fs::read_to_string(path).map_err(|err| FsError::from_io(err, path))
 }
 
+/// Conteúdo e mtime de um arquivo (#143). O mtime vem do mesmo handle que foi
+/// lido, então os dois descrevem a mesma versão mesmo se outro programa
+/// trocar o arquivo (rename atômico) no meio da leitura.
+#[derive(Debug, Serialize)]
+pub struct FileWithMtime {
+    pub content: String,
+    pub mtime: i64,
+}
+
+pub fn read_file_with_mtime(path: &Path) -> Result<FileWithMtime, FsError> {
+    let mut file = fs::File::open(path).map_err(|err| FsError::from_io(err, path))?;
+    let mut content = String::new();
+    file.read_to_string(&mut content)
+        .map_err(|err| FsError::from_io(err, path))?;
+    let meta = file.metadata().map_err(|err| FsError::from_io(err, path))?;
+    Ok(FileWithMtime {
+        content,
+        mtime: mtime_millis(&meta)?,
+    })
+}
+
+/// Um arquivo de aba a conferir na checagem por foco (#143).
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileCheck {
+    pub path: String,
+    pub known_mtime: Option<i64>,
+}
+
+#[derive(Debug, Serialize, PartialEq)]
+#[serde(tag = "kind")]
+pub enum FileCheckResult {
+    Unchanged,
+    Changed { mtime: i64, content: String },
+    Missing,
+}
+
+/// Compara o mtime em disco com o conhecido pela aba. O conteúdo só é lido
+/// quando o mtime diverge. Erro que não seja "não existe" (ex.: permissão)
+/// conta como `Unchanged`: a checagem por foco é só uma rede de segurança.
+pub fn check_file(path: &Path, known_mtime: Option<i64>) -> FileCheckResult {
+    match fs::metadata(path) {
+        Err(err) if err.kind() == io::ErrorKind::NotFound => return FileCheckResult::Missing,
+        Err(_) => return FileCheckResult::Unchanged,
+        Ok(meta) => {
+            if mtime_millis(&meta).ok() == known_mtime && known_mtime.is_some() {
+                return FileCheckResult::Unchanged;
+            }
+        }
+    }
+    match read_file_with_mtime(path) {
+        Ok(file) if Some(file.mtime) == known_mtime => FileCheckResult::Unchanged,
+        Ok(file) => FileCheckResult::Changed {
+            mtime: file.mtime,
+            content: file.content,
+        },
+        Err(FsError::NotFound { .. }) => FileCheckResult::Missing,
+        Err(_) => FileCheckResult::Unchanged,
+    }
+}
+
 fn temp_path_for(path: &Path) -> std::path::PathBuf {
     let mut name = path.file_name().unwrap_or_default().to_os_string();
     name.push(".scrible-tmp");
     path.with_file_name(name)
 }
 
-pub fn save_file(
-    path: &Path,
-    content: &str,
-    expected_mtime: Option<i64>,
-) -> Result<i64, FsError> {
+pub fn save_file(path: &Path, content: &str, expected_mtime: Option<i64>) -> Result<i64, FsError> {
     if let Some(expected) = expected_mtime {
         match fs::metadata(path) {
             Ok(meta) => {
@@ -86,7 +143,8 @@ pub fn save_file(
 
     let tmp_path = temp_path_for(path);
     {
-        let mut tmp_file = fs::File::create(&tmp_path).map_err(|err| FsError::from_io(err, &tmp_path))?;
+        let mut tmp_file =
+            fs::File::create(&tmp_path).map_err(|err| FsError::from_io(err, &tmp_path))?;
         use std::io::Write;
         tmp_file
             .write_all(content.as_bytes())
@@ -198,6 +256,65 @@ mod tests {
     use super::*;
     use std::io::Write as _;
 
+    fn set_mtime(path: &Path, millis: u64) {
+        let file = fs::File::options().write(true).open(path).unwrap();
+        file.set_modified(UNIX_EPOCH + std::time::Duration::from_millis(millis))
+            .unwrap();
+    }
+
+    #[test]
+    fn read_file_with_mtime_returns_content_and_mtime() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("doc.md");
+        fs::write(&path, "olá").unwrap();
+        set_mtime(&path, 5_000);
+
+        let file = read_file_with_mtime(&path).unwrap();
+
+        assert_eq!(file.content, "olá");
+        assert_eq!(file.mtime, 5_000);
+    }
+
+    #[test]
+    fn check_file_unchanged_when_mtime_matches() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("doc.md");
+        fs::write(&path, "a").unwrap();
+        set_mtime(&path, 5_000);
+
+        assert_eq!(check_file(&path, Some(5_000)), FileCheckResult::Unchanged);
+    }
+
+    #[test]
+    fn check_file_changed_returns_new_content_and_mtime() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("doc.md");
+        fs::write(&path, "novo").unwrap();
+        set_mtime(&path, 6_000);
+
+        assert_eq!(
+            check_file(&path, Some(5_000)),
+            FileCheckResult::Changed {
+                mtime: 6_000,
+                content: "novo".to_string()
+            }
+        );
+        assert!(matches!(
+            check_file(&path, None),
+            FileCheckResult::Changed { .. }
+        ));
+    }
+
+    #[test]
+    fn check_file_missing_when_file_is_gone() {
+        let tmp = tempfile::tempdir().unwrap();
+
+        assert_eq!(
+            check_file(&tmp.path().join("sumiu.md"), Some(5_000)),
+            FileCheckResult::Missing
+        );
+    }
+
     #[test]
     fn read_file_returns_not_found_for_missing_path() {
         let tmp = tempfile::tempdir().unwrap();
@@ -269,7 +386,11 @@ mod tests {
         // mais com o mtime atual em disco (aqui, deliberadamente errado).
         let stale_mtime = first_mtime - 1000;
 
-        let result = save_file(&path, "versão 2 (não deveria ir pro disco)", Some(stale_mtime));
+        let result = save_file(
+            &path,
+            "versão 2 (não deveria ir pro disco)",
+            Some(stale_mtime),
+        );
 
         match result {
             Err(FsError::ExternalChange {
@@ -376,8 +497,14 @@ mod tests {
         assert_eq!(
             entries,
             vec![
-                DirEntry { name: "subpasta".into(), is_dir: true },
-                DirEntry { name: "nota.md".into(), is_dir: false },
+                DirEntry {
+                    name: "subpasta".into(),
+                    is_dir: true
+                },
+                DirEntry {
+                    name: "nota.md".into(),
+                    is_dir: false
+                },
             ]
         );
     }
