@@ -21,11 +21,13 @@ export function StatusBar() {
 
   const saveState = !activeDoc
     ? null
-    : activeDoc.status === "saving"
-      ? ({ key: "saving", label: "Salvando…" } as const)
-      : activeDoc.dirty
-        ? ({ key: "dirty", label: "Não salvo" } as const)
-        : ({ key: "saved", label: "Salvo" } as const);
+    : activeDoc.status === "missing"
+      ? ({ key: "dirty", label: "Removido do disco" } as const)
+      : activeDoc.status === "saving"
+        ? ({ key: "saving", label: "Salvando…" } as const)
+        : activeDoc.dirty
+          ? ({ key: "dirty", label: "Não salvo" } as const)
+          : ({ key: "saved", label: "Salvo" } as const);
 
   return (
     <div className="status-bar">

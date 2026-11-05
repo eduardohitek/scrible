@@ -17,7 +17,7 @@ use open_paths::PendingOpenPaths;
 use session::{Session, SessionError};
 use tauri::{AppHandle, Emitter, Manager, WindowEvent};
 use tauri_plugin_opener::OpenerExt;
-use watcher::FileWatcher;
+use watcher::{FileWatcher, WatchEvent};
 use workspace::{WorkspaceError, WorkspacePaths};
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
@@ -254,8 +254,11 @@ pub fn run() {
             }
 
             let handle = app.handle().clone();
-            let file_watcher = FileWatcher::start(move |change| {
-                let _ = handle.emit("external-file-changed", change);
+            let file_watcher = FileWatcher::start(move |event| {
+                let _ = match event {
+                    WatchEvent::Changed(change) => handle.emit("external-file-changed", change),
+                    WatchEvent::Removed(removal) => handle.emit("external-file-removed", removal),
+                };
             });
             if let Ok(paths) = &result {
                 app.asset_protocol_scope().allow_directory(&paths.root, true)?;

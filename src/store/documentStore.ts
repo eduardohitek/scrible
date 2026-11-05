@@ -40,7 +40,10 @@ interface FsErrorExternalChange {
 }
 type FsError = FsErrorNotFound | FsErrorPermissionDenied | FsErrorIo | FsErrorExternalChange;
 
-export type DocumentStatus = "idle" | "saving" | "conflict" | "error";
+/** `missing`: o arquivo foi apagado, renomeado ou movido por outro programa
+ * (#141). O autosave fica suspenso até o usuário recriar o arquivo
+ * (`restoreMissing`) ou o arquivo reaparecer no mesmo path. */
+export type DocumentStatus = "idle" | "saving" | "conflict" | "error" | "missing";
 
 interface DocumentConflict {
   currentMtime: number;
@@ -79,6 +82,13 @@ interface DocumentStoreState {
    * local; "disk" descarta o conteúdo local (preservado antes via snapshot
    * forçado) e adota a versão do disco. */
   resolveConflict: (tabId: string, choice: "mine" | "disk") => Promise<void>;
+  /** Evento `external-file-removed` do watcher (#141): marca a aba como
+   * `missing` e suspende o autosave, sem tocar no conteúdo em memória. */
+  handleExternalRemoval: (tabId: string) => void;
+  /** "Salvar de novo aqui" (#141): recria o arquivo no mesmo path com o
+   * conteúdo atual. Devolve `false` (e a aba continua `missing`) se a
+   * gravação falhar — ex.: a pasta também sumiu. */
+  restoreMissing: (tabId: string) => Promise<boolean>;
   /** Só atualiza o path após um rename bem-sucedido em disco — não mexe em
    * content/lastSavedMtime, que continuam válidos (mesmo arquivo, novo nome). */
   renameDocument: (tabId: string, newPath: string) => void;
@@ -142,7 +152,7 @@ async function performSave(
 ) {
   if (pausedTabs.has(tabId)) return;
   const entry = get().documents[tabId];
-  if (!entry || entry.path === null) return;
+  if (!entry || entry.path === null || entry.status === "missing") return;
   const { path, content, lastSavedMtime } = entry;
   // O documento pode ser reapontado (Salvar Como) enquanto a gravação está
   // em voo: o resultado vale para o path antigo e não pode ser aplicado.
@@ -289,6 +299,33 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
 
     patchDocument(set, tabId, { lastSavedMtime: conflict.currentMtime, conflict: null });
     await performSave(tabId, get, set);
+  },
+
+  handleExternalRemoval: (tabId) => {
+    if (!get().documents[tabId]) return;
+    clearPendingSave(tabId);
+    patchDocument(set, tabId, { status: "missing", conflict: null });
+  },
+
+  restoreMissing: async (tabId) => {
+    const entry = get().documents[tabId];
+    if (!entry || entry.status !== "missing" || entry.path === null) return false;
+    const { path, content } = entry;
+    try {
+      const mtime = await invoke<number>("save_file", { path, content, expectedMtime: null });
+      if (get().documents[tabId]?.path !== path) return false;
+      patchDocument(set, tabId, {
+        lastSavedMtime: mtime,
+        status: "idle",
+        conflict: null,
+        dirty: get().documents[tabId].content !== content,
+      });
+      if (get().documents[tabId].dirty) scheduleSave(tabId, get, set);
+      return true;
+    } catch (err) {
+      console.error("falha ao recriar o arquivo removido:", err);
+      return false;
+    }
   },
 
   renameDocument: (tabId, newPath) => {

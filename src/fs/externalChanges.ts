@@ -18,6 +18,18 @@ export function handleExternalFileChanged(payload: ExternalChangePayload): void 
   }
 }
 
+export interface ExternalRemovalPayload {
+  path: string;
+}
+
+/** O arquivo de uma ou mais abas sumiu do disco (#141). */
+export function handleExternalFileRemoved(payload: ExternalRemovalPayload): void {
+  const { handleExternalRemoval } = useDocumentStore.getState();
+  for (const tab of useTabsStore.getState().tabs) {
+    if (tab.path === payload.path) handleExternalRemoval(tab.id);
+  }
+}
+
 function watchedKey(paths: string[]): string {
   return JSON.stringify([...new Set(paths)].sort());
 }
