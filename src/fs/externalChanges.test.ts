@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
-import { handleExternalFileChanged, startWatchedPathsSync } from "./externalChanges";
+import { handleExternalFileChanged, handleExternalFileRemoved, startWatchedPathsSync } from "./externalChanges";
 import { useTabsStore } from "../store/tabsStore";
 import { useDocumentStore, type DocumentEntry } from "../store/documentStore";
 
@@ -47,6 +47,27 @@ describe("handleExternalFileChanged", () => {
     handleExternalFileChanged({ path: "/root/outro.md", mtime: 2000, content: "x" });
 
     expect(useDocumentStore.getState().documents["tab-0"].content).toBe("a");
+  });
+});
+
+describe("handleExternalFileRemoved", () => {
+  beforeEach(() => {
+    useTabsStore.setState({ workspaceRoot: "/root", tabs: [], activeTabId: null, editingTabId: null });
+    useDocumentStore.setState({ documents: {} });
+  });
+
+  it("marca como removida só a aba com o path do payload", () => {
+    setTabs(["/root/a.md", "/root/b.md"]);
+    useDocumentStore.setState({
+      documents: { "tab-0": doc("/root/a.md", "a"), "tab-1": doc("/root/b.md", "b") },
+    });
+
+    handleExternalFileRemoved({ path: "/root/b.md" });
+
+    const { documents } = useDocumentStore.getState();
+    expect(documents["tab-1"].status).toBe("missing");
+    expect(documents["tab-1"].content).toBe("b");
+    expect(documents["tab-0"].status).toBe("idle");
   });
 });
 

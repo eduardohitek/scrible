@@ -187,6 +187,22 @@ describe("updateStore", () => {
     expect(mockedRelaunch).not.toHaveBeenCalled();
   });
 
+  it("instalar: aba com o arquivo removido do disco aborta sem instalar (#141)", async () => {
+    const update = fakeUpdate("0.3.0");
+    flushAll.mockImplementation(async () => {
+      documents = { a: { dirty: false, status: "missing" } };
+    });
+    mockedCheck.mockResolvedValue(update);
+    const store = await freshStore();
+    await store.getState().checkManually();
+
+    await store.getState().install();
+
+    expect(store.getState().status).toBe("error");
+    expect(update.downloadAndInstall).not.toHaveBeenCalled();
+    expect(mockedRelaunch).not.toHaveBeenCalled();
+  });
+
   it("instalar: edição não salva durante o download impede o reinício", async () => {
     const update = fakeUpdate("0.3.0");
     update.downloadAndInstall.mockImplementation(async () => {

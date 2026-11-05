@@ -160,6 +160,70 @@ describe("documentStore", () => {
     expect(mockedInvoke).not.toHaveBeenCalled();
   });
 
+  it("handleExternalRemoval marca missing, preserva o conteúdo e suspende o autosave", async () => {
+    useDocumentStore.getState().setContent("tab-1", "edição antes da remoção");
+
+    useDocumentStore.getState().handleExternalRemoval("tab-1");
+    useDocumentStore.getState().setContent("tab-1", "edição depois da remoção");
+    await vi.advanceTimersByTimeAsync(1000);
+    await useDocumentStore.getState().flushAll();
+
+    const entry = useDocumentStore.getState().documents["tab-1"];
+    expect(entry.status).toBe("missing");
+    expect(entry.content).toBe("edição depois da remoção");
+    expect(entry.dirty).toBe(true);
+    expect(mockedInvoke).not.toHaveBeenCalled();
+  });
+
+  it("restoreMissing recria o arquivo sem expectedMtime e volta para idle", async () => {
+    useDocumentStore.getState().setContent("tab-1", "texto em memória");
+    useDocumentStore.getState().handleExternalRemoval("tab-1");
+    mockedInvoke.mockResolvedValueOnce(5000);
+
+    expect(await useDocumentStore.getState().restoreMissing("tab-1")).toBe(true);
+
+    expect(mockedInvoke).toHaveBeenCalledWith("save_file", {
+      path: "/tmp/doc.md",
+      content: "texto em memória",
+      expectedMtime: null,
+    });
+    const entry = useDocumentStore.getState().documents["tab-1"];
+    expect(entry.status).toBe("idle");
+    expect(entry.dirty).toBe(false);
+    expect(entry.lastSavedMtime).toBe(5000);
+  });
+
+  it("restoreMissing que falha mantém a aba missing", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    useDocumentStore.getState().handleExternalRemoval("tab-1");
+    mockedInvoke.mockRejectedValueOnce({ kind: "NotFound", path: "/tmp" });
+
+    expect(await useDocumentStore.getState().restoreMissing("tab-1")).toBe(false);
+    expect(useDocumentStore.getState().documents["tab-1"].status).toBe("missing");
+  });
+
+  it("arquivo que reaparece numa aba missing limpa recarrega o conteúdo", () => {
+    useDocumentStore.getState().handleExternalRemoval("tab-1");
+
+    useDocumentStore.getState().handleExternalChange("tab-1", "de volta", 6000);
+
+    const entry = useDocumentStore.getState().documents["tab-1"];
+    expect(entry.status).toBe("idle");
+    expect(entry.content).toBe("de volta");
+  });
+
+  it("arquivo que reaparece numa aba missing com edição vira conflito", () => {
+    useDocumentStore.getState().setContent("tab-1", "minha edição");
+    useDocumentStore.getState().handleExternalRemoval("tab-1");
+
+    useDocumentStore.getState().handleExternalChange("tab-1", "de volta", 6000);
+
+    const entry = useDocumentStore.getState().documents["tab-1"];
+    expect(entry.status).toBe("conflict");
+    expect(entry.content).toBe("minha edição");
+    expect(entry.conflict).toEqual({ currentMtime: 6000, currentContent: "de volta" });
+  });
+
   it('resolveConflict("disk") tira snapshot da versão local antes de descartá-la', async () => {
     useDocumentStore.setState({
       documents: {

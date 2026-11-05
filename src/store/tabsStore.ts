@@ -334,7 +334,14 @@ export const useTabsStore = create<TabsState>((set, get) => ({
     const tab = get().tabs.find((t) => t.id === tabId);
     if (!tab) return;
 
-    await useDocumentStore.getState().flush(tabId);
+    const documents = useDocumentStore.getState();
+    // ⌘S numa aba cujo arquivo sumiu do disco (#141) é o pedido explícito de
+    // recriá-lo no mesmo lugar — igual ao "Salvar de novo aqui" do banner.
+    if (!tab.isNew && documents.documents[tabId]?.status === "missing") {
+      await documents.restoreMissing(tabId);
+      return;
+    }
+    await documents.flush(tabId);
     if (!tab.isNew) return;
     // Mover com um conflito externo aberto apagaria a versão do disco sem
     // passar pela escolha explícita do `ConflictBanner` (#10).

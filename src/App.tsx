@@ -11,7 +11,15 @@ import { useDocumentStore, DEFAULT_DOCUMENT } from "./store/documentStore";
 import { useTabsStore } from "./store/tabsStore";
 import { initFileIndex, refreshFileIndex } from "./workspace/fileIndex";
 import { normalizePath } from "./fs/paths";
-import { handleExternalFileChanged, startWatchedPathsSync, type ExternalChangePayload } from "./fs/externalChanges";
+import {
+  handleExternalFileChanged,
+  handleExternalFileRemoved,
+  startWatchedPathsSync,
+  type ExternalChangePayload,
+  type ExternalRemovalPayload,
+} from "./fs/externalChanges";
+import { confirmQuitWithMissingFiles } from "./fs/missingFiles";
+import { MissingFileBanner } from "./conflict/MissingFileBanner";
 import { useExplorerStore } from "./explorer/explorerStore";
 import { ExplorerPanel } from "./explorer/ExplorerPanel";
 import { useThemeStore } from "./theme/themeStore";
@@ -134,6 +142,9 @@ function App() {
     const unlistenClose = listen("app-close-requested", () => {
       void (async () => {
         await flushAll();
+        // Abas com o arquivo removido do disco (#141) não passam pelo flush:
+        // sem perguntar, o conteúdo delas se perderia ao sair.
+        if (!(await confirmQuitWithMissingFiles())) return;
         await sessionRef.current?.flush();
         await invoke("quit_app");
       })();
@@ -143,6 +154,9 @@ function App() {
     const stopWatchedPathsSync = startWatchedPathsSync();
     const unlistenExternalChange = listen<ExternalChangePayload>("external-file-changed", (event) => {
       handleExternalFileChanged(event.payload);
+    });
+    const unlistenExternalRemoval = listen<ExternalRemovalPayload>("external-file-removed", (event) => {
+      handleExternalFileRemoved(event.payload);
     });
     // Watcher recursivo dedicado ao explorador (#25, tree_watcher.rs) — evento
     // sem payload, o frontend decide o que re-buscar (raiz + pastas expandidas).
@@ -170,6 +184,7 @@ function App() {
       void unlistenClose.then((fn) => fn());
       stopWatchedPathsSync();
       void unlistenExternalChange.then((fn) => fn());
+      void unlistenExternalRemoval.then((fn) => fn());
       void unlistenTreeChange.then((fn) => fn());
       void unlistenMenu.then((fn) => fn());
     };
@@ -193,6 +208,7 @@ function App() {
         </header>
         <UpdateBanner />
         {activeDoc?.status === "conflict" && <ConflictBanner />}
+        {activeDoc?.status === "missing" && <MissingFileBanner />}
         <SplitLayout ref={splitLayoutRef} tabId={activeTabId} source={activeDoc?.content ?? ""} />
         <StatusBar />
       </div>

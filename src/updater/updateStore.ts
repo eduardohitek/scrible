@@ -43,7 +43,7 @@ function releasePending(): void {
 async function saveEverything(): Promise<boolean> {
   await useDocumentStore.getState().flushAll();
   return Object.values(useDocumentStore.getState().documents).every(
-    (doc) => !doc.dirty && doc.status !== "error" && doc.status !== "conflict",
+    (doc) => !doc.dirty && doc.status !== "error" && doc.status !== "conflict" && doc.status !== "missing",
   );
 }
 

@@ -733,6 +733,22 @@ describe("tabsStore", () => {
       expect(mockedInvoke).toHaveBeenCalledWith("save_file", expect.objectContaining({ path: "/root/a.md" }));
     });
 
+    it("aba já salva com o arquivo removido: recria no mesmo path, sem diálogo (#141)", async () => {
+      setupTab(false, "/root/a.md");
+      useDocumentStore.getState().handleExternalRemoval("tab-1");
+      mockedInvoke.mockResolvedValueOnce(3000); // save_file
+
+      await useTabsStore.getState().save("tab-1");
+
+      expect(mockedSave).not.toHaveBeenCalled();
+      expect(mockedInvoke).toHaveBeenCalledWith("save_file", {
+        path: "/root/a.md",
+        content: "rascunho",
+        expectedMtime: null,
+      });
+      expect(useDocumentStore.getState().documents["tab-1"].status).toBe("idle");
+    });
+
     it("aba nova: grava no destino, apaga o original, reaponta e zera isNew", async () => {
       setupTab(true);
       mockedInvoke.mockResolvedValueOnce(1000); // flush

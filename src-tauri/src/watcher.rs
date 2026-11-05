@@ -21,6 +21,21 @@ pub struct ExternalChangePayload {
     pub content: String,
 }
 
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct ExternalRemovalPayload {
+    pub path: String,
+}
+
+/// O que o watcher entrega a cada rajada assentada (#140, #141).
+#[derive(Debug, PartialEq)]
+pub enum WatchEvent {
+    Changed(ExternalChangePayload),
+    /// O arquivo existia e deixou de existir (apagado, renomeado ou movido
+    /// por fora). Emitido uma vez por transição; quando ele volta, sai como
+    /// `Changed`.
+    Removed(ExternalRemovalPayload),
+}
+
 fn disk_mtime(path: &Path) -> Option<i64> {
     let meta = fs::metadata(path).ok()?;
     fs_ops::mtime_millis(&meta).ok()
@@ -71,11 +86,17 @@ impl WatchSet {
     }
 
     /// Alterações externas desde a última checagem, já marcadas como vistas.
-    /// Arquivo ausente ou ilegível é pulado sem mexer no conhecido.
-    fn collect_changes(&mut self) -> Vec<ExternalChangePayload> {
+    /// Arquivo que sumiu vira `Removed` (conhecido passa a `None`, então não
+    /// repete); arquivo ilegível é pulado sem mexer no conhecido. Como a
+    /// checagem só roda depois de a rajada assentar, o rename atômico de outro
+    /// editor (o arquivo some e volta dentro do debounce) sai como `Changed`.
+    fn collect_changes(&mut self) -> Vec<WatchEvent> {
         let mut changes = Vec::new();
         for (path, known) in self.files.iter_mut() {
             let Some(mtime) = disk_mtime(Path::new(path)) else {
+                if known.take().is_some() {
+                    changes.push(WatchEvent::Removed(ExternalRemovalPayload { path: path.clone() }));
+                }
                 continue;
             };
             if *known == Some(mtime) {
@@ -85,11 +106,11 @@ impl WatchSet {
                 continue;
             };
             *known = Some(mtime);
-            changes.push(ExternalChangePayload {
+            changes.push(WatchEvent::Changed(ExternalChangePayload {
                 path: path.clone(),
                 mtime,
                 content,
-            });
+            }));
         }
         changes
     }
@@ -114,9 +135,9 @@ pub struct FileWatcher(Arc<Mutex<Inner>>);
 impl FileWatcher {
     /// Cria o watcher e a thread que, a cada rajada de eventos assentada,
     /// confere todos os arquivos observados e chama `on_change` para cada
-    /// alteração externa. Sem watcher nativo disponível, o conjunto continua
+    /// alteração ou remoção externa. Sem watcher nativo disponível, o conjunto continua
     /// sendo mantido, só não há eventos.
-    pub fn start(on_change: impl Fn(ExternalChangePayload) + Send + 'static) -> Self {
+    pub fn start(on_change: impl Fn(WatchEvent) + Send + 'static) -> Self {
         let (tx, rx) = mpsc::channel();
         let watcher = match notify::recommended_watcher(tx) {
             Ok(watcher) => Some(watcher),
@@ -204,6 +225,16 @@ mod tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
 
+    fn changed_paths(events: Vec<WatchEvent>) -> Vec<String> {
+        events
+            .into_iter()
+            .map(|event| match event {
+                WatchEvent::Changed(change) => change.path,
+                WatchEvent::Removed(removal) => panic!("remoção inesperada: {}", removal.path),
+            })
+            .collect()
+    }
+
     fn path_string(path: &Path) -> String {
         path.to_string_lossy().into_owned()
     }
@@ -249,11 +280,11 @@ mod tests {
 
         assert_eq!(
             set.collect_changes(),
-            vec![ExternalChangePayload {
+            vec![WatchEvent::Changed(ExternalChangePayload {
                 path: path_string(&file),
                 mtime: 2_000_000,
                 content: "dois".to_string(),
-            }]
+            })]
         );
         assert!(set.collect_changes().is_empty());
     }
@@ -272,9 +303,7 @@ mod tests {
         set.record_save(&path_string(&a), 2_000_000);
         write_with_mtime(&b, "b alterado por fora", 2_000_000);
 
-        let changes = set.collect_changes();
-        assert_eq!(changes.len(), 1);
-        assert_eq!(changes[0].path, path_string(&b));
+        assert_eq!(changed_paths(set.collect_changes()), vec![path_string(&b)]);
     }
 
     #[test]
@@ -290,13 +319,11 @@ mod tests {
         write_with_mtime(&a, "a novo", 2_000_000);
         set.replace(vec![path_string(&a), path_string(&b)]);
 
-        let changes = set.collect_changes();
-        assert_eq!(changes.len(), 1);
-        assert_eq!(changes[0].path, path_string(&a));
+        assert_eq!(changed_paths(set.collect_changes()), vec![path_string(&a)]);
     }
 
     #[test]
-    fn missing_file_is_skipped_and_reported_when_it_comes_back() {
+    fn removed_file_is_reported_once_and_as_change_when_it_comes_back() {
         let dir = tempfile::tempdir().unwrap();
         let file = dir.path().join("a.md");
         write_with_mtime(&file, "um", 1_000_000);
@@ -304,10 +331,48 @@ mod tests {
         set.replace(vec![path_string(&file)]);
 
         fs::remove_file(&file).unwrap();
+        assert_eq!(
+            set.collect_changes(),
+            vec![WatchEvent::Removed(ExternalRemovalPayload { path: path_string(&file) })]
+        );
         assert!(set.collect_changes().is_empty());
 
         write_with_mtime(&file, "de volta", 3_000_000);
-        assert_eq!(set.collect_changes()[0].content, "de volta");
+        assert_eq!(
+            set.collect_changes(),
+            vec![WatchEvent::Changed(ExternalChangePayload {
+                path: path_string(&file),
+                mtime: 3_000_000,
+                content: "de volta".to_string(),
+            })]
+        );
+    }
+
+    #[test]
+    fn path_missing_at_baseline_is_not_reported_as_removed() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("nunca-existiu.md");
+        let mut set = WatchSet::default();
+
+        set.replace(vec![path_string(&file)]);
+
+        assert!(set.collect_changes().is_empty());
+    }
+
+    #[test]
+    fn atomic_replace_between_checks_is_a_change_not_a_removal() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("a.md");
+        let tmp = dir.path().join("a.md.tmp");
+        write_with_mtime(&file, "um", 1_000_000);
+        let mut set = WatchSet::default();
+        set.replace(vec![path_string(&file)]);
+
+        fs::remove_file(&file).unwrap();
+        write_with_mtime(&tmp, "dois", 2_000_000);
+        fs::rename(&tmp, &file).unwrap();
+
+        assert_eq!(changed_paths(set.collect_changes()), vec![path_string(&file)]);
     }
 
     #[test]
@@ -345,8 +410,23 @@ mod tests {
         write_with_mtime(&watched, "alterado por fora", now);
 
         let change = rx.recv_timeout(Duration::from_secs(10)).expect("evento do arquivo observado");
-        assert_eq!(change.path, path_string(&watched));
-        assert_eq!(change.content, "alterado por fora");
+        assert_eq!(
+            change,
+            WatchEvent::Changed(ExternalChangePayload {
+                path: path_string(&watched),
+                mtime: now as i64,
+                content: "alterado por fora".to_string(),
+            })
+        );
+        assert!(rx.recv_timeout(Duration::from_millis(800)).is_err());
+
+        fs::remove_file(&other).unwrap();
+        fs::remove_file(&watched).unwrap();
+        let removal = rx.recv_timeout(Duration::from_secs(10)).expect("remoção do arquivo observado");
+        assert_eq!(
+            removal,
+            WatchEvent::Removed(ExternalRemovalPayload { path: path_string(&watched) })
+        );
         assert!(rx.recv_timeout(Duration::from_millis(800)).is_err());
     }
 

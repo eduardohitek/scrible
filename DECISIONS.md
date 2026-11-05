@@ -1791,3 +1791,38 @@ e `restoreTabs`.
 de `handleExternalChange`, e não do evento), `#143` (a checagem no foco reaproveita
 `handleExternalChange` e compara com `lastSavedMtime`. Atenção: `initDocument` não preenche
 `lastSavedMtime` ao abrir um arquivo existente, porque `read_file` não devolve mtime).
+
+## #141 — Aba com arquivo apagado ou movido por outro programa (spec #139)
+
+- **Detecção no `WatchSet::collect_changes`**: path observado que existia (mtime conhecido `Some`) e
+  sumiu vira `WatchEvent::Removed`, e o conhecido passa a `None`, então a remoção não se repete.
+  Quando o arquivo volta, o mtime diverge de `None` e sai como `Changed`, seguindo a regra normal
+  (recarrega se a aba está limpa, conflito se há edição). Path que já não existia ao entrar no
+  conjunto não gera remoção. O rename atômico de outro editor não vira remoção porque a checagem
+  só roda depois de a rajada assentar (300ms). Evento novo: `external-file-removed { path }`.
+- **`status: "missing"`** no `DocumentStatus`. `performSave` não grava (vale para autosave, `flush`
+  e `flushAll`). As edições continuam atualizando `content`/`dirty`. `handleExternalRemoval` limpa
+  um `conflict` que estivesse aberto: a remoção tem precedência.
+- **`restoreMissing`** ("Salvar de novo aqui") grava com `expectedMtime: null` e devolve `false`, com
+  a aba continuando `missing`, se a gravação falhar (ex.: a pasta também sumiu).
+  **⌘S numa aba já salva e `missing` faz o mesmo** (decisão da sabatina): é um pedido explícito de
+  gravar. Aba `isNew` segue o fluxo do diálogo da `#128`. O Salvar Como sai do estado `missing`
+  pelo `relocateDocument`.
+- **Fechar o app com abas `missing`** (decisão da sabatina): depois do `flushAll` do handshake de
+  fechamento (`#7`), `confirmQuitWithMissingFiles` (`src/fs/missingFiles.ts`) mostra o `message()` do
+  `tauri-plugin-dialog` com os botões Recriar / Sair sem recriar / Cancelar. Cancelar, fechar o
+  diálogo ou uma recriação que falhe mantêm o app aberto. Sem isso o conteúdo se perderia, porque a
+  sessão (`#9`) descarta no boot as abas cujo arquivo não existe. O resultado é aceito tanto com o
+  texto do botão quanto com `Yes`/`No`, porque o formato varia com a plataforma.
+- **Updater**: `saveEverything` também bloqueia o reinício da atualização com aba `missing`. Antes
+  ela passaria como "salva" e o conteúdo se perderia no relaunch.
+- **⌘W ou "Fechar aba"** numa aba `missing` fecha sem perguntar. O usuário já viu o banner.
+- **Banner** `MissingFileBanner` (`src/conflict/`) reaproveita as classes `.conflict-banner`. A
+  status bar mostra "Removido do disco" no lugar de Salvo/Não salvo.
+- Exclusão e rename pelo explorador, rename pela aba e o Salvar de aba nova não passam pelo estado
+  `missing`: o path da aba já mudou (ou a aba já foi fechada) quando a rajada assenta, e o evento
+  de um path sem aba é ignorado.
+
+**Afeta:** `#142` (o marcador na aba deve cobrir `status === "missing"` além de `"conflict"`), `#143`
+(a checagem no foco deve levar arquivo ausente para `handleExternalRemoval`, e não para um caminho
+próprio).
