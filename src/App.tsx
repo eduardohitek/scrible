@@ -17,6 +17,7 @@ import {
   startWatchedPathsSync,
   type ExternalChangePayload,
   type ExternalRemovalPayload,
+  checkOpenTabsOnFocus,
 } from "./fs/externalChanges";
 import { confirmQuitWithMissingFiles } from "./fs/missingFiles";
 import { MissingFileBanner } from "./conflict/MissingFileBanner";
@@ -137,6 +138,9 @@ function App() {
       if (!focused) {
         void flushAll();
         void sessionRef.current?.flush();
+      } else {
+        // Rede de segurança para o que o watcher perdeu (#143).
+        void checkOpenTabsOnFocus();
       }
     });
     const unlistenClose = listen("app-close-requested", () => {

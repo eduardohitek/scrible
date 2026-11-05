@@ -63,7 +63,10 @@ mod macos {
     /// controle). `.await` em vez de bloqueio síncrono resolve: cede o
     /// controle de volta pro loop nativo entre os pontos de espera, deixando
     /// o callback do WebKit ser entregue normalmente.
-    pub async fn render_html_to_pdf(app: &AppHandle, html: String) -> Result<Vec<u8>, PdfExportError> {
+    pub async fn render_html_to_pdf(
+        app: &AppHandle,
+        html: String,
+    ) -> Result<Vec<u8>, PdfExportError> {
         let id = NEXT_WINDOW_ID.fetch_add(1, Ordering::Relaxed);
         let label = format!("pdf-export-{id}");
 
@@ -131,8 +134,12 @@ mod macos {
         let result = match pdf_result {
             Ok(()) => match tokio::time::timeout(Duration::from_secs(30), rx).await {
                 Ok(Ok(inner)) => inner.map_err(PdfExportError::native),
-                Ok(Err(_)) => Err(PdfExportError::native("canal do createPDF fechado sem resposta")),
-                Err(_) => Err(PdfExportError::native("tempo esgotado aguardando createPDF")),
+                Ok(Err(_)) => Err(PdfExportError::native(
+                    "canal do createPDF fechado sem resposta",
+                )),
+                Err(_) => Err(PdfExportError::native(
+                    "tempo esgotado aguardando createPDF",
+                )),
             },
             Err(err) => Err(PdfExportError::native(err.to_string())),
         };
@@ -185,7 +192,10 @@ mod portable {
         }
     }
 
-    pub async fn render_html_to_pdf(app: &AppHandle, html: String) -> Result<Vec<u8>, PdfExportError> {
+    pub async fn render_html_to_pdf(
+        app: &AppHandle,
+        html: String,
+    ) -> Result<Vec<u8>, PdfExportError> {
         let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
         let stem = format!("scrible-pdf-export-{}-{id}", std::process::id());
         let html_path = std::env::temp_dir().join(format!("{stem}.html"));
@@ -197,26 +207,33 @@ mod portable {
 
         let (loaded_tx, loaded_rx) = oneshot::channel::<()>();
         let loaded_tx = Mutex::new(Some(loaded_tx));
-        let window = WebviewWindowBuilder::new(app, format!("pdf-export-{id}"), WebviewUrl::External(url))
-            .visible(false)
-            .on_page_load(move |_, payload| {
-                if payload.event() == PageLoadEvent::Finished {
-                    if let Some(tx) = loaded_tx.lock().unwrap().take() {
-                        let _ = tx.send(());
+        let window =
+            WebviewWindowBuilder::new(app, format!("pdf-export-{id}"), WebviewUrl::External(url))
+                .visible(false)
+                .on_page_load(move |_, payload| {
+                    if payload.event() == PageLoadEvent::Finished {
+                        if let Some(tx) = loaded_tx.lock().unwrap().take() {
+                            let _ = tx.send(());
+                        }
                     }
-                }
-            })
-            .build()
-            .map_err(|err| PdfExportError::native(err.to_string()))?;
+                })
+                .build()
+                .map_err(|err| PdfExportError::native(err.to_string()))?;
 
         let result = match tokio::time::timeout(LOAD_TIMEOUT, loaded_rx).await {
-            Ok(Ok(())) => match tokio::time::timeout(PRINT_TIMEOUT, print_to_pdf(&window, &pdf_path)).await {
-                Ok(Ok(())) => std::fs::read(&pdf_path).map_err(PdfExportError::from),
-                Ok(Err(err)) => Err(err),
-                Err(_) => Err(PdfExportError::native("tempo esgotado gerando o PDF")),
-            },
-            Ok(Err(_)) => Err(PdfExportError::native("janela de exportação fechada antes do load")),
-            Err(_) => Err(PdfExportError::native("tempo esgotado carregando o documento")),
+            Ok(Ok(())) => {
+                match tokio::time::timeout(PRINT_TIMEOUT, print_to_pdf(&window, &pdf_path)).await {
+                    Ok(Ok(())) => std::fs::read(&pdf_path).map_err(PdfExportError::from),
+                    Ok(Err(err)) => Err(err),
+                    Err(_) => Err(PdfExportError::native("tempo esgotado gerando o PDF")),
+                }
+            }
+            Ok(Err(_)) => Err(PdfExportError::native(
+                "janela de exportação fechada antes do load",
+            )),
+            Err(_) => Err(PdfExportError::native(
+                "tempo esgotado carregando o documento",
+            )),
         };
 
         // `destroy()`, não `close()`: ver o comentário do módulo macOS.
@@ -249,7 +266,9 @@ mod portable {
     /// Página A4 (8,27 × 11,69 pol.) com fundos, como o `createPDF` do macOS.
     #[cfg(windows)]
     fn start_print(window: &WebviewWindow, out: PathBuf, done: Done) -> tauri::Result<()> {
-        use webview2_com::Microsoft::Web::WebView2::Win32::{ICoreWebView2Environment6, ICoreWebView2_7};
+        use webview2_com::Microsoft::Web::WebView2::Win32::{
+            ICoreWebView2Environment6, ICoreWebView2_7,
+        };
         use webview2_com::PrintToPdfCompletedHandler;
         use windows_core::{Interface, PCWSTR};
 
@@ -263,16 +282,21 @@ mod portable {
                     settings.SetPageWidth(8.27)?;
                     settings.SetPageHeight(11.69)?;
                     let handler_done = done.clone();
-                    let handler = PrintToPdfCompletedHandler::create(Box::new(move |status, ok| {
-                        let result = match status {
-                            Err(err) => Err(err.to_string()),
-                            Ok(()) if !ok => Err("PrintToPdf retornou sem sucesso".to_string()),
-                            Ok(()) => Ok(()),
-                        };
-                        finish(&handler_done, result);
-                        Ok(())
-                    }));
-                    let wide: Vec<u16> = out.to_string_lossy().encode_utf16().chain(Some(0)).collect();
+                    let handler =
+                        PrintToPdfCompletedHandler::create(Box::new(move |status, ok| {
+                            let result = match status {
+                                Err(err) => Err(err.to_string()),
+                                Ok(()) if !ok => Err("PrintToPdf retornou sem sucesso".to_string()),
+                                Ok(()) => Ok(()),
+                            };
+                            finish(&handler_done, result);
+                            Ok(())
+                        }));
+                    let wide: Vec<u16> = out
+                        .to_string_lossy()
+                        .encode_utf16()
+                        .chain(Some(0))
+                        .collect();
                     core.PrintToPdf(PCWSTR(wide.as_ptr()), &settings, &handler)
                 }
             })();

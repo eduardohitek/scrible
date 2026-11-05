@@ -48,7 +48,8 @@ pub fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
         .accelerator("CmdOrCtrl+Q")
         .build(app)?;
     let about = PredefinedMenuItem::about(app, Some("Sobre o scrible"), Some(about_metadata(app)))?;
-    let check_updates = MenuItemBuilder::with_id("check_updates", "Procurar atualizações…").build(app)?;
+    let check_updates =
+        MenuItemBuilder::with_id("check_updates", "Procurar atualizações…").build(app)?;
     let app_menu = SubmenuBuilder::new(app, "scrible")
         .item(&about)
         .separator()

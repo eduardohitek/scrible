@@ -70,11 +70,53 @@ pub fn workspace_file(root: &Path, path: &Path) -> Result<PathBuf, FsError> {
 /// Opening these in the default app runs code (Terminal, installers, script hosts)
 /// instead of showing a document, so a click in the preview must not reach them.
 const EXECUTABLE_EXTENSIONS: &[&str] = &[
-    "app", "command", "tool", "terminal", "workflow", "action", "scpt", "scptd",
-    "applescript", "pkg", "mpkg", "sh", "bash", "zsh", "csh", "ksh", "fish", "py", "rb",
-    "pl", "php", "jar", "desktop", "appimage", "run", "exe", "com", "bat", "cmd", "msi",
-    "msp", "ps1", "psm1", "vbs", "vbe", "js", "jse", "wsf", "wsh", "hta", "scr", "cpl",
-    "lnk", "url", "webloc", "inetloc", "reg",
+    "app",
+    "command",
+    "tool",
+    "terminal",
+    "workflow",
+    "action",
+    "scpt",
+    "scptd",
+    "applescript",
+    "pkg",
+    "mpkg",
+    "sh",
+    "bash",
+    "zsh",
+    "csh",
+    "ksh",
+    "fish",
+    "py",
+    "rb",
+    "pl",
+    "php",
+    "jar",
+    "desktop",
+    "appimage",
+    "run",
+    "exe",
+    "com",
+    "bat",
+    "cmd",
+    "msi",
+    "msp",
+    "ps1",
+    "psm1",
+    "vbs",
+    "vbe",
+    "js",
+    "jse",
+    "wsf",
+    "wsh",
+    "hta",
+    "scr",
+    "cpl",
+    "lnk",
+    "url",
+    "webloc",
+    "inetloc",
+    "reg",
 ];
 
 /// Files the preview may hand to the system opener: inside the workspace and not executable.
@@ -183,7 +225,13 @@ mod tests {
     #[test]
     fn opener_rejects_executables_and_scripts() {
         let tmp = tempfile::tempdir().unwrap();
-        for name in ["run.command", "install.PKG", "script.sh", "setup.exe", "a.js"] {
+        for name in [
+            "run.command",
+            "install.PKG",
+            "script.sh",
+            "setup.exe",
+            "a.js",
+        ] {
             let path = tmp.path().join(name);
             fs::write(&path, "").unwrap();
             assert!(

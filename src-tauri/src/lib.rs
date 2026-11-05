@@ -38,6 +38,37 @@ fn read_file(path: String) -> Result<String, FsError> {
     fs_ops::read_file(&PathBuf::from(path))
 }
 
+/// Leitura de documento de aba com o mtime (#143), para `initDocument`
+/// preencher `lastSavedMtime` ao abrir um arquivo existente.
+#[tauri::command]
+fn read_file_with_mtime(path: String) -> Result<fs_ops::FileWithMtime, FsError> {
+    fs_ops::read_file_with_mtime(&PathBuf::from(path))
+}
+
+/// Checagem das abas abertas quando a janela ganha foco (#143): rede de
+/// segurança para eventos que o watcher perdeu. O que for detectado aqui é
+/// registrado no `FileWatcher` como já visto.
+#[tauri::command]
+fn check_files(
+    files: Vec<fs_ops::FileCheck>,
+    watcher: tauri::State<FileWatcher>,
+) -> Vec<fs_ops::FileCheckResult> {
+    files
+        .into_iter()
+        .map(|file| {
+            let result = fs_ops::check_file(&PathBuf::from(&file.path), file.known_mtime);
+            match &result {
+                fs_ops::FileCheckResult::Changed { mtime, .. } => {
+                    watcher.record_known(&file.path, Some(*mtime))
+                }
+                fs_ops::FileCheckResult::Missing => watcher.record_known(&file.path, None),
+                fs_ops::FileCheckResult::Unchanged => {}
+            }
+            result
+        })
+        .collect()
+}
+
 #[tauri::command]
 fn save_file(
     path: String,
@@ -72,7 +103,10 @@ fn snapshot_before_discard(
 }
 
 #[tauri::command]
-fn list_snapshots(path: String, state: tauri::State<WorkspaceState>) -> Result<Vec<SnapshotInfo>, HistoryError> {
+fn list_snapshots(
+    path: String,
+    state: tauri::State<WorkspaceState>,
+) -> Result<Vec<SnapshotInfo>, HistoryError> {
     let workspace = state.0.as_ref().map_err(|err| HistoryError::Io {
         message: err.to_string(),
     })?;
@@ -110,8 +144,14 @@ fn read_session(state: tauri::State<WorkspaceState>) -> Session {
 }
 
 #[tauri::command]
-fn write_session(session: Session, state: tauri::State<WorkspaceState>) -> Result<(), SessionError> {
-    let workspace = state.0.as_ref().map_err(|err| SessionError::Io(err.to_string()))?;
+fn write_session(
+    session: Session,
+    state: tauri::State<WorkspaceState>,
+) -> Result<(), SessionError> {
+    let workspace = state
+        .0
+        .as_ref()
+        .map_err(|err| SessionError::Io(err.to_string()))?;
     session::save(&workspace.hidden, &session)
 }
 
@@ -121,7 +161,11 @@ fn write_export_file(path: String, content: String) -> Result<(), FsError> {
 }
 
 #[tauri::command]
-async fn export_pdf(app: AppHandle, html: String, path: String) -> Result<(), pdf_export::PdfExportError> {
+async fn export_pdf(
+    app: AppHandle,
+    html: String,
+    path: String,
+) -> Result<(), pdf_export::PdfExportError> {
     let bytes = pdf_export::render_html_to_pdf(&app, html).await?;
     std::fs::write(&path, bytes)?;
     Ok(())
@@ -153,26 +197,57 @@ fn list_dir_entries(path: String) -> Result<Vec<fs_ops::DirEntry>, FsError> {
 }
 
 #[tauri::command]
-async fn list_workspace_files(state: tauri::State<'_, WorkspaceState>) -> Result<Vec<String>, FsError> {
-    let root = state.0.as_ref().map_err(|err| FsError::Io { message: err.to_string() })?.root.clone();
+async fn list_workspace_files(
+    state: tauri::State<'_, WorkspaceState>,
+) -> Result<Vec<String>, FsError> {
+    let root = state
+        .0
+        .as_ref()
+        .map_err(|err| FsError::Io {
+            message: err.to_string(),
+        })?
+        .root
+        .clone();
     tauri::async_runtime::spawn_blocking(move || file_index::scan(&root))
-        .await.map_err(|err| FsError::Io { message: err.to_string() })?
+        .await
+        .map_err(|err| FsError::Io {
+            message: err.to_string(),
+        })?
 }
 
 /// Links `.md` do preview só abrem aba de arquivo existente — `openTab` cria
 /// arquivos ausentes, e um link quebrado não pode virar arquivo vazio no disco.
 #[tauri::command]
 fn check_workspace_file(path: String, state: tauri::State<WorkspaceState>) -> Result<(), FsError> {
-    let root = &state.0.as_ref().map_err(|err| FsError::Io { message: err.to_string() })?.root;
+    let root = &state
+        .0
+        .as_ref()
+        .map_err(|err| FsError::Io {
+            message: err.to_string(),
+        })?
+        .root;
     file_index::workspace_file(root, &PathBuf::from(path)).map(|_| ())
 }
 
 #[tauri::command]
-fn open_workspace_file(app: AppHandle, path: String, state: tauri::State<WorkspaceState>) -> Result<(), FsError> {
-    let root = &state.0.as_ref().map_err(|err| FsError::Io { message: err.to_string() })?.root;
+fn open_workspace_file(
+    app: AppHandle,
+    path: String,
+    state: tauri::State<WorkspaceState>,
+) -> Result<(), FsError> {
+    let root = &state
+        .0
+        .as_ref()
+        .map_err(|err| FsError::Io {
+            message: err.to_string(),
+        })?
+        .root;
     let path = file_index::openable_workspace_file(root, &PathBuf::from(path))?;
-    app.opener().open_path(path.to_string_lossy().into_owned(), None::<&str>)
-        .map_err(|err| FsError::Io { message: err.to_string() })
+    app.opener()
+        .open_path(path.to_string_lossy().into_owned(), None::<&str>)
+        .map_err(|err| FsError::Io {
+            message: err.to_string(),
+        })
 }
 
 #[tauri::command]
@@ -261,8 +336,13 @@ pub fn run() {
                 };
             });
             if let Ok(paths) = &result {
-                app.asset_protocol_scope().allow_directory(&paths.root, true)?;
-                tree_watcher::start_watching(app.handle().clone(), paths.root.clone(), paths.hidden.clone());
+                app.asset_protocol_scope()
+                    .allow_directory(&paths.root, true)?;
+                tree_watcher::start_watching(
+                    app.handle().clone(),
+                    paths.root.clone(),
+                    paths.hidden.clone(),
+                );
             }
 
             app.manage(WorkspaceState(result));
@@ -286,6 +366,8 @@ pub fn run() {
             greet,
             workspace_status,
             read_file,
+            read_file_with_mtime,
+            check_files,
             save_file,
             write_export_file,
             export_pdf,

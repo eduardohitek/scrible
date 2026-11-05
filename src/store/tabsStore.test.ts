@@ -46,7 +46,7 @@ describe("tabsStore", () => {
   });
 
   it("openTab cria uma aba nova e chama initDocument", async () => {
-    mockedInvoke.mockResolvedValueOnce("conteúdo lido");
+    mockedInvoke.mockResolvedValueOnce({ content: "conteúdo lido", mtime: 1000 });
 
     await useTabsStore.getState().openTab("/root/a.md");
 
@@ -55,11 +55,11 @@ describe("tabsStore", () => {
     expect(tabs[0].path).toBe("/root/a.md");
     expect(tabs[0].title).toBe("a.md");
     expect(activeTabId).toBe(tabs[0].id);
-    expect(mockedInvoke).toHaveBeenCalledWith("read_file", { path: "/root/a.md" });
+    expect(mockedInvoke).toHaveBeenCalledWith("read_file_with_mtime", { path: "/root/a.md" });
   });
 
   it("openTab com um path já aberto só foca a aba existente, sem duplicar", async () => {
-    mockedInvoke.mockResolvedValueOnce("conteúdo");
+    mockedInvoke.mockResolvedValueOnce({ content: "conteúdo", mtime: 1000 });
     await useTabsStore.getState().openTab("/root/a.md");
     const firstTabId = useTabsStore.getState().tabs[0].id;
 
@@ -75,18 +75,18 @@ describe("tabsStore", () => {
 
   it("newTab usa o primeiro nome untitled-N.md livre, checando o disco", async () => {
     mockedInvoke.mockResolvedValueOnce(["untitled.md", "untitled-1.md", "notas.md"]);
-    mockedInvoke.mockResolvedValueOnce("");
+    mockedInvoke.mockResolvedValueOnce({ content: "", mtime: 1000 });
 
     await useTabsStore.getState().newTab();
 
     expect(mockedInvoke).toHaveBeenNthCalledWith(1, "list_dir", { path: "/root" });
-    expect(mockedInvoke).toHaveBeenNthCalledWith(2, "read_file", { path: "/root/untitled-2.md" });
+    expect(mockedInvoke).toHaveBeenNthCalledWith(2, "read_file_with_mtime", { path: "/root/untitled-2.md" });
     expect(useTabsStore.getState().tabs[0].path).toBe("/root/untitled-2.md");
   });
 
   it("newTab usa untitled.md quando o workspace está vazio", async () => {
     mockedInvoke.mockResolvedValueOnce([]);
-    mockedInvoke.mockResolvedValueOnce("");
+    mockedInvoke.mockResolvedValueOnce({ content: "", mtime: 1000 });
 
     await useTabsStore.getState().newTab();
 
@@ -95,7 +95,7 @@ describe("tabsStore", () => {
 
   it("newTab com targetDir cria untitled-N.md na pasta alvo, não na raiz", async () => {
     mockedInvoke.mockResolvedValueOnce(["untitled.md"]); // list_dir da pasta alvo
-    mockedInvoke.mockResolvedValueOnce(""); // read_file
+    mockedInvoke.mockResolvedValueOnce({ content: "", mtime: 1000 }); // read_file_with_mtime
 
     await useTabsStore.getState().newTab("/root/subpasta");
 
@@ -173,7 +173,7 @@ describe("tabsStore", () => {
     useDocumentStore.setState({ documents: { "tab-1": docEntry({ path: "/root/a.md" }) } });
     mockedInvoke.mockResolvedValueOnce(1000); // flush do documento fechado
     mockedInvoke.mockResolvedValueOnce(["a.md"]); // list_dir do newTab automático
-    mockedInvoke.mockResolvedValueOnce(""); // read_file do untitled.md novo
+    mockedInvoke.mockResolvedValueOnce({ content: "", mtime: 1000 }); // read_file_with_mtime do untitled.md novo
 
     await useTabsStore.getState().closeTab("tab-1");
 
@@ -321,7 +321,7 @@ describe("tabsStore", () => {
 
   it("openFileDialog abre a aba do path escolhido, filtrado por .md", async () => {
     mockedOpen.mockResolvedValueOnce("/root/notas.md");
-    mockedInvoke.mockResolvedValueOnce("conteúdo"); // read_file do openTab
+    mockedInvoke.mockResolvedValueOnce({ content: "conteúdo", mtime: 1000 }); // read_file_with_mtime do openTab
 
     await useTabsStore.getState().openFileDialog();
 
@@ -382,7 +382,7 @@ describe("tabsStore", () => {
         if (cmd === "validate_open_paths") {
           return (args as { paths: string[] }).paths.filter((p) => !rejected.includes(p));
         }
-        if (cmd === "read_file") return "conteúdo";
+        if (cmd === "read_file_with_mtime") return { content: "conteúdo", mtime: 1000 };
         throw new Error(`comando inesperado: ${cmd}`);
       });
     }
@@ -712,9 +712,9 @@ describe("tabsStore", () => {
 
     it("newTab marca a aba como nova; openTab não", async () => {
       mockedInvoke.mockResolvedValueOnce([]); // list_dir
-      mockedInvoke.mockResolvedValueOnce(""); // read_file
+      mockedInvoke.mockResolvedValueOnce({ content: "", mtime: 1000 }); // read_file_with_mtime
       await useTabsStore.getState().newTab();
-      mockedInvoke.mockResolvedValueOnce("x");
+      mockedInvoke.mockResolvedValueOnce({ content: "x", mtime: 1000 });
       await useTabsStore.getState().openTab("/root/existente.md");
 
       const [created, opened] = useTabsStore.getState().tabs;

@@ -72,7 +72,10 @@ pub fn load(hidden: &Path) -> Session {
     let mut active_tab_index = 0;
     for (index, tab) in session.tabs.into_iter().enumerate() {
         if !Path::new(&tab.path).is_file() {
-            eprintln!("aba da sessão ignorada, arquivo não existe mais: {}", tab.path);
+            eprintln!(
+                "aba da sessão ignorada, arquivo não existe mais: {}",
+                tab.path
+            );
             continue;
         }
         if index == session.active_tab_index {
@@ -80,7 +83,10 @@ pub fn load(hidden: &Path) -> Session {
         }
         tabs.push(tab);
     }
-    Session { tabs, active_tab_index }
+    Session {
+        tabs,
+        active_tab_index,
+    }
 }
 
 /// Grava a sessão de forma atômica (tmp + fsync + rename), mesmo padrão de
@@ -91,7 +97,8 @@ pub fn save(hidden: &Path, session: &Session) -> Result<(), SessionError> {
     tmp_name.push(".scrible-tmp");
     let tmp = target.with_file_name(tmp_name);
 
-    let json = serde_json::to_string_pretty(session).map_err(|err| SessionError::Io(err.to_string()))?;
+    let json =
+        serde_json::to_string_pretty(session).map_err(|err| SessionError::Io(err.to_string()))?;
     let mut file = File::create(&tmp)?;
     file.write_all(json.as_bytes())?;
     file.sync_all()?;
@@ -105,7 +112,12 @@ mod tests {
     use super::*;
 
     fn tab(path: &Path, cursor_pos: usize, scroll_top: f64) -> SessionTab {
-        SessionTab { path: path.to_string_lossy().into_owned(), cursor_pos, scroll_top, is_new: false }
+        SessionTab {
+            path: path.to_string_lossy().into_owned(),
+            cursor_pos,
+            scroll_top,
+            is_new: false,
+        }
     }
 
     #[test]
@@ -133,7 +145,11 @@ mod tests {
             })
             .collect();
         let session = Session {
-            tabs: vec![tab(&files[0], 3, 10.5), tab(&files[1], 7, 0.0), tab(&files[2], 0, 120.0)],
+            tabs: vec![
+                tab(&files[0], 3, 10.5),
+                tab(&files[1], 7, 0.0),
+                tab(&files[2], 0, 120.0),
+            ],
             active_tab_index: 1,
         };
         save(dir.path(), &session).unwrap();
@@ -149,7 +165,13 @@ mod tests {
         fs::write(&a, "x").unwrap();
         fs::write(&b, "x").unwrap();
         let session = Session {
-            tabs: vec![SessionTab { is_new: true, ..tab(&a, 0, 0.0) }, tab(&b, 0, 0.0)],
+            tabs: vec![
+                SessionTab {
+                    is_new: true,
+                    ..tab(&a, 0, 0.0)
+                },
+                tab(&b, 0, 0.0),
+            ],
             active_tab_index: 0,
         };
         save(dir.path(), &session).unwrap();
@@ -191,7 +213,10 @@ mod tests {
         let a = dir.path().join("a.md");
         fs::write(&a, "x").unwrap();
         let gone = dir.path().join("gone.md");
-        let session = Session { tabs: vec![tab(&a, 0, 0.0), tab(&gone, 0, 0.0)], active_tab_index: 1 };
+        let session = Session {
+            tabs: vec![tab(&a, 0, 0.0), tab(&gone, 0, 0.0)],
+            active_tab_index: 1,
+        };
         save(dir.path(), &session).unwrap();
 
         let loaded = load(dir.path());

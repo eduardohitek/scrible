@@ -33,7 +33,7 @@ describe("restoreSession", () => {
           activeTabIndex: 2,
         };
       }
-      if (cmd === "read_file") return `conteúdo de ${(args as { path: string }).path}`;
+      if (cmd === "read_file_with_mtime") return { content: `conteúdo de ${(args as { path: string }).path}`, mtime: 1000 };
       throw new Error(`comando inesperado: ${cmd}`);
     });
 
