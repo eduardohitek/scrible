@@ -135,6 +135,28 @@ describe("documentStore", () => {
     expect(entry.dirty).toBe(false);
   });
 
+  it("handleExternalChange com reload de conteúdo novo registra lastExternalReload (#142)", () => {
+    useDocumentStore.getState().handleExternalChange("tab-1", "versão do disco", 3000);
+    const first = useDocumentStore.getState().lastExternalReload;
+    expect(first?.tabId).toBe("tab-1");
+
+    useDocumentStore.getState().handleExternalChange("tab-1", "outra versão", 4000);
+    const second = useDocumentStore.getState().lastExternalReload;
+    expect(second?.tabId).toBe("tab-1");
+    expect(second?.seq).toBeGreaterThan(first!.seq);
+  });
+
+  it("handleExternalChange sem mudança de texto ou com conflito não registra reload (#142)", () => {
+    useDocumentStore.setState({ lastExternalReload: null });
+    const current = useDocumentStore.getState().documents["tab-1"].content;
+    useDocumentStore.getState().handleExternalChange("tab-1", current, 3000);
+    expect(useDocumentStore.getState().lastExternalReload).toBeNull();
+
+    useDocumentStore.getState().setContent("tab-1", "edição local");
+    useDocumentStore.getState().handleExternalChange("tab-1", "versão do disco", 4000);
+    expect(useDocumentStore.getState().lastExternalReload).toBeNull();
+  });
+
   it("handleExternalChange com edição pendente expõe conflito sem sobrescrever nada", () => {
     useDocumentStore.getState().setContent("tab-1", "minha edição local");
 

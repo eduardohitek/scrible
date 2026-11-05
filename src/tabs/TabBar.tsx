@@ -6,9 +6,28 @@ import {
   type DragEvent,
   type KeyboardEvent,
 } from "react";
-import { ChevronDown, Plus, X } from "lucide-react";
+import { ChevronDown, Plus, TriangleAlert, X } from "lucide-react";
 import { useTabsStore, type Tab } from "../store/tabsStore";
 import { useDocumentStore } from "../store/documentStore";
+
+/** Aviso de alteração externa na aba (#142): conflito (#10) ou arquivo
+ * removido (#141). Devolve o texto do `title`, ou `null` se não há aviso. */
+function useTabWarning(tabId: string): string | null {
+  return useDocumentStore((state) => {
+    const status = state.documents[tabId]?.status;
+    if (status === "conflict") return "Conflito: o arquivo foi alterado por outro programa";
+    if (status === "missing") return "Arquivo removido do disco";
+    return null;
+  });
+}
+
+function TabWarning({ title }: { title: string }) {
+  return (
+    <span className="tab-warning" title={title} aria-label={title} role="img">
+      <TriangleAlert size={13} aria-hidden="true" />
+    </span>
+  );
+}
 
 interface TabItemProps {
   tab: Tab;
@@ -43,6 +62,7 @@ function TabItem({
   onClose,
 }: TabItemProps) {
   const dirty = useDocumentStore((state) => state.documents[tab.id]?.dirty ?? false);
+  const warning = useTabWarning(tab.id);
 
   function handleEditingKeyDown(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key === "Enter") {
@@ -62,6 +82,7 @@ function TabItem({
       onDrop={() => onDrop(index)}
       onClick={() => onSelect(tab.id)}
     >
+      {warning && <TabWarning title={warning} />}
       {isEditing ? (
         <input
           className="tab-title-input"
@@ -95,6 +116,7 @@ function TabItem({
 
 function TabListItem({ tab, active, select }: { tab: Tab; active: boolean; select: () => void }) {
   const dirty = useDocumentStore((state) => state.documents[tab.id]?.dirty ?? false);
+  const warning = useTabWarning(tab.id);
   const folder = tab.path.slice(0, tab.path.lastIndexOf("/")) || "/";
   return (
     <button
@@ -105,6 +127,7 @@ function TabListItem({ tab, active, select }: { tab: Tab; active: boolean; selec
     >
       <span>
         {active ? "✓ " : ""}
+        {warning && <TabWarning title={warning} />}
         {tab.title}
         {dirty ? " •" : ""}
       </span>

@@ -1826,3 +1826,25 @@ de `handleExternalChange`, e não do evento), `#143` (a checagem no foco reaprov
 **Afeta:** `#142` (o marcador na aba deve cobrir `status === "missing"` além de `"conflict"`), `#143`
 (a checagem no foco deve levar arquivo ausente para `handleExternalRemoval`, e não para um caminho
 próprio).
+
+## #142 — Feedback visual de alteração externa (spec #139)
+
+- **Sinal de reload no store**: `documentStore.lastExternalReload { tabId, seq }` é preenchido
+  **só** no caminho de reload de `handleExternalChange` e só quando o texto muda de fato.
+  Touch, mesmo texto, conflito e o "disk" do `resolveConflict` (escolha do usuário) não preenchem.
+  `seq` cresce a cada reload, então dois reloads seguidos da mesma aba são distinguíveis.
+- **Status bar**: assina o store (`subscribe`, sem efeito na montagem) e só reage se `tabId` for a
+  aba ativa **no momento do reload**. Por `RELOAD_MESSAGE_MS` (3s), "Recarregado do disco" ocupa o
+  lugar do rótulo "Salvo", com o ponto verde. "Salvando…", "Não salvo" e "Removido do disco" têm
+  precedência. Trocar de aba descarta a mensagem, que não volta se o usuário retornar à aba
+  dentro dos 3s.
+- **Marcador na aba**: `TriangleAlert` (`.tab-warning`, `--color-warning`) antes do título, com
+  `title`/`aria-label`, para `status` `conflict` e `missing`. Aparece em todas as abas,
+  inclusive a ativa, e na lista de overflow. É derivado do `status`, então some sozinho quando o
+  estado é resolvido.
+- Os banners (`ConflictBanner`, `MissingFileBanner`) já eram derivados de `activeDoc.status` no
+  `App.tsx`, então não houve mudança.
+
+**Afeta:** `#143`. Se a checagem no foco reaproveitar `handleExternalChange`, a mensagem aparece
+também no reload por foco. Se isso não for desejado, ela precisa de um caminho que não preencha
+`lastExternalReload`.

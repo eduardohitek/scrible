@@ -61,8 +61,19 @@ export interface DocumentEntry {
   conflict: DocumentConflict | null;
 }
 
+/** Último reload causado por alteração externa (#142). `seq` cresce a cada
+ * reload, para que dois reloads seguidos da mesma aba sejam distinguíveis. */
+export interface ExternalReload {
+  tabId: string;
+  seq: number;
+}
+
 interface DocumentStoreState {
   documents: Record<string, DocumentEntry>;
+  /** Preenchido só pelo caminho de reload de `handleExternalChange`, quando o
+   * conteúdo realmente mudou. A status bar usa esse campo para mostrar
+   * "Recarregado do disco". */
+  lastExternalReload: ExternalReload | null;
   /** Abre (ou recarrega) o documento de uma aba: lê `path`; se não existir,
    * cria com `fallbackContent` (só a aba inicial recebe o texto de boas-vindas). */
   initDocument: (tabId: string, path: string, fallbackContent?: string) => Promise<void>;
@@ -107,6 +118,7 @@ interface DocumentStoreState {
   resumeAutosave: (tabId: string) => void;
 }
 
+let externalReloadSeq = 0;
 const debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const pausedTabs = new Set<string>();
 
@@ -191,6 +203,7 @@ async function performSave(
 
 export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
   documents: {},
+  lastExternalReload: null,
 
   initDocument: async (tabId, path, fallbackContent = "") => {
     try {
@@ -277,7 +290,9 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
     const entry = get().documents[tabId];
     if (!entry) return;
     if (!entry.dirty || content === entry.content) {
+      const changed = content !== entry.content;
       get().applyExternalContent(tabId, content, mtime);
+      if (changed) set({ lastExternalReload: { tabId, seq: ++externalReloadSeq } });
       return;
     }
     patchDocument(set, tabId, {
