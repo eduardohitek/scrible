@@ -6,9 +6,20 @@ import {
   type DragEvent,
   type KeyboardEvent,
 } from "react";
+import { homeDir } from "@tauri-apps/api/path";
 import { ChevronDown, Plus, TriangleAlert, X } from "lucide-react";
 import { useTabsStore, type Tab } from "../store/tabsStore";
 import { useDocumentStore } from "../store/documentStore";
+
+/** Pasta da aba para a lista: o home vira `~`. Compara até a `/` para não
+ * abreviar uma pasta vizinha (`/Users/ana2` com home `/Users/ana`). */
+function displayFolder(path: string, home: string | null): string {
+  const folder = path.slice(0, path.lastIndexOf("/")) || "/";
+  if (home && (folder === home || folder.startsWith(`${home}/`))) {
+    return `~${folder.slice(home.length)}`;
+  }
+  return folder;
+}
 
 /** Aviso de alteração externa na aba (#142): conflito (#10) ou arquivo
  * removido (#141). Devolve o texto do `title`, ou `null` se não há aviso. */
@@ -114,10 +125,19 @@ function TabItem({
   );
 }
 
-function TabListItem({ tab, active, select }: { tab: Tab; active: boolean; select: () => void }) {
+function TabListItem({
+  tab,
+  active,
+  home,
+  select,
+}: {
+  tab: Tab;
+  active: boolean;
+  home: string | null;
+  select: () => void;
+}) {
   const dirty = useDocumentStore((state) => state.documents[tab.id]?.dirty ?? false);
   const warning = useTabWarning(tab.id);
-  const folder = tab.path.slice(0, tab.path.lastIndexOf("/")) || "/";
   return (
     <button
       type="button"
@@ -131,7 +151,7 @@ function TabListItem({ tab, active, select }: { tab: Tab; active: boolean; selec
         {tab.title}
         {dirty ? " •" : ""}
       </span>
-      <small>{folder}</small>
+      <small>{displayFolder(tab.path, home)}</small>
     </button>
   );
 }
@@ -154,6 +174,16 @@ export function TabBar() {
   const containerRef = useRef<HTMLDivElement>(null);
   const [overflow, setOverflow] = useState(false);
   const [listOpen, setListOpen] = useState(false);
+  const [home, setHome] = useState<string | null>(null);
+
+  // Busca ao surgir o botão, não ao abrir a lista, para o caminho completo não
+  // aparecer antes do `~`. Se falhar, a lista mostra o caminho completo.
+  useEffect(() => {
+    if (!overflow || home) return;
+    homeDir()
+      .then(setHome)
+      .catch(() => {});
+  }, [overflow, home]);
 
   useLayoutEffect(() => {
     const bar = barRef.current!;
@@ -271,6 +301,7 @@ export function TabBar() {
               key={tab.id}
               tab={tab}
               active={tab.id === activeTabId}
+              home={home}
               select={() => {
                 setActiveTab(tab.id);
                 setListOpen(false);

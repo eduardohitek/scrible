@@ -1,11 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
+import { homeDir } from "@tauri-apps/api/path";
 import { useDocumentStore } from "../store/documentStore";
 import { TabBar } from "./TabBar";
 import { useTabsStore } from "../store/tabsStore";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
+}));
+
+// Por padrão o home nunca resolve: os testes que não tratam dele ficam sem
+// atualização de estado fora de `act`.
+vi.mock("@tauri-apps/api/path", () => ({
+  homeDir: vi.fn(() => new Promise(() => {})),
 }));
 
 function threeTabs() {
@@ -157,6 +164,37 @@ describe("TabBar", () => {
     fireEvent.click(screen.getByRole("button", { name: /c.md.*root/ }));
     expect(useTabsStore.getState().activeTabId).toBe("tab-3");
     expect(screen.queryByLabelText("Abas abertas")).toBeNull();
+  });
+
+  it("abrevia o home como ~ na pasta, sem afetar pastas vizinhas", async () => {
+    overflowBar();
+    vi.mocked(homeDir).mockResolvedValueOnce("/Users/ana");
+    useTabsStore.setState({
+      tabs: [
+        { id: "tab-1", path: "/Users/ana/docs/a.md", title: "a.md" },
+        { id: "tab-2", path: "/Users/ana/b.md", title: "b.md" },
+        { id: "tab-3", path: "/Users/ana2/c.md", title: "c.md" },
+      ],
+    });
+    render(<TabBar />);
+    fireEvent.click(screen.getByLabelText("Todas as abas"));
+
+    expect(await screen.findByText("~/docs")).not.toBeNull();
+    expect(screen.getByText("~")).not.toBeNull();
+    expect(screen.getByText("/Users/ana2")).not.toBeNull();
+  });
+
+  it("mostra o caminho completo se não conseguir ler o home", async () => {
+    overflowBar();
+    vi.mocked(homeDir).mockRejectedValueOnce(new Error("sem permissão"));
+    useTabsStore.setState({
+      tabs: [{ id: "tab-1", path: "/Users/ana/docs/a.md", title: "a.md" }],
+    });
+    render(<TabBar />);
+    fireEvent.click(screen.getByLabelText("Todas as abas"));
+
+    await act(async () => {});
+    expect(screen.getByText("/Users/ana/docs")).not.toBeNull();
   });
 
   it("fecha com Escape e clique fora", () => {
