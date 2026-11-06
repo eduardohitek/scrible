@@ -1879,3 +1879,22 @@ também no reload por foco. Se isso não for desejado, ela precisa de um caminho
 
 **Afeta:** qualquer novo caminho que abra documento precisa preencher `lastSavedMtime`, senão a
 checagem por foco entrega um `Changed` na primeira vez (inofensivo: mesmo texto só adota o mtime).
+
+## #150 — Duplicar a linha por atalho (spec #149)
+
+- **Atalho por sistema, e não `Mod-Shift-Arrow`**: no macOS, ⇧⌘↑/↓ é o padrão do sistema e do
+  CodeMirror para selecionar até o início/fim do documento, e o usuário decidiu mantê-lo. Lá a
+  duplicação fica em ⇧⌥↑/↓, que já vinha do `defaultKeymap`, sem binding novo. O código novo é só
+  `linux`/`win`: `Ctrl-Shift-ArrowDown/Up` em `markdownEditingKeymap`. ⇧⌥↑/↓ também continua valendo
+  no Linux.
+- **Área de transferência não muda**: `copyLineDown`/`copyLineUp` escrevem direto no documento.
+- **O editor não liga vários cursores**: não há `allowMultipleSelections` nas extensões, então hoje
+  o caso real é a seleção de várias linhas. O teste de vários cursores liga a opção só para garantir
+  que o atalho funciona se isso mudar.
+- **Teste de keymap por plataforma**: o CodeMirror lê `navigator.platform` ao carregar
+  `@codemirror/view`. Para exercitar o keymap de uma plataforma de verdade, o arquivo define o
+  valor em `vi.hoisted`, antes dos imports, um arquivo por plataforma
+  (`duplicateLine.mac.test.ts`, `duplicateLine.linux.test.ts`). Complementa o achado da `#16` de
+  que o jsdom trata `Mod` como Ctrl.
+
+**Afeta:** novos atalhos com Mod+Shift+seta no macOS, que seguem reservados para a seleção.

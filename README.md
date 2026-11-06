@@ -78,7 +78,7 @@ O scrible **não** vira o app padrão de Markdown sozinho. Para torná-lo padrã
 
 ### Atalhos
 
-No Linux, use Ctrl no lugar de ⌘.
+No Linux, use Ctrl no lugar de ⌘, exceto onde a tabela indica outro atalho.
 
 | Atalho | Ação |
 |---|---|
@@ -92,6 +92,7 @@ No Linux, use Ctrl no lugar de ⌘.
 | ⇧⌘E | Mostrar/esconder o explorador |
 | ⌘= / ⌘- / ⌘0 | Aumentar, diminuir e restaurar o zoom |
 | `/` | Menu de blocos (no começo de uma linha) |
+| ⇧⌥↓ / ⇧⌥↑ no macOS, Ctrl+Shift+↓ / Ctrl+Shift+↑ no Linux | Duplicar a linha para baixo / para cima |
 
 Renomear a aba, exportar para HTML/PDF e trocar o tema ficam nos menus **Arquivo** e **Visualizar**.
 
