@@ -1898,3 +1898,18 @@ checagem por foco entrega um `Changed` na primeira vez (inofensivo: mesmo texto 
   que o jsdom trata `Mod` como Ctrl.
 
 **Afeta:** novos atalhos com Mod+Shift+seta no macOS, que seguem reservados para a seleção.
+
+## #129 e #130 — Navegação na barra de abas (spec #126)
+
+- **Entrega pelo PR #132**: ele implementou a spec inteira, mas só referenciou `Closes #126`, e as
+  sub-issues ficaram abertas. A #129 foi fechada sem código. A #130 só precisou do `~` abaixo.
+- **Aba ativa revelada por `scrollLeft`, e não `scrollIntoView`**: o cálculo manual em `TabBar.tsx`
+  só mexe na rolagem horizontal da `.tab-bar`, sem risco para a rolagem vertical da página. Os
+  testes verificam `scrollLeft`.
+- **Home abreviado como `~` na lista de abas**: `homeDir()` de `@tauri-apps/api/path` é assíncrono,
+  então a busca roda quando o overflow surge, e não ao abrir a lista, para o caminho completo não
+  aparecer antes do `~`. Se a chamada falhar, a lista mostra o caminho completo. A permissão já vem
+  de `core:default`.
+
+**Afeta:** novos usos de `homeDir()` em testes de componente, que precisam de mock próprio de
+`@tauri-apps/api/path`, porque o mock de `invoke` devolve `undefined`.
