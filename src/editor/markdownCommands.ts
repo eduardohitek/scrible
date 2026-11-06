@@ -1,6 +1,7 @@
 import type { SyntaxNode } from "@lezer/common";
 import { EditorSelection, type Extension, Prec, type StateCommand } from "@codemirror/state";
 import { type KeyBinding, keymap } from "@codemirror/view";
+import { copyLineDown, copyLineUp } from "@codemirror/commands";
 import { syntaxTree } from "@codemirror/language";
 
 /**
@@ -235,6 +236,10 @@ const bindings: readonly KeyBinding[] = [
   { key: "Mod-b", run: toggleBold },
   { key: "Mod-i", run: toggleItalic },
   { key: "Mod-k", run: insertLink },
+  // Duplicar linha (#150): só fora do macOS. Lá, ⇧⌥↑/↓ já vem do `defaultKeymap`
+  // (e também vale aqui), e ⇧⌘↑/↓ continua selecionando até a borda do documento.
+  { linux: "Ctrl-Shift-ArrowDown", win: "Ctrl-Shift-ArrowDown", run: copyLineDown, preventDefault: true },
+  { linux: "Ctrl-Shift-ArrowUp", win: "Ctrl-Shift-ArrowUp", run: copyLineUp, preventDefault: true },
 ];
 
 /** Precedência alta, mesmo padrão do `markdownKeymap` da lib — garante
