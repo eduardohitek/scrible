@@ -10,7 +10,7 @@ scrible é um editor de markdown com preview em tempo real (incluindo mermaid) e
 
 O backlog vive nas issues do GitHub (`eduardohitek/scrible`). Funcionalidades novas entram como **specs** (ver seção abaixo); os milestones `v0.1 — MVP` e `v0.2` são legado e não recebem issues novas. O trabalho avança uma issue (ou sub-issue) por vez:
 
-1. **Antes de planejar a implementação de uma issue, ler `DECISIONS.md`** — verificar se alguma decisão anterior (formato de erro, convenção de path, estrutura de store, etc.) impacta a issue atual.
+1. **Antes de planejar a implementação de uma issue, consultar `DECISIONS.md`** — verificar se alguma decisão anterior (formato de erro, convenção de path, estrutura de store, etc.) impacta a issue atual. O arquivo tem cerca de 160 KB: buscar com `grep -n` pelo número da issue, pelas issues de `Dependências` e pelos termos do assunto, e ler só as seções encontradas.
 2. Antes de qualquer plano formal, rodar a sabatina (conforme instrução global do usuário).
 3. Criar uma branch a partir de `main` atualizada. Nunca commitar direto em `main`.
    - Issues: `feat/{numero-da-issue}-{slug}`. Numa spec, o número é o da **sub-issue**, não o da spec pai.
@@ -19,6 +19,12 @@ O backlog vive nas issues do GitHub (`eduardohitek/scrible`). Funcionalidades no
 5. Assim que o plano estiver implementado e verificado, commitar, dar push e abrir o PR — não é preciso esperar pedido explícito a cada vez. No corpo do PR (não só na mensagem de commit), usar sempre a palavra-chave em **inglês** `Closes #N` (não `Fecha #N`) quando o PR fechar uma issue — é a única forma que o GitHub reconhece para auto-fechar.
 6. Ao concluir uma issue cujas decisões possam afetar issues futuras, **atualizar `DECISIONS.md`** antes de considerar o trabalho fechado.
 7. Atualizações de `CLAUDE.md` ou `DECISIONS.md` entram **na branch da alteração que as motivou** — não criar uma branch nem um PR separado só para isso, mesmo quando a atualização for retroativa (cobrindo uma issue anterior).
+
+## Economia de contexto
+
+- Ler arquivos por trecho: localizar com `grep -n` e abrir só o intervalo necessário. Arquivo inteiro só quando a tarefa altera boa parte dele.
+- Filtrar a saída de comandos longos (testes, builds, `gh`) para o que decide o próximo passo, como o resumo e as falhas.
+- Delegar ao subagente `Explore` as buscas que varrem muitos arquivos, para receber só a conclusão.
 
 ## Specs
 
